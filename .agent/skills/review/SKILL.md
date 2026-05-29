@@ -32,9 +32,10 @@ description: "사용자가 '리뷰해줘', '코드 리뷰해줘', '백엔드적�
 
 파일이 없으면 리뷰를 중단하지 않고 문서 부재를 Findings 또는 Checklist에 명시한다.
 
-API 코드가 포함된 경우 다음 파일이 있으면 확인한다.
+API 코드가 포함된 경우 다음 파일이 있으면 해당 도메인에 맞는 API 문서를 확인한다.
 
-- `docs/API.md`
+- `docs/api/README.md`
+- `docs/api/*.md`
 
 Entity, Repository, DB 코드가 포함된 경우 다음 파일이 있으면 확인한다.
 
