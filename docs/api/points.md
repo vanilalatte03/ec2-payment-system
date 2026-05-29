@@ -4,10 +4,12 @@
 
 환불로 적립 포인트를 회수할 때 이미 사용한 포인트가 많으면 잔액이 음수가 될 수 있습니다. 이번 프로젝트에서는 즉시 적립 정책의 트레이드오프로 음수 잔액을 허용합니다. 단, 결제 시 포인트 사용은 현재 잔액을 초과할 수 없습니다.
 
-## GET `/api/points/balance`
+## 포인트 잔액 조회
 
 내 현재 포인트 잔액을 조회합니다.
 
+- Method: `GET`
+- Path: `/api/points/balance`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
@@ -17,7 +19,6 @@
 {
   "userId": 1,
   "balance": 5000,
-  "negativeBalanceAllowed": true,
   "updatedAt": "2026-05-29T18:30:00+09:00"
 }
 ```
@@ -30,10 +31,12 @@
 | `POINT_ACCOUNT_NOT_FOUND` | 404 | 포인트 계정 없음 |
 | `POINT_LEDGER_SYNC_FAILED` | 500 | 원장 합계와 스냅샷 불일치 |
 
-## GET `/api/points/transactions`
+## 포인트 거래 내역 조회
 
 내 포인트 거래 내역을 최신순으로 조회합니다.
 
+- Method: `GET`
+- Path: `/api/points/transactions`
 - 인증: 필요
 - HTTP Status: `200 OK`
 

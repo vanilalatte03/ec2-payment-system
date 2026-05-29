@@ -9,10 +9,12 @@ PortOne V2 웹훅은 Standard Webhooks 방식의 메시지 검증을 지원합�
 - [PortOne 웹훅 연동하기](https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2)
 - [Standard Webhooks specification](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md)
 
-## POST `/api/webhooks/portone`
+## PortOne 웹훅 수신
 
 PortOne 결제 결과 웹훅을 수신합니다.
 
+- Method: `POST`
+- Path: `/api/webhooks/portone`
 - 인증: PortOne 웹훅 서명 검증
 - HTTP Status: `200 OK`
 - Content-Type: `application/json`

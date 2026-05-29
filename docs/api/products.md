@@ -2,7 +2,7 @@
 
 상품은 조회 중심 도메인입니다. 생성, 수정, 삭제는 관리자 기능으로 보고 이번 범위에서 제외합니다.
 
-### 상품 목록 조회
+## 상품 목록 조회
 
 상품 목록을 필터링, 정렬, 페이지네이션하여 조회합니다.
 
@@ -11,7 +11,7 @@
 - 인증: 불필요
 - HTTP Status: `200 OK`
 
-#### Query Parameters
+### Query Parameters
 
 | 이름 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -23,7 +23,7 @@
 | `page` | number | N | `0` | 페이지 번호 |
 | `size` | number | N | `20` | 페이지 크기 |
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -46,7 +46,7 @@
 }
 ```
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
@@ -54,7 +54,7 @@
 | `INVALID_ENUM_VALUE` | 400 | 잘못된 `status` 또는 `sort` |
 | `INVALID_PAGINATION` | 400 | 페이지 번호 또는 크기 오류 |
 
-### 상품 단 건 조회
+## 상품 단건 조회
 
 상품 상세 정보를 조회합니다.
 
@@ -63,13 +63,13 @@
 - 인증: 불필요
 - HTTP Status: `200 OK`
 
-#### Path Variables
+### Path Variables
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | `productId` | number | 상품 ID |
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -85,7 +85,7 @@
 }
 ```
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |

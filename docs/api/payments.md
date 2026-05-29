@@ -2,10 +2,12 @@
 
 결제 확정은 서버가 최종 책임자입니다. 클라이언트 콜백과 PortOne 웹훅은 순서가 바뀌거나 중복될 수 있으므로 같은 도메인 서비스를 호출해 멱등하게 처리해야 합니다.
 
-## POST `/api/payments/confirm`
+## 결제 확정
 
 PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요청합니다. 포인트 전액 결제(`pgAmount = 0`)도 이 API를 호출하되 PortOne 조회는 생략합니다.
 
+- Method: `POST`
+- Path: `/api/payments/confirm`
 - 인증: 필요
 - HTTP Status: `200 OK`
 

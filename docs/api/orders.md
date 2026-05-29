@@ -2,7 +2,7 @@
 
 주문은 결제와 환불의 기준 단위입니다. 주문 생성 후 상품/수량/금액 수정은 불가하며, 상태 변경은 결제 확정, 결제 실패 정리, 주문 취소, 환불 흐름에서만 발생합니다.
 
-### 주문서 미리보기
+## 주문서 미리보기
 
 장바구니 상품을 결제 직전 주문서 형태로 미리보기합니다. 스냅샷 저장 전이므로 상품의 현재가와 현재 재고를 기준으로 응답합니다.
 
@@ -11,7 +11,7 @@
 - 인증: 필요
 - HTTP Status: `200 OK`
 
-#### Query Parameters
+### Query Parameters
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@
 
 예: `/api/orders/preview?cartItemIds=100&cartItemIds=101`
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -41,7 +41,7 @@
 }
 ```
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
@@ -52,7 +52,7 @@
 | `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
 | `CART_STOCK_EXCEEDED` | 409 | 장바구니 수량이 현재 재고 초과 |
 
-### 주문/결제 생성
+## 주문/결제 생성
 
 주문서에서 결제하기를 누른 시점에 주문과 결제를 동시에 생성합니다. 단일 트랜잭션 안에서 재고를 검증하고 선차감합니다. 하나라도 재고가 부족하면 전체 주문 생성을 롤백합니다.
 
@@ -61,7 +61,7 @@
 - 인증: 필요
 - HTTP Status: `201 Created`
 
-#### Request Body
+### Request Body
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -75,7 +75,7 @@
 }
 ```
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -105,7 +105,7 @@
 
 `pgAmount`가 `0`이면 `paymentType`은 `POINT_ONLY`, `nextAction`은 `CONFIRM_POINT_ONLY`로 내려줍니다. 이 경우 클라이언트는 PortOne 결제창을 열지 않고 결제 확정 API를 호출합니다.
 
-#### 처리 규칙
+### 처리 규칙
 
 - 주문 상품에는 주문 생성 시점의 상품명과 가격 스냅샷을 저장합니다.
 - 결제 레코드는 `PENDING` 상태로 함께 생성합니다.
@@ -113,7 +113,7 @@
 - 장바구니는 주문 생성 시 비우지 않습니다. 결제 완료 시점에 비웁니다.
 - 포인트 잔액이 부족하면 주문과 결제는 생성하지 않습니다.
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
@@ -126,7 +126,7 @@
 | `ORDER_STOCK_SHORTAGE` | 409 | 재고 검증/차감 중 재고 부족 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
 
-### 주문 내역 조회
+## 주문 내역 조회
 
 내 주문 목록을 최신순으로 조회합니다.
 
@@ -135,7 +135,7 @@
 - 인증: 필요
 - HTTP Status: `200 OK`
 
-#### Query Parameters
+### Query Parameters
 
 | 이름 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -143,7 +143,7 @@
 | `page` | number | N | `0` | 페이지 번호 |
 | `size` | number | N | `20` | 페이지 크기 |
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -166,7 +166,7 @@
 }
 ```
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
@@ -174,7 +174,7 @@
 | `INVALID_ENUM_VALUE` | 400 | 잘못된 주문 상태 |
 | `INVALID_PAGINATION` | 400 | 페이지 번호 또는 크기 오류 |
 
-### 주문 상세 조회
+## 주문 상세 조회
 
 주문 상세, 주문 상품, 결제 상태, 포인트 사용/적립 요약을 조회합니다.
 
@@ -183,13 +183,13 @@
 - 인증: 필요
 - HTTP Status: `200 OK`
 
-#### Path Variables
+### Path Variables
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | `orderId` | number | 주문 ID |
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -229,7 +229,7 @@
 }
 ```
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
@@ -237,7 +237,7 @@
 | `ORDER_NOT_FOUND` | 404 | 주문 없음 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
 
-### 주문 상태 변경
+## 주문 상태 변경
 
 주문 상태를 변경합니다. 회원이 직접 호출하는 상태 변경은 결제대기 주문을 `CANCELED`로 변경하는 경우만 허용합니다. `COMPLETED` 전이는 결제 확정 로직에서 처리합니다.
 
@@ -246,13 +246,13 @@
 - 인증: 필요
 - HTTP Status: `200 OK`
 
-#### Path Variables
+### Path Variables
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
 | `orderId` | number | 주문 ID |
 
-#### Request Body
+### Request Body
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -264,7 +264,7 @@
 }
 ```
 
-#### Response Data
+### Response Data
 
 ```json
 {
@@ -283,7 +283,7 @@
 }
 ```
 
-#### Errors
+### Errors
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
