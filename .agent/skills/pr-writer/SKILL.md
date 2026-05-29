@@ -44,8 +44,9 @@ git diff <base>...HEAD
 필요한 경우 변경된 파일이나 직접 관련된 문서만 읽는다.
 
 - `README.md`
-- `API.md`
-- `ERD.md`
+- `docs/api/README.md`
+- `docs/api/*.md`
+- `docs/ERD.md`
 - `docs/**/*.md`
 
 ## PR 제목
@@ -58,7 +59,6 @@ git diff <base>...HEAD
 - `[docs]`: 문서 수정
 - `[test]`: 테스트 추가 또는 수정
 - `[chore]`: 설정, 빌드, 유지보수
-- `[style]`: 포맷팅, 컨벤션 정리
 
 예시:
 
