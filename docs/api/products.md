@@ -2,10 +2,12 @@
 
 상품은 조회 중심 도메인입니다. 생성, 수정, 삭제는 관리자 기능으로 보고 이번 범위에서 제외합니다.
 
-## GET `/api/products`
+## 상품 목록 조회
 
 상품 목록을 필터링, 정렬, 페이지네이션하여 조회합니다.
 
+- Method: `GET`
+- Path: `/api/products`
 - 인증: 불필요
 - HTTP Status: `200 OK`
 
@@ -52,10 +54,12 @@
 | `INVALID_ENUM_VALUE` | 400 | 잘못된 `status` 또는 `sort` |
 | `INVALID_PAGINATION` | 400 | 페이지 번호 또는 크기 오류 |
 
-## GET `/api/products/{productId}`
+## 상품 단건 조회
 
 상품 상세 정보를 조회합니다.
 
+- Method: `GET`
+- Path: `/api/products/{productId}`
 - 인증: 불필요
 - HTTP Status: `200 OK`
 

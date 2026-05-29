@@ -1,11 +1,13 @@
 # 장바구니 API
 
-장바구니는 인증된 회원만 접근할 수 있고, 항상 토큰의 회원 기준으로 조회/수정합니다. URL에 `cartId`를 받지 않아 타인의 장바구니 접근 가능성을 줄입니다.
+장바구니는 인증된 회원만 접근할 수 있고, 항상 토큰의 회원 기준으로 조회/수정합니다.
 
-## POST `/api/carts/items`
+## 상품 담기
 
 상품을 장바구니에 담습니다. 같은 상품이 이미 있으면 수량을 합산합니다.
 
+- Method: `POST`
+- Path: `/api/carts/items`
 - 인증: 필요
 - HTTP Status: `201 Created`
 
@@ -47,10 +49,12 @@
 | `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
 | `CART_STOCK_EXCEEDED` | 409 | 합산 수량이 현재 재고 초과 |
 
-## GET `/api/carts`
+## 장바구니 조회
 
 내 장바구니 상품 목록과 합계 금액을 조회합니다.
 
+- Method: `GET`
+- Path: `/api/carts`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
@@ -83,10 +87,12 @@
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
 | `CART_NOT_FOUND` | 404 | 회원의 장바구니가 없음 |
 
-## PATCH `/api/carts/items/{cartItemId}`
+## 장바구니 수량 변경
 
 장바구니 상품 수량을 변경합니다.
 
+- Method: `PATCH`
+- Path: `/api/carts/items/{cartItemId}`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
@@ -132,12 +138,20 @@
 | `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
 | `CART_STOCK_EXCEEDED` | 409 | 변경 수량이 현재 재고 초과 |
 
-## DELETE `/api/carts/items/{cartItemId}`
+## 장바구니 상품 개별 삭제
 
 장바구니 상품 1건을 삭제합니다.
 
+- Method: `DELETE`
+- Path: `/api/carts/items/{cartItemId}`
 - 인증: 필요
 - HTTP Status: `200 OK`
+
+### Path Variables
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `cartItemId` | number | 장바구니 상품 ID |
 
 ### Response Data
 
@@ -157,10 +171,12 @@
 | `CART_ITEM_NOT_FOUND` | 404 | 장바구니 상품이 없음 |
 | `CART_ITEM_ACCESS_DENIED` | 403 | 타인의 장바구니 상품 |
 
-## DELETE `/api/carts`
+## 장바구니 전체 비우기
 
 내 장바구니를 전체 비웁니다.
 
+- Method: `DELETE`
+- Path: `/api/carts`
 - 인증: 필요
 - HTTP Status: `200 OK`
 

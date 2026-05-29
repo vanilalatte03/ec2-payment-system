@@ -81,7 +81,6 @@ Authorization: Bearer {accessToken}
 - `payment.portone_payment_id`는 UNIQUE입니다.
 - 결제 확정 API와 웹훅은 같은 `portonePaymentId`가 여러 번 들어와도 최종 상태가 동일해야 합니다.
 - 이미 완료된 결제 확정 요청은 상태를 변경하지 않고 성공 응답을 반환합니다.
-- 이미 해지된 구독의 해지 요청은 상태를 변경하지 않고 성공 응답을 반환합니다.
 
 ## Enum
 
@@ -135,38 +134,6 @@ Authorization: Bearer {accessToken}
 | `PROCESSING` | DB 환불 처리 완료, PG 취소 호출 전/진행 중 |
 | `COMPLETED` | 환불 완료 |
 | `FAILED` | PG 취소 실패 또는 환불 처리 실패 |
-
-### MembershipGrade
-
-| 값 | 누적 결제 금액 | 적립률 |
-| --- | --- | --- |
-| `NORMAL` | 50,000원 미만 | 1% |
-| `VIP` | 50,000원 이상 100,000원 미만 | 5% |
-| `VVIP` | 100,000원 이상 | 10% |
-
-### SubscriptionStatus
-
-| 값 | 설명 |
-| --- | --- |
-| `ACTIVE` | 활성 |
-| `CANCELED` | 해지 |
-| `PAST_DUE` | 미납. 최소 구현에서는 사용하지 않고 청구서 실패 기록만 남겨도 됩니다. |
-
-### SubscriptionInvoiceStatus
-
-| 값 | 설명 |
-| --- | --- |
-| `PENDING` | 청구 생성 후 결제 전 |
-| `COMPLETED` | 결제 성공 |
-| `FAILED` | 결제 실패 |
-| `SKIPPED` | 동일 청구 기간 UNIQUE 충돌로 스킵 |
-
-### BillingMethodStatus
-
-| 값 | 설명 |
-| --- | --- |
-| `ACTIVE` | 사용 가능 |
-| `DELETED` | 삭제 또는 비활성화 |
 
 ## 공통 에러 코드
 
@@ -226,13 +193,3 @@ Authorization: Bearer {accessToken}
 | `WEBHOOK_SIGNATURE_INVALID` | 400 | 웹훅 서명 검증 실패 |
 | `WEBHOOK_PAYLOAD_INVALID` | 400 | 웹훅 본문 파싱 실패 |
 | `WEBHOOK_PAYMENT_ID_MISSING` | 400 | 웹훅에서 paymentId 추출 실패 |
-| `MEMBERSHIP_NOT_FOUND` | 404 | 멤버십 정보 없음 |
-| `BILLING_METHOD_NOT_FOUND` | 404 | 결제 수단 없음 |
-| `BILLING_METHOD_ACCESS_DENIED` | 403 | 타인의 결제 수단 접근 |
-| `SUBSCRIPTION_PLAN_NOT_FOUND` | 404 | 구독 요금제 없음 |
-| `SUBSCRIPTION_NOT_FOUND` | 404 | 구독 없음 |
-| `SUBSCRIPTION_ACCESS_DENIED` | 403 | 타인의 구독 접근 |
-| `SUBSCRIPTION_ALREADY_ACTIVE` | 409 | 이미 활성 구독 존재 |
-| `SUBSCRIPTION_NOT_ACTIVE` | 409 | 활성 구독이 아님 |
-| `SUBSCRIPTION_FIRST_PAYMENT_FAILED` | 402 | 구독 첫 결제 실패 |
-| `SUBSCRIPTION_BILLING_UNIQUE_CONFLICT` | 409 | 같은 구독/청구 기간 중복 청구 |

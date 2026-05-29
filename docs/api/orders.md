@@ -2,10 +2,12 @@
 
 주문은 결제와 환불의 기준 단위입니다. 주문 생성 후 상품/수량/금액 수정은 불가하며, 상태 변경은 결제 확정, 결제 실패 정리, 주문 취소, 환불 흐름에서만 발생합니다.
 
-## GET `/api/orders/preview`
+## 주문서 미리보기
 
 장바구니 상품을 결제 직전 주문서 형태로 미리보기합니다. 스냅샷 저장 전이므로 상품의 현재가와 현재 재고를 기준으로 응답합니다.
 
+- Method: `GET`
+- Path: `/api/orders/preview`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
@@ -50,10 +52,12 @@
 | `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
 | `CART_STOCK_EXCEEDED` | 409 | 장바구니 수량이 현재 재고 초과 |
 
-## POST `/api/orders`
+## 주문/결제 생성
 
 주문서에서 결제하기를 누른 시점에 주문과 결제를 동시에 생성합니다. 단일 트랜잭션 안에서 재고를 검증하고 선차감합니다. 하나라도 재고가 부족하면 전체 주문 생성을 롤백합니다.
 
+- Method: `POST`
+- Path: `/api/orders`
 - 인증: 필요
 - HTTP Status: `201 Created`
 
@@ -122,10 +126,12 @@
 | `ORDER_STOCK_SHORTAGE` | 409 | 재고 검증/차감 중 재고 부족 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
 
-## GET `/api/orders`
+## 주문 내역 조회
 
 내 주문 목록을 최신순으로 조회합니다.
 
+- Method: `GET`
+- Path: `/api/orders`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
@@ -168,12 +174,20 @@
 | `INVALID_ENUM_VALUE` | 400 | 잘못된 주문 상태 |
 | `INVALID_PAGINATION` | 400 | 페이지 번호 또는 크기 오류 |
 
-## GET `/api/orders/{orderId}`
+## 주문 상세 조회
 
 주문 상세, 주문 상품, 결제 상태, 포인트 사용/적립 요약을 조회합니다.
 
+- Method: `GET`
+- Path: `/api/orders/{orderId}`
 - 인증: 필요
 - HTTP Status: `200 OK`
+
+### Path Variables
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `orderId` | number | 주문 ID |
 
 ### Response Data
 
@@ -223,16 +237,32 @@
 | `ORDER_NOT_FOUND` | 404 | 주문 없음 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
 
-## POST `/api/orders/{orderId}/cancel`
+## 주문 상태 변경
 
-결제대기 상태의 본인 주문을 직접 취소합니다. 단일 트랜잭션으로 주문 상태를 `CANCELED`, 결제 상태를 `FAILED`로 변경하고 선차감된 재고를 복구합니다.
+주문 상태를 변경합니다. 회원이 직접 호출하는 상태 변경은 결제대기 주문을 `CANCELED`로 변경하는 경우만 허용합니다. `COMPLETED` 전이는 결제 확정 로직에서 처리합니다.
 
+- Method: `PATCH`
+- Path: `/api/orders/{orderId}/status`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
+### Path Variables
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `orderId` | number | 주문 ID |
+
 ### Request Body
 
-없음
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `status` | OrderStatus | Y | 변경할 주문 상태. 직접 요청은 `CANCELED`만 허용 |
+
+```json
+{
+  "status": "CANCELED"
+}
+```
 
 ### Response Data
 
@@ -240,7 +270,8 @@
 {
   "orderId": 200,
   "orderNumber": "ORD-20260529-000001",
-  "orderStatus": "CANCELED",
+  "previousOrderStatus": "PAYMENT_PENDING",
+  "currentOrderStatus": "CANCELED",
   "paymentStatus": "FAILED",
   "restoredStockItems": [
     {
@@ -257,6 +288,8 @@
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
+| `VALIDATION_FAILED` | 400 | 상태 값 누락 |
+| `INVALID_ENUM_VALUE` | 400 | 잘못된 주문 상태 |
 | `ORDER_NOT_FOUND` | 404 | 주문 없음 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
-| `ORDER_CANCEL_NOT_ALLOWED` | 409 | 결제대기 상태가 아님 |
+| `ORDER_CANCEL_NOT_ALLOWED` | 409 | 결제대기 상태가 아니거나 직접 변경할 수 없는 상태 |
