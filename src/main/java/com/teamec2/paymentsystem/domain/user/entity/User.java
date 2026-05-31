@@ -34,8 +34,8 @@ public class User {
     @Column(nullable = false, length = 50)
     private String phone;
 
-    @Column(name = "point_snap", nullable = false)
-    private long pointSnap;
+    @Column(name = "point_balance", nullable = false)
+    private long pointBalance;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -45,7 +45,7 @@ public class User {
         this.password = password;
         this.name = name;
         this.phone = phone;
-        this.pointSnap = 0L;
+        this.pointBalance = 0L;
         this.createdAt = LocalDateTime.now();
     }
 
