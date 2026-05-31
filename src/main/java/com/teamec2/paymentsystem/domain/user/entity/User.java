@@ -6,10 +6,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "`user`")
 public class User {
 
@@ -35,9 +40,6 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    protected User() {
-    }
-
     private User(String email, String password, String name, String phone) {
         this.email = email;
         this.password = password;
@@ -49,33 +51,5 @@ public class User {
 
     public static User create(String email, String password, String name, String phone) {
         return new User(email, password, name, phone);
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public long getPointSnap() {
-        return pointSnap;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
     }
 }
