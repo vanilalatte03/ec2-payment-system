@@ -15,7 +15,7 @@
 
 | 이름 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `cartItemIds` | number[] | N | 선택 장바구니 상품 ID 목록. 비어 있으면 장바구니 전체 |
+| `cartItemIds` | Long[] | N | 선택 장바구니 상품 ID 목록. 비어 있으면 장바구니 전체 |
 
 예: `/api/orders/preview?cartItemIds=100&cartItemIds=101`
 
@@ -65,8 +65,8 @@
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `cartItemIds` | number[] | N | 주문할 장바구니 상품 ID 목록. 비어 있으면 장바구니 전체 |
-| `usePointAmount` | number | Y | 사용할 포인트 금액. 0 이상 |
+| `cartItemIds` | Long[] | N | 주문할 장바구니 상품 ID 목록. 비어 있으면 장바구니 전체 |
+| `usePointAmount` | Long | Y | 사용할 포인트 금액. 0 이상 |
 
 ```json
 {
@@ -140,8 +140,8 @@
 | 이름 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
 | `status` | OrderStatus | N | 없음 | 주문 상태 |
-| `page` | number | N | `0` | 페이지 번호 |
-| `size` | number | N | `20` | 페이지 크기 |
+| `page` | int | N | `0` | 페이지 번호 |
+| `size` | int | N | `20` | 페이지 크기 |
 
 ### Response Data
 
@@ -187,7 +187,7 @@
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `orderId` | number | 주문 ID |
+| `orderId` | Long | 주문 ID |
 
 ### Response Data
 
@@ -250,7 +250,7 @@
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `orderId` | number | 주문 ID |
+| `orderId` | Long | 주문 ID |
 
 ### Request Body
 

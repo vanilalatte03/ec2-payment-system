@@ -45,8 +45,8 @@
 | 이름 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
 | `type` | PointTransactionType | N | 없음 | 거래 타입 |
-| `page` | number | N | `0` | 페이지 번호 |
-| `size` | number | N | `20` | 페이지 크기 |
+| `page` | int | N | `0` | 페이지 번호 |
+| `size` | int | N | `20` | 페이지 크기 |
 
 ### Response Data
 

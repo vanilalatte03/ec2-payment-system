@@ -17,11 +17,11 @@
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `orderId` | number | Y | 환불할 주문 ID |
+| `orderId` | Long | Y | 환불할 주문 ID |
 | `reason` | string | Y | 환불 사유 |
 | `items` | object[] | Y | 환불할 주문 상품과 수량 |
-| `items[].orderItemId` | number | Y | 주문 상품 ID |
-| `items[].quantity` | number | Y | 환불 수량. 1 이상 |
+| `items[].orderItemId` | Long | Y | 주문 상품 ID |
+| `items[].quantity` | int | Y | 환불 수량. 1 이상 |
 
 ```json
 {
