@@ -109,8 +109,10 @@ erDiagram
 
     refund {
         BIGINT id PK "환불ID"
+        BIGINT order_id FK "주문ID"
         BIGINT payment_id FK "결제ID"
-        VARCHAR reason "취소사유"
+        VARCHAR reason "환불사유"
+        INT refund_amount "총 환불 금액"
         INT point_refund_amount "포인트 환불 금액"
         INT pg_refund_amount "PG 환불 금액"
         VARCHAR status "환불 상태"
@@ -123,6 +125,8 @@ erDiagram
         BIGINT refund_id FK "환불ID"
         BIGINT order_item_id FK "주문상품ID"
         INT refund_quantity "환불수량"
+        INT unit_price "상품 단가"
+        INT refund_amount "상품별 총 환불 금액"
         INT point_refund_amount "포인트 환불금액"
         INT pg_refund_amount "PG 환불 금액"
         DATETIME created_at "생성일시"
@@ -237,13 +241,15 @@ erDiagram
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
 | 환불ID | id | BIGINT | NOT NULL | PK |
+| 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id |
 | 결제ID | payment_id | BIGINT | NOT NULL | FK: payment.id |
-| 취소사유 | reason | VARCHAR(255) | NOT NULL |  |
-| 포인트 환불 금액 | point_refund_amount | INT | NOT NULL |  |
+| 환불사유 | reason | VARCHAR(255) | NOT NULL |  |
+| 총 환불 금액 | refund_amount | INT | NOT NULL | 포인트 + PG 포함 총 환불 금액 |
+| 포인트 환불 금액 | point_refund_amount | INT | NOT NULL | 고객에게 복구되는 포인트 금액 |
 | PG 환불 금액 | pg_refund_amount | INT | NOT NULL |  |
-| 환불 상태 | status | VARCHAR(30) | NOT NULL | COMPLETED, FAILED |
+| 환불 상태 | status | VARCHAR(30) | NOT NULL | PENDING, COMPLETED, FAILED |
 | 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각 |
-| 환불완료일시 | refunded_at | DATETIME | NOT NULL | 실제 PG 환불이 완료된 시각 |
+| 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각 |
 
 ### refund_item
 
@@ -252,7 +258,9 @@ erDiagram
 | 환불상품ID | id | BIGINT | NOT NULL | PK |
 | 환불ID | refund_id | BIGINT | NOT NULL | FK: refund.id |
 | 주문상품ID | order_item_id | BIGINT | NOT NULL | FK: order_item.id |
-| 환불수량 | refund_quantity | INT | NOT NULL |  |
+| 환불수량 | refund_quantity | INT | NOT NULL | 1 이상 |
+| 상품 단가 | unit_price | INT | NOT NULL | 환불 당시 주문 상품 단가 |
+| 상품별 총 환불 금액 | refund_amount | INT | NOT NULL | 해당 주문상품 기준 총 환불 금액 |
 | 포인트 환불금액 | point_refund_amount | INT | NOT NULL |  |
 | PG 환불 금액 | pg_refund_amount | INT | NOT NULL |  |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
@@ -269,6 +277,7 @@ erDiagram
 | order - order_item | 주문은 여러 주문 상품을 가진다. |
 | product - order_item | 상품은 주문 상품으로 기록된다. |
 | order - payment | 주문은 결제와 1:1로 연결된다. |
+| order - refund | 주문은 여러 환불 내역을 가질 수 있다. |
 | payment - point_transaction | 결제는 포인트 거래 내역을 생성할 수 있다. |
 | payment - refund | 결제는 여러 환불 내역을 가질 수 있다. |
 | refund - refund_item | 환불은 여러 환불 상품을 가진다. |
