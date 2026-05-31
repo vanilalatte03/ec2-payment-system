@@ -15,8 +15,8 @@
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `productId` | number | Y | 상품 ID |
-| `quantity` | number | Y | 담을 수량. 1 이상 |
+| `productId` | Long | Y | 상품 ID |
+| `quantity` | int | Y | 담을 수량. 1 이상 |
 
 ```json
 {
@@ -100,13 +100,13 @@
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `cartItemId` | number | 장바구니 상품 ID |
+| `cartItemId` | Long | 장바구니 상품 ID |
 
 ### Request Body
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `quantity` | number | Y | 변경할 수량. 1 이상 |
+| `quantity` | int | Y | 변경할 수량. 1 이상 |
 
 ```json
 {
@@ -151,7 +151,7 @@
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `cartItemId` | number | 장바구니 상품 ID |
+| `cartItemId` | Long | 장바구니 상품 ID |
 
 ### Response Data
 

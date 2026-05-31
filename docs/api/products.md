@@ -16,12 +16,12 @@
 | 이름 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
 | `category` | string | N | 없음 | 카테고리 |
-| `minPrice` | number | N | 없음 | 최소 판매가 |
-| `maxPrice` | number | N | 없음 | 최대 판매가 |
+| `minPrice` | int | N | 없음 | 최소 판매가 |
+| `maxPrice` | int | N | 없음 | 최대 판매가 |
 | `status` | ProductStatus | N | 없음 | `ON_SALE`, `SOLD_OUT`, `DISCONTINUED` |
 | `sort` | string | N | `LATEST` | `LATEST`, `PRICE_ASC`, `PRICE_DESC` |
-| `page` | number | N | `0` | 페이지 번호 |
-| `size` | number | N | `20` | 페이지 크기 |
+| `page` | int | N | `0` | 페이지 번호 |
+| `size` | int | N | `20` | 페이지 크기 |
 
 ### Response Data
 
@@ -67,7 +67,7 @@
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `productId` | number | 상품 ID |
+| `productId` | Long | 상품 ID |
 
 ### Response Data
 

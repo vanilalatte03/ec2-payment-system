@@ -15,7 +15,7 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `orderId` | number | Y | 주문 ID |
+| `orderId` | Long | Y | 주문 ID |
 | `portonePaymentId` | string | Y | 주문 생성 시 서버가 반환한 PortOne 결제 ID |
 
 ```json
