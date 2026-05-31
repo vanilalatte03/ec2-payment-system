@@ -133,15 +133,15 @@ erDiagram
 
 ### user
 
-| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
-| --- | --- | --- | --- | --- |
-| 유저 ID | id | BIGINT | NOT NULL | PK |
-| 유저 이메일 | email | VARCHAR(50) | NOT NULL |  |
-| 유저 비밀번호 | password | VARCHAR(255) | NOT NULL |  |
-| 이름 | name | VARCHAR(20) | NOT NULL |  |
-| 전화번호 | phone | VARCHAR(50) | NOT NULL |  |
-| 포인트 잔액 스냅샷 | point_snap | BIGINT | NOT NULL |  |
-| 생성일시 | created_at | DATETIME | NULL |  |
+| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고  |
+| --- | --- | --- | --- |--------|
+| 유저 ID | id | BIGINT | NOT NULL | PK     |
+| 유저 이메일 | email | VARCHAR(50) | NOT NULL | UNIQUE |
+| 유저 비밀번호 | password | VARCHAR(255) | NOT NULL |        |
+| 이름 | name | VARCHAR(20) | NOT NULL |        |
+| 전화번호 | phone | VARCHAR(50) | NOT NULL |        |
+| 포인트 잔액 스냅샷 | point_snap | BIGINT | NOT NULL |        |
+| 생성일시 | created_at | DATETIME | NULL |        |
 
 ### cart
 
