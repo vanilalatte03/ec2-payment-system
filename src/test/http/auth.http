@@ -1,0 +1,66 @@
+@baseUrl = http://localhost:8080
+@email = customer-{{$timestamp}}@example.com
+@password = Password123!
+
+### 회원가입 성공
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "010-1234-5678"
+}
+
+### 회원가입 실패 - 중복 이메일
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "585799e8-3a33-4428-b4ce-a7fe15e1875d@example.com",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "010-1234-5678"
+}
+
+### 회원가입 실패 - 유효하지 않은 요청
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "password": "weak",
+  "name": "",
+  "phone": ""
+}
+
+### 로그인 성공
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 로그인 실패 - 비밀번호 불일치
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "WrongPassword123!"
+}
+
+### 로그인 실패 - 존재하지 않는 이메일
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "unknown@example.com",
+  "password": "{{password}}"
+}
+
+### 로그아웃 성공
+POST {{baseUrl}}/api/auth/logout
