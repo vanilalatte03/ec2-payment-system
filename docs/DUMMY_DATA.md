@@ -6,9 +6,19 @@
 
 애플리케이션 스키마가 생성된 뒤 MySQL에서 직접 실행합니다.
 
-```bash
-mysql -h localhost -u <user> -p <database> < src/main/resources/dev-dummy-data.sql
+macOS/Linux:
+
+```shell
+mysql -h localhost -u YOUR_USER -p YOUR_DATABASE < src/main/resources/dev-dummy-data.sql
 ```
+
+Windows PowerShell:
+
+```powershell
+Get-Content -Raw -Encoding UTF8 src/main/resources/dev-dummy-data.sql | mysql -h localhost -u YOUR_USER -p YOUR_DATABASE
+```
+
+`YOUR_USER`, `YOUR_DATABASE`는 로컬 MySQL 계정과 데이터베이스명으로 바꿔 실행합니다.
 
 Spring Boot 시작 시 자동 실행되도록 연결하지 않았습니다. 현재 프로젝트는 테이블 생성 방식이 코드로 완전히 확정된 상태가 아니므로, 개발자가 필요할 때 명시적으로 주입하는 용도입니다.
 

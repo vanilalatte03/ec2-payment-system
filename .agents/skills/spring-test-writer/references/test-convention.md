@@ -7,7 +7,12 @@
 - Gradle
 - JUnit Platform
 
-테스트 실행 명령은 Windows 기준 `.\gradlew.bat test`를 안내한다.
+테스트 실행 명령은 OS별로 함께 안내한다.
+
+- Windows PowerShell: `.\gradlew.bat test`
+- macOS/Linux: `./gradlew test`
+
+macOS/Linux에서 권한 오류가 나면 `chmod +x ./gradlew` 후 다시 실행하도록 안내한다.
 
 ## 메서드명
 

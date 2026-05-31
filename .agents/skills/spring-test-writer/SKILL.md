@@ -13,17 +13,32 @@ Spring Boot 프로젝트에서 테스트 후보를 제안하거나, 사용자가
 
 ## 작업 전 확인
 
-작업 시작 전 요청 범위에 맞게 다음 파일을 확인한다.
+작업 시작 전 문서를 바로 열지 말고 먼저 테스트 범위를 좁힌다.
 
-- `README.md`
-- `docs/CODE_CONVENTION.md`
-- `docs/api/common.md`
-- 관련 API가 있으면 `docs/api/*.md`
-- Entity, Repository, DB 상태 검증이 포함되면 `docs/ERD.md`
-- 테스트 대상 프로덕션 코드
-- 기존 테스트 코드와 패키지 구조
+- 사용자가 파일/클래스/기능을 지정했으면 해당 프로덕션 코드와 인접 테스트를 먼저 확인한다.
+- 현재 브랜치의 변경사항 기준이면 `git status --short`, `git diff --stat`, `git diff --name-only`로 범위를 먼저 확인한다.
+- 대상이 불명확하면 `rg`로 Controller, Service, Repository, Entity, 기존 테스트 파일을 찾아 범위를 좁힌다.
 
 이 프로젝트는 기본적으로 Spring Boot 4.0.6, Java 21, Gradle, JUnit Platform 테스트 환경을 사용한다. 테스트 의존성 추가는 사용자가 명확히 요청하거나 현재 의존성으로 불가능한 경우에만 제안한다.
+
+## 문서 로딩 규칙
+
+문서는 아래 조건에 맞을 때만 읽는다.
+
+- `references/test-convention.md`
+  - 실제 테스트 코드를 작성하거나 기존 테스트를 수정할 때
+  - 테스트 후보만 제안하는 경우에는 메서드명/스타일 판단이 꼭 필요할 때만 읽는다.
+- `docs/api/common.md`
+  - Controller 테스트, 공통 응답 형식, 공통 에러 응답, 인증 실패 응답을 검증할 때
+- `docs/api/{domain}.md`
+  - 특정 API의 Method, URL, Request/Response, status code, error code, auth 요구사항을 검증할 때
+  - `docs/api/*.md` 전체를 한 번에 읽지 않고, 대상 도메인 문서만 읽는다.
+- `docs/ERD.md`
+  - Repository 테스트, Entity 매핑, DB 상태 검증, 관계/unique/nullable/enum 검증이 필요할 때
+- `README.md`
+  - 테스트 실행 방법, 프로젝트 범위, 환경변수, 외부 서비스 설정이 테스트 작성에 직접 필요할 때
+
+테스트 작업에서는 `docs/CODE_CONVENTION.md`를 기본으로 읽지 않는다. 테스트 스타일은 `references/test-convention.md`를 기준으로 한다.
 
 ## 작업 모드
 
@@ -32,6 +47,8 @@ Spring Boot 프로젝트에서 테스트 후보를 제안하거나, 사용자가
 사용자가 "어떤 테스트를 작성해야 할지 모르겠다", "테스트 조언해줘", "테스트 후보 알려줘"처럼 요청하면 테스트 코드를 작성하지 않는다.
 
 현재 코드, 문서, 변경사항을 확인한 뒤 작성하면 좋은 테스트 후보만 제안한다.
+
+체크리스트는 요청 도메인이 명확할 때 해당 reference 1개만 읽는다. 전체 테스트 전략을 요청받은 경우에도 먼저 변경 파일과 도메인을 기준으로 우선순위를 좁힌 뒤 필요한 reference만 순차적으로 읽는다.
 
 - 단위 테스트, 계층별 테스트(Controller/Repository 등), 통합 테스트를 구분한다.
 - 우선순위가 높은 테스트부터 정리한다.

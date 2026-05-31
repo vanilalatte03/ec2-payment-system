@@ -25,7 +25,7 @@ description: "사용자가 'pr 작성해줘', 'pr 올려줘', 'PR 만들어줘' 
 
 먼저 아래 명령으로 현재 브랜치와 저장소 상태를 확인한다.
 
-```bash
+```shell
 git branch --show-current
 git status --short
 git log --oneline --decorate -n 10
@@ -35,19 +35,25 @@ git branch -r
 
 base 브랜치를 선택한 뒤 아래 명령으로 변경사항을 확인한다.
 
-```bash
+```shell
 git diff --stat <base>...HEAD
 git diff --name-only <base>...HEAD
-git diff <base>...HEAD
 ```
 
+전체 diff는 파일 목록과 통계만으로 PR 내용을 충분히 파악할 수 없을 때만 확인한다.
+확인이 필요하면 `git diff <base>...HEAD -- <file>`처럼 변경 파일 단위로 좁혀서 읽는다.
+
 필요한 경우 변경된 파일이나 직접 관련된 문서만 읽는다.
+
+아래 경로는 전체 열람 대상이 아니라 검색 후보이다. 먼저 변경 파일, 파일명, 검색 결과로 범위를 좁힌 뒤 필요한 문서만 개별적으로 읽는다.
 
 - `README.md`
 - `docs/api/README.md`
 - `docs/api/*.md`
 - `docs/ERD.md`
 - `docs/**/*.md`
+
+`docs/**/*.md` 전체를 한 번에 읽지 않는다.
 
 ## PR 제목
 
@@ -99,8 +105,14 @@ git diff <base>...HEAD
 실제로 확인한 항목은 명령어와 결과를 함께 적고 체크한다.
 
 ```markdown
+- [x] `.\gradlew.bat test` 통과
 - [x] `./gradlew test` 통과
 ```
+
+테스트 명령은 실행한 OS에 맞는 실제 명령만 적는다.
+
+- Windows PowerShell: `.\gradlew.bat test`
+- macOS/Linux: `./gradlew test`
 
 확인하지 않은 항목은 체크하지 않는다.
 
@@ -113,12 +125,10 @@ git diff <base>...HEAD
 
 사용자가 "pr 올려줘", "PR 만들어줘", "생성해줘"처럼 PR 생성을 명확히 요청한 경우에만 생성한다.
 
-```bash
-gh pr create \
-  --base <base-branch-name> \
-  --head <current-branch-name> \
-  --title "<title>" \
-  --body "<body>"
+여러 줄 명령은 셸별 줄 연결 문자가 달라질 수 있으므로 기본적으로 한 줄로 실행한다.
+
+```shell
+gh pr create --base <base-branch-name> --head <current-branch-name> --title "<title>" --body "<body>"
 ```
 
 `gh`가 설치되어 있지 않거나 인증되지 않은 경우, 또는 현재 브랜치가 push되어 있지 않은 경우에는 PR 제목과 본문을 제공하고 자동 생성이 불가능한 이유를 설명한다.

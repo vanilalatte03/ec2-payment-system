@@ -25,43 +25,49 @@ description: "사용자가 '리뷰해줘', '코드 리뷰해줘', '백엔드적�
 
 ## 확인 절차
 
-리뷰 시작 전 반드시 다음 파일을 확인한다.
-
-- `README.md`
-- `docs/CODE_CONVENTION.md`
-
-파일이 없으면 리뷰를 중단하지 않고 문서 부재를 Findings 또는 Checklist에 명시한다.
-
-API 코드가 포함된 경우 다음 파일이 있으면 해당 도메인에 맞는 API 문서를 확인한다.
-
-- `docs/api/README.md`
-- `docs/api/*.md`
-
-Entity, Repository, DB 코드가 포함된 경우 다음 파일이 있으면 확인한다.
-
-- `docs/ERD.md`
+리뷰 시작 전 문서를 바로 열지 말고 먼저 리뷰 범위를 좁힌다.
 
 현재 브랜치의 변경사항을 리뷰하는 경우 먼저 아래 명령으로 범위를 확인한다.
 
-```bash
+```shell
 git status --short
 git diff --stat
 git diff --name-only
-git diff
 ```
 
-특정 파일 리뷰 요청이면 요청된 파일과 직접 관련된 문서만 읽는다.
+`git diff` 전체 출력은 파일 목록과 통계를 본 뒤 필요한 파일 범위로 좁혀서 확인한다.
+
+특정 파일 리뷰 요청이면 요청된 파일과 직접 관련된 코드와 문서만 읽는다.
+
+파일이 없으면 리뷰를 중단하지 않고 문서 부재를 Findings 또는 Checklist에 명시한다.
+
+## 문서 로딩 규칙
+
+문서는 아래 조건에 맞을 때만 읽는다.
+
+- `README.md`
+  - README 변경사항을 리뷰하거나, 실행 방법/프로젝트 범위/환경변수 정합성을 확인해야 할 때
+- `docs/CODE_CONVENTION.md`
+  - 사용자가 컨벤션 리뷰를 요청했거나, 코드 변경이 Controller/Service/Repository/Entity/DTO/Exception/Validation/Transaction/Logging 같은 컨벤션과 직접 관련될 때
+  - 이 파일은 인덱스로만 사용하고, 실제 내용은 관련된 `docs/conventions/*.md`만 개별적으로 읽는다.
+- `docs/api/README.md`, `docs/api/{domain}.md`
+  - Controller, Request/Response DTO, endpoint, status code, error code, auth 요구사항이 바뀌었거나 문서 정합성 리뷰가 필요할 때
+  - `docs/api/*.md` 전체를 한 번에 읽지 않고, 변경 파일명/도메인명/검색 결과로 대상 문서만 고른다.
+- `docs/ERD.md`
+  - Entity, Repository, DB schema, enum, relation, nullable, unique 조건이 바뀌었거나 ERD 정합성 리뷰가 필요할 때
 
 ## 리뷰 기준
 
-리뷰할 코드 범위에 맞게 아래 reference 문서를 읽고 적용한다.
+리뷰할 코드 범위에 맞는 reference 문서만 읽고 적용한다.
 
 - `references/backend-review-checklist.md`
-  - 공통 백엔드 계층, 검증, 보안, 트랜잭션, 멱등성 기준
+  - Controller, Service, Repository, Entity, DTO, validation, security, transaction, idempotency를 리뷰할 때
 - `references/payment-domain-review-checklist.md`
-  - 주문, 결제, 환불, 웹훅, 포인트, 멤버십, 구독 도메인 기준
+  - 주문, 결제, 환불, 웹훅, 포인트, 멤버십, 구독 도메인 코드나 문서를 리뷰할 때
 - `references/documentation-consistency-checklist.md`
-  - README, API, ERD 문서 정합성 기준
+  - 사용자가 문서 정합성을 요청했거나 README/API/ERD 변경사항을 리뷰할 때
+
+관련 없는 reference 문서를 예방 차원에서 읽지 않는다.
 
 ## 리뷰 순서
 
@@ -75,9 +81,12 @@ git diff
 
 ## 결과 형식
 
-리뷰 결과는 아래 문서를 기준으로 작성한다.
+기본 결과는 Findings를 먼저 작성한다.
 
-- `references/review-output-format.md`
+- Findings
+- Open Questions 또는 Assumptions
+- 간단한 Summary
+- Final Verdict
 
 최종 판정은 아래 중 하나를 사용한다.
 
@@ -85,6 +94,8 @@ git diff
 - `Approve with Comments`
 - `Request Changes`
 - `Blocked`
+
+사용자가 기존 상세 템플릿을 명확히 요구하거나 체크리스트까지 포함한 정식 리뷰가 필요할 때만 `references/review-output-format.md`를 읽는다.
 
 ## 과한 설계 제한
 
