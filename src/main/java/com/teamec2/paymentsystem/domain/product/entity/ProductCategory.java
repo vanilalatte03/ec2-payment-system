@@ -6,5 +6,6 @@ public enum ProductCategory {
     BOTTOM,
     BAG,
     OUTER,
-    SHOES
+    SHOES,
+    ELECTRONIC
 }
