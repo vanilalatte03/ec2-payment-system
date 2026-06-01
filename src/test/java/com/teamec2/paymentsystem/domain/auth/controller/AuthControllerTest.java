@@ -3,7 +3,6 @@ package com.teamec2.paymentsystem.domain.auth.controller;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,8 +33,7 @@ class AuthControllerTest {
     PasswordEncoder passwordEncoder;
 
     @Test
-    @DisplayName("회원가입 성공 시 회원 정보를 반환한다")
-    void signupSuccess() throws Exception {
+    void 회원가입_성공하면_회원정보를반환한다() throws Exception {
         String email = uniqueEmail();
 
         mockMvc.perform(post("/api/auth/signup")
@@ -62,8 +60,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 성공 시 비밀번호를 BCrypt 해시로 저장한다")
-    void signupStoresEncodedPassword() throws Exception {
+    void 회원가입_성공하면_비밀번호를BCrypt해시로저장한다() throws Exception {
         String email = uniqueEmail();
         String rawPassword = "Password123!";
 
@@ -77,8 +74,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("중복 이메일로 회원가입하면 EMAIL_ALREADY_EXISTS를 반환한다")
-    void signupFailWithDuplicatedEmail() throws Exception {
+    void 회원가입_중복이메일이면_EMAIL_ALREADY_EXISTS를반환한다() throws Exception {
         String email = uniqueEmail();
         signup(email, "Password123!");
 
@@ -100,8 +96,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 요청 값이 올바르지 않으면 400을 반환한다")
-    void signupFailWithInvalidRequest() throws Exception {
+    void 회원가입_요청값이올바르지않으면_400을반환한다() throws Exception {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -119,8 +114,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 필수 값이 비어 있으면 400을 반환한다")
-    void signupFailWithBlankFields() throws Exception {
+    void 회원가입_필수값이비어있으면_400을반환한다() throws Exception {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -138,8 +132,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 성공 시 사용자 요약 정보를 반환한다")
-    void loginSuccess() throws Exception {
+    void 로그인_성공하면_사용자요약정보를반환한다() throws Exception {
         String email = uniqueEmail();
         signup(email, "Password123!");
 
@@ -166,8 +159,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 이메일로 로그인하면 401을 반환한다")
-    void loginFailWithUnknownEmail() throws Exception {
+    void 로그인_존재하지않는이메일이면_401을반환한다() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -184,8 +176,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("비밀번호가 틀리면 401을 반환한다")
-    void loginFailWithWrongPassword() throws Exception {
+    void 로그인_비밀번호가틀리면_401을반환한다() throws Exception {
         String email = uniqueEmail();
         signup(email, "Password123!");
 
@@ -206,8 +197,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 요청 값이 올바르지 않으면 400을 반환한다")
-    void loginFailWithInvalidRequest() throws Exception {
+    void 로그인_요청값이올바르지않으면_400을반환한다() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -223,8 +213,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그아웃 성공 시 로그아웃 여부를 반환한다")
-    void logoutSuccess() throws Exception {
+    void 로그아웃_성공하면_로그아웃여부를반환한다() throws Exception {
         mockMvc.perform(post("/api/auth/logout"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(BODY_STATUS))

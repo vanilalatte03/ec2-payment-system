@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 class Ec2PaymentSystemApplicationTests {
 
     @Test
-    void contextLoads() {
+    void 애플리케이션컨텍스트_시작하면_정상로딩된다() {
     }
 
 }

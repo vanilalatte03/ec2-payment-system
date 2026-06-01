@@ -1,6 +1,6 @@
 # 포인트 API
 
-포인트는 `user.point_snap` 잔액 스냅샷과 `point_transaction` 원장으로 관리합니다. 사용, 적립, 사용복구, 적립회수는 모두 원장에 기록합니다.
+포인트는 `users.point_balance` 잔액 스냅샷과 `point_transactions` 원장으로 관리합니다. 사용, 적립, 사용복구, 적립회수는 모두 원장에 기록합니다.
 
 환불로 적립 포인트를 회수할 때 이미 사용한 포인트가 많으면 잔액이 음수가 될 수 있습니다. 이번 프로젝트에서는 즉시 적립 정책의 트레이드오프로 음수 잔액을 허용합니다. 단, 결제 시 포인트 사용은 현재 잔액을 초과할 수 없습니다.
 
@@ -46,7 +46,7 @@
 | --- | --- | --- | --- | --- |
 | `type` | PointTransactionType | N | 없음 | 거래 타입 |
 | `page` | int | N | `0` | 페이지 번호 |
-| `size` | int | N | `20` | 페이지 크기 |
+| `size` | int | N | `10` | 페이지 크기 |
 
 ### Response Data
 
@@ -69,7 +69,7 @@
     }
   ],
   "page": 0,
-  "size": 20,
+  "size": 10,
   "totalElements": 2,
   "totalPages": 1,
   "hasNext": false

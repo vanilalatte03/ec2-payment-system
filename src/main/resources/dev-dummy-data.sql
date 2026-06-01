@@ -27,8 +27,8 @@ INSERT INTO users (
     id,
     name,
     email,
-    password_hash,
-    phone_number,
+    password,
+    phone,
     point_balance,
     created_at,
     updated_at
@@ -202,7 +202,7 @@ INSERT INTO products (
 -- 장바구니 데이터
 INSERT INTO carts (
     id,
-    member_id,
+    user_id,
     created_at,
     updated_at
 ) VALUES
@@ -229,10 +229,10 @@ INSERT INTO cart_items (
 -- 10005: 결제 실패로 취소된 주문
 INSERT INTO orders (
     id,
-    member_id,
+    user_id,
     order_number,
     total_amount,
-    used_point_amount,
+    used_point,
     status,
     created_at,
     updated_at
@@ -249,7 +249,7 @@ INSERT INTO order_items (
     product_id,
     product_name,
     price,
-    quantity,
+    count,
     created_at,
     updated_at
 ) VALUES
@@ -394,7 +394,7 @@ INSERT INTO refunds (
 -- 포인트 거래 데이터
 INSERT INTO point_transactions (
     id,
-    member_id,
+    user_id,
     payment_id,
     refund_id,
     type,
