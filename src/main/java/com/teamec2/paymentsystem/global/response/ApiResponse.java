@@ -26,6 +26,10 @@ public record ApiResponse<T>(
         return new ApiResponse<>(BODY_STATUS, errorCode.name(), errorCode.getMessage(), null);
     }
 
+    public static ApiResponse<Void> error(ErrorCode errorCode, String message) {
+        return new ApiResponse<>(BODY_STATUS, errorCode.name(), message, null);
+    }
+
     public static <T> ApiResponse<T> error(ErrorCode errorCode, T data) {
         return new ApiResponse<>(BODY_STATUS, errorCode.name(), errorCode.getMessage(), data);
     }

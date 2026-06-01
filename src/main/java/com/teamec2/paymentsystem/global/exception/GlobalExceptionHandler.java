@@ -24,7 +24,7 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = exception.getErrorCode();
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
-                .body(ApiResponse.error(errorCode));
+                .body(ApiResponse.error(errorCode, exception.getMessage()));
     }
 
     // @Valid 요청 body 검증에 실패했을 때 사용하는 에러

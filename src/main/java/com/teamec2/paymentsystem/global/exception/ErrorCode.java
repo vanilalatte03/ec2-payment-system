@@ -35,6 +35,8 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
     PRODUCT_NOT_ON_SALE(HttpStatus.BAD_REQUEST, "판매중이 아닌 상품입니다."),
     PRODUCT_OUT_OF_STOCK(HttpStatus.CONFLICT, "상품 재고가 부족합니다."),
+    INVALID_PRICE(HttpStatus.BAD_REQUEST, "가격은 0 이상이어야 합니다."),
+    INVALID_STOCK(HttpStatus.BAD_REQUEST,"재고는 0 이상이어야 합니다."),
 
     // Cart
     CART_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니를 찾을 수 없습니다."),

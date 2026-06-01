@@ -1,0 +1,69 @@
+@baseUrl = http://localhost:8080
+@existingProductId = 10001
+@unknownProductId = 999999
+
+### 상품 목록 조회 - 기본값(최신순, page=0, size=10)
+GET {{baseUrl}}/api/products
+
+### 상품 목록 조회 - 카테고리 필터
+GET {{baseUrl}}/api/products?category=TOP
+
+### 상품 목록 조회 - 최소/최대 가격 필터
+GET {{baseUrl}}/api/products?minPrice=10000&maxPrice=70000
+
+### 상품 목록 조회 - 판매 상태 필터(판매중)
+GET {{baseUrl}}/api/products?status=ON_SALE
+
+### 상품 목록 조회 - 판매 상태 필터(품절)
+GET {{baseUrl}}/api/products?status=SOLD_OUT
+
+### 상품 목록 조회 - 다중 조건 필터링
+GET {{baseUrl}}/api/products?category=TOP&minPrice=10000&maxPrice=90000&status=ON_SALE
+
+### 상품 목록 조회 - 최신순 정렬
+GET {{baseUrl}}/api/products?sort=LATEST&page=0&size=5
+
+### 상품 목록 조회 - 가격 오름차순 정렬
+GET {{baseUrl}}/api/products?sort=PRICE_ASC&page=0&size=5
+
+### 상품 목록 조회 - 가격 내림차순 정렬
+GET {{baseUrl}}/api/products?sort=PRICE_DESC&page=0&size=5
+
+### 상품 목록 조회 - 페이지네이션 첫 페이지
+GET {{baseUrl}}/api/products?page=0&size=3
+
+### 상품 목록 조회 - 페이지네이션 다음 페이지
+GET {{baseUrl}}/api/products?page=1&size=3
+
+### 상품 목록 조회 - 필터, 정렬, 페이지네이션 전체 조합
+GET {{baseUrl}}/api/products?category=BOTTOM&minPrice=10000&maxPrice=70000&status=ON_SALE&sort=PRICE_ASC&page=0&size=2
+
+### 상품 목록 조회 실패 - 최소 가격이 음수
+GET {{baseUrl}}/api/products?minPrice=-1
+
+### 상품 목록 조회 실패 - 최대 가격이 음수
+GET {{baseUrl}}/api/products?maxPrice=-1
+
+### 상품 목록 조회 실패 - 최소 가격이 최대 가격보다 큼
+GET {{baseUrl}}/api/products?minPrice=70000&maxPrice=10000
+
+### 상품 목록 조회 실패 - 잘못된 카테고리
+GET {{baseUrl}}/api/products?category=INVALID_CATEGORY
+
+### 상품 목록 조회 실패 - 잘못된 판매 상태
+GET {{baseUrl}}/api/products?status=INVALID_STATUS
+
+### 상품 목록 조회 실패 - 잘못된 정렬 조건
+GET {{baseUrl}}/api/products?sort=INVALID_SORT
+
+### 상품 목록 조회 실패 - 잘못된 페이지 번호
+GET {{baseUrl}}/api/products?page=-1&size=20
+
+### 상품 목록 조회 실패 - 잘못된 페이지 크기
+GET {{baseUrl}}/api/products?page=0&size=0
+
+### 상품 단건 조회 - 결제 화면 구성용 상세 정보
+GET {{baseUrl}}/api/products/{{existingProductId}}
+
+### 상품 단건 조회 실패 - 존재하지 않는 상품
+GET {{baseUrl}}/api/products/{{unknownProductId}}
