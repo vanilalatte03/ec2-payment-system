@@ -52,6 +52,10 @@ public enum ErrorCode {
     ORDER_STOCK_SHORTAGE(HttpStatus.CONFLICT, "주문 생성 중 재고가 부족합니다."),
     INVALID_ORDER_STATUS(HttpStatus.BAD_REQUEST, "요청할 수 없는 주문 상태입니다."),
     ORDER_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "결제대기 상태가 아니라 직접 취소할 수 없습니다."),
+    INVALID_ORDER_PRICE(HttpStatus.BAD_REQUEST, "가격은 0 이상이어야 합니다."),
+    INVALID_ORDER_QUANTITY(HttpStatus.BAD_REQUEST, "주문 수량은 1 이상이어야 합니다."),
+    INVALID_ORDER_STOCK(HttpStatus.BAD_REQUEST,"재고는 0 이상이어야 합니다."),
+    INVALID_USED_POINT(HttpStatus.BAD_REQUEST, "사용 포인트는 0 이상이고 주문 금액 이하여야 합니다."),
 
     // Payment
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "결제를 찾을 수 없습니다."),
