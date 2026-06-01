@@ -58,10 +58,10 @@ Authorization: Bearer {accessToken}
 
 목록 API는 다음 query parameter를 사용합니다.
 
-| 이름 | 타입 | 기본값 | 설명 |
-| --- | --- | --- | --- |
-| `page` | int | `0` | 0부터 시작하는 페이지 번호 |
-| `size` | int | `20` | 페이지 크기. 최대 `100` |
+| 이름 | 타입 | 기본값  | 설명 |
+| --- | --- |------| --- |
+| `page` | int | `0`  | 0부터 시작하는 페이지 번호 |
+| `size` | int | `10` | 페이지 크기. 최대 `100` |
 
 페이지 응답 형식:
 
@@ -69,7 +69,7 @@ Authorization: Bearer {accessToken}
 {
   "content": [],
   "page": 0,
-  "size": 20,
+  "size": 10,
   "totalElements": 120,
   "totalPages": 6,
   "hasNext": true
@@ -184,6 +184,7 @@ Authorization: Bearer {accessToken}
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
 | `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 성공/내부 실패 보상 취소 실패 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
+| `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
 | `POINT_ACCOUNT_NOT_FOUND` | 404 | 포인트 계정 없음 |
 | `POINT_LEDGER_SYNC_FAILED` | 500 | 포인트 스냅샷과 원장 동기화 실패 |
 | `REFUND_ITEM_REQUIRED` | 400 | 환불할 주문 상품 목록 누락 |

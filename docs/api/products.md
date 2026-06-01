@@ -15,13 +15,13 @@
 
 | 이름 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
-| `category` | string | N | 없음 | 카테고리 |
-| `minPrice` | int | N | 없음 | 최소 판매가 |
-| `maxPrice` | int | N | 없음 | 최대 판매가 |
-| `status` | ProductStatus | N | 없음 | `ON_SALE`, `SOLD_OUT`, `DISCONTINUED` |
+| `category` | string | N | 없음       | 카테고리 |
+| `minPrice` | int | N | 없음       | 최소 판매가 |
+| `maxPrice` | int | N | 없음       | 최대 판매가 |
+| `status` | ProductStatus | N | 없음       | `ON_SALE`, `SOLD_OUT`, `DISCONTINUED` |
 | `sort` | string | N | `LATEST` | `LATEST`, `PRICE_ASC`, `PRICE_DESC` |
-| `page` | int | N | `0` | 페이지 번호 |
-| `size` | int | N | `20` | 페이지 크기 |
+| `page` | int | N | `0`      | 페이지 번호 |
+| `size` | int | N | `10`     | 페이지 크기 |
 
 ### Response Data
 
@@ -39,7 +39,7 @@
     }
   ],
   "page": 0,
-  "size": 20,
+  "size": 10,
   "totalElements": 1,
   "totalPages": 1,
   "hasNext": false

@@ -6,6 +6,7 @@
     - 포인트 환불 금액: `floor(환불금액 * 사용포인트 / 주문총액)`
     - PG 환불 금액: `환불금액 - 포인트환불금액`
 - 마지막 전액 환불이 되는 요청은 소수점 버림 누적 오차를 없애기 위해 남은 포인트/PG 환불 가능액을 모두 배정합니다.
+    - 마지막 적립 포인트 회수 금액 = 원 결제 적립 포인트 - 기존 적립 포인트 회수 합계
 
 ## 공통 Response
 
@@ -14,17 +15,17 @@
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `refundId` | `Long` | 생성된 환불 ID |
-| `orderId` | `Long` | 환불 대상 주문 ID |
-| `paymentId` | `Long` | 환불 대상 결제 ID |
+| `refundId` | `Long` | 생성된 환불 ID                           |
+| `orderId` | `Long` | 환불 대상 주문 ID                         |
+| `paymentId` | `Long` | 환불 대상 결제 ID                         |
 | `refundStatus` | `RefundStatus` | `PROCESSING`, `COMPLETED`, `FAILED` |
-| `refundAmount` | `Integer` | 총 환불 금액 |
-| `pointRefundAmount` | `Integer` | 복구되는 포인트 금액 |
-| `pgRefundAmount` | `Integer` | PG 환불 금액 |
-| `reason` | `String` | 환불 사유 |
-| `items` | `List&lt;RefundItemResponse&gt;` | 환불 상품 목록 |
-| `createdAt` | `LocalDateTime` | 환불 요청 생성 시각 |
-| `refundedAt` | `LocalDateTime` | PG 환불 완료 시각 |
+| `refundAmount` | `Integer` | 총 환불 금액                             |
+| `pointRefundAmount` | `Integer` | 복구되는 포인트 금액                         |
+| `pgRefundAmount` | `Integer` | PG 환불 금액                            |
+| `reason` | `String` | 환불 사유                               |
+| `items` | `List&lt;RefundItemResponse&gt;` | 환불 상품 목록                            |
+| `createdAt` | `LocalDateTime` | 환불 요청 생성 시각                         |
+| `refundedAt` | `LocalDateTime` | PG 환불 완료 시각                         |
 
 ```json
 {
@@ -83,7 +84,7 @@
 | 필드 | 타입                           | 필수 | 설명 |
 |---|------------------------------|---|---|
 | `reason` | `String`                     | Y | 환불 사유 |
-| `items` | `List&lt<RefundItemRequest>` | Y | 환불할 주문 상품과 수량 목록 |
+| `items` | `List&lt;RefundItemRequest&gt;` | Y | 환불할 주문 상품과 수량 목록 |
 | `items[].orderItemId` | `Long`                       | Y | 주문 상품 ID |
 | `items[].quantity` | `Integer`                    | Y | 환불 수량. 1 이상 |
 
@@ -107,19 +108,19 @@
 - 공통 `RefundResponse` DTO를 사용합니다.
 - 부분 환불의 경우 `items`에는 실제 환불 요청한 주문 상품만 포함됩니다.
 
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `refundId` | Long | 생성된 환불 ID |
-| `orderId` | Long | 환불 대상 주문 ID |
-| `paymentId` | Long | 환불 대상 결제 ID |
-| `refundStatus` | RefundStatus | 환불 상태. `PENDING`, `PROCESSING`, `FAILED` |
-| `refundAmount` | Integer | 총 환불 금액 |
-| `pointRefundAmount` | Integer | 복구되는 포인트 금액 |
-| `pgRefundAmount` | Integer | PG 환불 금액 |
-| `reason` | String | 환불 사유 |
-| `items` | List<RefundItemResponse> | 환불 상품 목록 |
-| `createdAt` | LocalDateTime | 환불 요청 생성 시각 |
-| `refundedAt` | LocalDateTime | PG 환불 완료 시각. 완료 전 또는 실패 시 `null` |
+| 필드 | 타입 | 설명                                         |
+|---|---|--------------------------------------------|
+| `refundId` | Long | 생성된 환불 ID                                  |
+| `orderId` | Long | 환불 대상 주문 ID                                |
+| `paymentId` | Long | 환불 대상 결제 ID                                |
+| `refundStatus` | RefundStatus | 환불 상태. `PROCESSING`, `COMPLETED`, `FAILED` |
+| `refundAmount` | Integer | 총 환불 금액                                    |
+| `pointRefundAmount` | Integer | 복구되는 포인트 금액                                |
+| `pgRefundAmount` | Integer | PG 환불 금액                                   |
+| `reason` | String | 환불 사유                                      |
+| `items` | List<RefundItemResponse> | 환불 상품 목록                                   |
+| `createdAt` | LocalDateTime | 환불 요청 생성 시각                                |
+| `refundedAt` | LocalDateTime | PG 환불 완료 시각. 완료 전 또는 실패 시 `null`           |
 
 ```json
 {
@@ -231,26 +232,67 @@
 }
 ```
 
-### 처리 규칙
+## 3. PortOne 결제 취소 API
 
-1. 환불 대상 주문 상품의 잔여 환불 가능 수량을 초과할 수 없습니다.
+`pgRefundAmount > 0`이면 백엔드 서버가 PortOne V2 결제 취소 API를 호출합니다.
 
-2. 선검증 후 DB 트랜잭션에서 다음 작업을 처리합니다.
-    - 환불 기록 생성: `Refund.status = PROCESSING`
-    - 환불 상품 기록 생성
-    - 재고 복구
-    - 포인트 사용분 복구
-    - 적립분 회수
+이 API는 클라이언트가 직접 호출하지 않습니다.
+PortOne API Secret이 외부에 노출되지 않도록 반드시 백엔드 서버에서 호출해야 합니다.
 
-3. DB 트랜잭션 커밋 후 PortOne PG 취소 API를 호출합니다.
+- Method: `POST`
+- URL: `https://api.portone.io/payments/{portonePaymentId}/cancel`
+- 인증 헤더: `Authorization: PortOne {API_SECRET}`
+- Content-Type: `application/json`
 
-4. PG 취소 성공 시 다음 작업을 처리합니다.
-    - 환불 상태를 `COMPLETED`로 갱신합니다.
-    - 전액 환불이면 주문 상태를 `CANCELED`, 결제 상태를 `FULL_REFUNDED`로 변경합니다.
-    - 부분 환불이면 주문 상태는 `COMPLETED`를 유지하고 결제 상태만 `PARTIAL_REFUNDED`로 변경합니다.
+`portonePaymentId`는 우리 DB의 `payment.id`가 아닙니다.
 
-5. PG 취소 실패 시 환불 상태를 `FAILED`로 갱신하고 `REFUND_PG_CANCEL_FAILED`를 반환합니다.
-    - 운영에서는 실패 로그와 수동 보정 대상 추적이 필요합니다.
+결제 생성 시 발급하여 저장한 `payment.portone_payment_id`입니다.
+
+부분 환불 요청 예시:
+
+```json
+{
+  "reason": "일부 상품 환불 요청",
+  "amount": 8000,
+  "currentCancellableAmount": 20000
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `reason` | `String` | Y | 환불 사유 |
+| `amount` | `Long` | 부분 환불 시 Y | 이번에 취소할 PG 결제 금액. `pgRefundAmount`를 전달합니다. |
+| `currentCancellableAmount` | `Long` | 부분 환불 시 Y | 취소 요청 직전의 PG 환불 가능 잔액입니다. 실제 잔액과 다르면 PortOne이 취소를 거부합니다. |
+
+전체 환불은 남은 PG 결제 금액 전체를 취소합니다.
+
+포인트 전액 결제로 `pgRefundAmount == 0`이면 PortOne API 호출을 생략하고 내부 환불 확정 단계로 이동합니다.
+
+네트워크 오류로 동일한 요청을 다시 보낼 수 있으므로 요청 헤더에 고유한 멱등 키를 포함합니다.
+
+```http
+Idempotency-Key: "refund-cancel-request-{refundId}"
+```
+
+- 멱등 키는 동일한 취소 요청이 중복 처리되지 않도록 식별하는 값입니다.
+
+#### 처리 규칙
+
+- 환불 금액은 서버가 주문 당시 가격과 수량으로 계산한다.
+- 잔여 수량·금액 계산 시 `PROCESSING`, `COMPLETED` 환불을 제외한다.
+- 마지막 전체 환불에서는 포인트 배분의 누적 오차를 보정한다.
+- 동일 결제의 환불은 한 번에 하나만 처리한다.
+- 동시 환불을 방지하기 위해 우리 DB의 원본 결제 정보(`payment`)에 `PESSIMISTIC_WRITE` 잠금을 적용한다.
+- 기존 `PROCESSING` 환불이 있으면 `REFUND_IN_PROGRESS`를 반환한다.
+- 환불 요청을 `PROCESSING`으로 저장하고 트랜잭션을 종료한 후 PG 취소를 요청한다.
+- 포인트 전액 결제는 PG 호출을 생략한다.
+- PG 취소 성공 시 재고, 포인트, 주문·결제 상태를 반영한다.
+- 부분 환불은 `PARTIAL_REFUNDED`, 전체 환불은 `REFUNDED`로 처리한다.
+- 명확한 PG 취소 실패는 `FAILED`로 변경한다.
+- 타임아웃·네트워크 오류는 `PROCESSING`을 유지하고 재시도한다.
+- 재시도 시 새 환불을 생성하지 않고 동일한 멱등 키를 사용한다.
+
+`Idempotency-Key: refund-cancel-request-{refundId}`
 
 ### Errors
 
@@ -266,3 +308,4 @@
 | `REFUND_NOT_ALLOWED` | 409 | 결제가 환불 가능한 상태가 아님 |
 | `REFUND_QUANTITY_EXCEEDED` | 400 | 잔여 환불 가능 수량 초과 |
 | `REFUND_PG_CANCEL_FAILED` | 502 | PortOne PG 취소 실패 |
+| `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
