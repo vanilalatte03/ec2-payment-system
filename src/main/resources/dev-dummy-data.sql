@@ -18,18 +18,18 @@ DELETE FROM orders WHERE id BETWEEN 10001 AND 19999;
 DELETE FROM cart_items WHERE id BETWEEN 10001 AND 19999;
 DELETE FROM carts WHERE id BETWEEN 10001 AND 19999;
 DELETE FROM products WHERE id BETWEEN 10001 AND 19999;
-DELETE FROM members WHERE id BETWEEN 10001 AND 19999;
+DELETE FROM users WHERE id BETWEEN 10001 AND 19999;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 회원 데이터
-INSERT INTO members (
+INSERT INTO users (
     id,
     name,
     email,
     password_hash,
     phone_number,
-    point_snap,
+    point_balance,
     created_at,
     updated_at
 ) VALUES
