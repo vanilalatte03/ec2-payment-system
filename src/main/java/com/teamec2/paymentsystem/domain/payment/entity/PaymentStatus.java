@@ -1,0 +1,39 @@
+package com.teamec2.paymentsystem.domain.payment.entity;
+
+/**
+ * 결제 처리 상태.
+ *
+ * <p>결제는 PENDING 상태로 생성되며, 결제 검증 결과에 따라 COMPLETED 또는 FAILED로 전이된다.
+ * COMPLETED 이후에는 환불 처리 결과에 따라 PARTIAL_REFUNDED 또는 REFUNDED로 전이될 수 있다.
+ */
+public enum PaymentStatus {
+    /** 결제 검증 전 대기 상태 */
+    PENDING,
+
+    /** 결제 승인 완료 상태 */
+    COMPLETED,
+
+    /** 결제 검증 또는 승인 실패 상태 */
+    FAILED,
+
+    /** 일부 금액이 환불된 상태 */
+    PARTIAL_REFUNDED,
+
+    /** 전체 금액이 환불된 상태 */
+    REFUNDED;
+
+    /**
+     * 현재 상태에서 대상 상태로 전이할 수 있는지 확인한다.
+     *
+     * @param target 전이하려는 대상 상태
+     * @return 전이 가능 여부
+     */
+    public boolean canTransitionTo(PaymentStatus target) {
+        return switch (this) {
+            case PENDING -> target == COMPLETED || target == FAILED;
+            case COMPLETED -> target == PARTIAL_REFUNDED || target == REFUNDED;
+            case PARTIAL_REFUNDED -> target == REFUNDED;
+            case FAILED, REFUNDED -> false;
+        };
+    }
+}
