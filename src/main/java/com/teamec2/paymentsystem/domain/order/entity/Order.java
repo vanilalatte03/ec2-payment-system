@@ -69,7 +69,7 @@ public class Order extends BaseEntity {
     }
 
     public void complete() {
-        if (status != OrderStatus.PAYMENT_PENDING) {
+        if (!status.canCompletePayment()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
@@ -77,7 +77,7 @@ public class Order extends BaseEntity {
     }
 
     public void cancelPendingPayment() {
-        if (status != OrderStatus.PAYMENT_PENDING) {
+        if (!status.canCancelPendingPayment()) {
             throw new BusinessException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
         }
 
@@ -85,7 +85,7 @@ public class Order extends BaseEntity {
     }
 
     public void cancelCompletedByRefund() {
-        if (status != OrderStatus.COMPLETED) {
+        if (!status.canCancelCompletedByRefund()) {
             throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
         }
 
