@@ -58,10 +58,10 @@ Authorization: Bearer {accessToken}
 
 목록 API는 다음 query parameter를 사용합니다.
 
-| 이름 | 타입 | 기본값 | 설명 |
-| --- | --- | --- | --- |
-| `page` | int | `0` | 0부터 시작하는 페이지 번호 |
-| `size` | int | `20` | 페이지 크기. 최대 `100` |
+| 이름 | 타입 | 기본값  | 설명 |
+| --- | --- |------| --- |
+| `page` | int | `0`  | 0부터 시작하는 페이지 번호 |
+| `size` | int | `10` | 페이지 크기. 최대 `100` |
 
 페이지 응답 형식:
 
@@ -69,7 +69,7 @@ Authorization: Bearer {accessToken}
 {
   "content": [],
   "page": 0,
-  "size": 20,
+  "size": 10,
   "totalElements": 120,
   "totalPages": 6,
   "hasNext": true
