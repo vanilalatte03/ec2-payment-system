@@ -36,17 +36,13 @@ public class OrderItem extends BaseEntity {
     @Column(nullable = false, columnDefinition = "int UNSIGNED")
     private int quantity;
 
-    public OrderItem(Order order, Product product, int price, int quantity) {
+    public OrderItem(Order order, Product product, int quantity) {
         if (order == null) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
 
         if (product == null) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
-        }
-
-        if (price < 0) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_PRICE);
         }
 
         if (quantity <= 0) {
@@ -56,7 +52,7 @@ public class OrderItem extends BaseEntity {
         this.order = order;
         this.product = product;
         this.productName = product.getName();
-        this.price = price;
+        this.price = product.getPrice();
         this.quantity = quantity;
     }
 

@@ -14,17 +14,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OrderItemTest {
 
     @Test
-    void 주문상품생성_가격이음수면_INVALID_ORDER_PRICE가발생한다() {
+    void 주문상품생성_상품가격을주문상품가격으로저장한다() {
         // given
         Order order = 주문_생성();
-        Product product = 상품_생성();
+        Product product = 상품_생성(1500);
 
         // when
+        OrderItem orderItem = new OrderItem(order, product, 2);
+
         // then
-        assertThatThrownBy(() -> new OrderItem(order, product, -1, 1))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_ORDER_PRICE);
+        assertThat(orderItem.getPrice()).isEqualTo(1500);
     }
 
     @Test
@@ -34,7 +33,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(null, product, 1000, 1))
+        assertThatThrownBy(() -> new OrderItem(null, product, 1))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ORDER_NOT_FOUND);
@@ -47,7 +46,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(order, null, 1000, 1))
+        assertThatThrownBy(() -> new OrderItem(order, null, 1))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND);
@@ -61,7 +60,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(order, product, 1000, 0))
+        assertThatThrownBy(() -> new OrderItem(order, product, 0))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_ORDER_QUANTITY);
@@ -75,7 +74,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(order, product, 1000, -1))
+        assertThatThrownBy(() -> new OrderItem(order, product, -1))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_ORDER_QUANTITY);
@@ -86,7 +85,7 @@ class OrderItemTest {
         // given
         Order order = 주문_생성();
         Product product = 상품_생성();
-        OrderItem orderItem = new OrderItem(order, product, 1000, 3);
+        OrderItem orderItem = new OrderItem(order, product, 3);
 
         // when
         long subtotal = orderItem.getSubtotal();
@@ -99,8 +98,8 @@ class OrderItemTest {
     void 주문상품금액조회_int범위를넘어도_long타입금액을반환한다() {
         // given
         Order order = 주문_생성();
-        Product product = 상품_생성();
-        OrderItem orderItem = new OrderItem(order, product, 1_500_000_000, 2);
+        Product product = 상품_생성(1_500_000_000);
+        OrderItem orderItem = new OrderItem(order, product, 2);
 
         // when
         long subtotal = orderItem.getSubtotal();
@@ -113,8 +112,8 @@ class OrderItemTest {
         return Order.create(
                 회원_생성(),
                 "ORDER-001",
-                1000,
-                0
+                1000L,
+                0L
         );
     }
 
@@ -128,9 +127,13 @@ class OrderItemTest {
     }
 
     private Product 상품_생성() {
+        return 상품_생성(1000);
+    }
+
+    private Product 상품_생성(int price) {
         return new Product(
                 "테스트 상품",
-                1000,
+                price,
                 10,
                 "테스트 상품 설명",
                 ProductStatus.ON_SALE,
