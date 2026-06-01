@@ -16,30 +16,32 @@ erDiagram
     order ||--o{ order_item : contains
     product ||--o{ order_item : ordered_as
     order ||--|| payment : paid_by
+    order ||--o{ refund : refunded_by
 
     payment ||--o{ point_transaction : creates
     payment ||--o{ refund : refunded_by
+    refund o|--o{ point_transaction : creates
     refund ||--o{ refund_item : contains
     order_item ||--o{ refund_item : refunded_as
 
-    user {
+    users {
         BIGINT id PK "유저 ID"
         VARCHAR email "유저 이메일"
         VARCHAR password "유저 비밀번호"
         VARCHAR name "이름"
         VARCHAR phone "전화번호"
-        BIGINT point_snap "포인트 잔액 스냅샷"
+        BIGINT point_balance "포인트 잔액 스냅샷"
         DATETIME created_at "생성일시"
     }
 
-    cart {
+    carts {
         BIGINT id PK "장바구니 ID"
         BIGINT user_id FK "유저 ID"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
     }
 
-    cart_item {
+    cart_items {
         BIGINT id PK "장바구니 상품 ID"
         BIGINT product_id FK "상품 ID"
         BIGINT cart_id FK "장바구니 ID"
@@ -48,7 +50,7 @@ erDiagram
         DATETIME updated_at "수정일시"
     }
 
-    product {
+    products {
         BIGINT id PK "상품 ID"
         VARCHAR name "상품명"
         INT price "판매가"
@@ -60,7 +62,7 @@ erDiagram
         DATETIME updated_at "수정일시"
     }
 
-    order {
+    orders {
         BIGINT id PK "주문 ID"
         BIGINT user_id FK "유저 ID"
         VARCHAR order_number "주문번호"
@@ -71,7 +73,7 @@ erDiagram
         DATETIME updated_at "수정일시"
     }
 
-    order_item {
+    order_items {
         BIGINT id PK "주문상품ID"
         BIGINT order_id FK "주문 ID"
         BIGINT product_id FK "상품 ID"
@@ -82,7 +84,7 @@ erDiagram
         DATETIME updated_at "수정일시"
     }
 
-    payment {
+    payments {
         BIGINT id PK "결제ID"
         BIGINT order_id FK "주문 ID"
         VARCHAR portone_payment_id "포트원 ID"
@@ -98,16 +100,17 @@ erDiagram
         DATETIME updated_at "수정일시"
     }
 
-    point_transaction {
+    point_transactions {
         BIGINT id PK "포인트거래ID"
         BIGINT payment_id FK "결제ID"
         BIGINT user_id FK "유저 ID"
+        BIGINT refund_id FK "환불ID, nullable"
         VARCHAR type "거래타입"
         INT amount "거래금액"
         DATETIME created_at "생성일시"
     }
 
-    refund {
+    refunds {
         BIGINT id PK "환불ID"
         BIGINT order_id FK "주문ID"
         BIGINT payment_id FK "결제ID"
@@ -120,7 +123,7 @@ erDiagram
         DATETIME refunded_at "환불완료일시"
     }
 
-    refund_item {
+    refund_items {
         BIGINT id PK "환불상품ID"
         BIGINT refund_id FK "환불ID"
         BIGINT order_item_id FK "주문상품ID"
@@ -135,19 +138,19 @@ erDiagram
 
 ## 테이블 정의
 
-### user
+### users
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고  |
 | --- | --- | --- | --- |--------|
-| 유저 ID | id | BIGINT | NOT NULL | PK     |
-| 유저 이메일 | email | VARCHAR(50) | NOT NULL | UNIQUE |
-| 유저 비밀번호 | password | VARCHAR(255) | NOT NULL |        |
-| 이름 | name | VARCHAR(20) | NOT NULL |        |
-| 전화번호 | phone | VARCHAR(50) | NOT NULL |        |
-| 포인트 잔액 스냅샷 | point_snap | BIGINT | NOT NULL |        |
-| 생성일시 | created_at | DATETIME | NULL |        |
+| 유저 ID | id            | BIGINT | NOT NULL | PK     |
+| 유저 이메일 | email         | VARCHAR(50) | NOT NULL | UNIQUE |
+| 유저 비밀번호 | password      | VARCHAR(255) | NOT NULL |        |
+| 이름 | name          | VARCHAR(20) | NOT NULL |        |
+| 전화번호 | phone         | VARCHAR(50) | NOT NULL |        |
+| 포인트 잔액 스냅샷 | point_balance | BIGINT | NOT NULL |        |
+| 생성일시 | created_at    | DATETIME | NULL |        |
 
-### cart
+### carts
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -156,7 +159,7 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
-### cart_item
+### cart_items
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -167,7 +170,7 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
-### product
+### products
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -181,7 +184,7 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
-### order
+### orders
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -194,7 +197,7 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
-### order_item
+### order_items
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -207,7 +210,7 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
-### payment
+### payments
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -225,33 +228,36 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NOT NULL |  |
 
-### point_transaction
+### point_transactions
+제약 조건:
+- `UNIQUE (refund_id, type)`
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
-| 포인트거래ID | id | BIGINT | NOT NULL | PK |
-| 결제ID | payment_id | BIGINT | NOT NULL | FK: payment.id |
-| 유저 ID | user_id | BIGINT | NOT NULL | FK: user.id |
-| 거래타입 | type | VARCHAR | NOT NULL | USE, EARN, USE_RESTORE, EARN_CANCEL |
-| 거래금액 | amount | INT | NOT NULL |  |
-| 생성일시 | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각 |
+| 포인트거래ID | id         | BIGINT | NOT NULL | PK                                  |
+| 결제ID    | payment_id | BIGINT | NOT NULL | FK: payment.id                      |
+| 유저 ID   | user_id    | BIGINT | NOT NULL | FK: user.id                         |
+| 환불ID | refund_id | BIGINT | NULL | FK: refund.id. `USE_RESTORE`, `EARN_CANCEL`인 경우 저장 |
+| 거래타입    | type       | VARCHAR | NOT NULL | USE, EARN, USE_RESTORE, EARN_CANCEL |
+| 거래금액    | amount     | INT | NOT NULL |                                     |
+| 생성일시    | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
 
-### refund
+### refunds
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
-| 환불ID | id | BIGINT | NOT NULL | PK |
-| 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id |
-| 결제ID | payment_id | BIGINT | NOT NULL | FK: payment.id |
-| 환불사유 | reason | VARCHAR(255) | NOT NULL |  |
-| 총 환불 금액 | refund_amount | INT | NOT NULL | 포인트 + PG 포함 총 환불 금액 |
-| 포인트 환불 금액 | point_refund_amount | INT | NOT NULL | 고객에게 복구되는 포인트 금액 |
-| PG 환불 금액 | pg_refund_amount | INT | NOT NULL |  |
-| 환불 상태 | status | VARCHAR(30) | NOT NULL | PENDING, COMPLETED, FAILED |
-| 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각 |
-| 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각 |
+| 환불ID | id | BIGINT | NOT NULL | PK                            |
+| 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id                 |
+| 결제ID | payment_id | BIGINT | NOT NULL | FK: payment.id                |
+| 환불사유 | reason | VARCHAR(255) | NOT NULL |                               |
+| 총 환불 금액 | refund_amount | INT | NOT NULL | 포인트 + PG 포함 총 환불 금액           |
+| 포인트 환불 금액 | point_refund_amount | INT | NOT NULL | 고객에게 복구되는 포인트 금액              |
+| PG 환불 금액 | pg_refund_amount | INT | NOT NULL |                               |
+| 환불 상태 | status | VARCHAR(30) | NOT NULL | PROCESSING, COMPLETED, FAILED |
+| 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각                 |
+| 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각              |
 
-### refund_item
+### refund_items
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -280,5 +286,6 @@ erDiagram
 | order - refund | 주문은 여러 환불 내역을 가질 수 있다. |
 | payment - point_transaction | 결제는 포인트 거래 내역을 생성할 수 있다. |
 | payment - refund | 결제는 여러 환불 내역을 가질 수 있다. |
+| refund - point_transaction | 환불은 사용 포인트 복구 및 적립 포인트 회수 거래 내역을 생성할 수 있다. |
 | refund - refund_item | 환불은 여러 환불 상품을 가진다. |
 | order_item - refund_item | 주문 상품은 환불 상품으로 참조된다. |
