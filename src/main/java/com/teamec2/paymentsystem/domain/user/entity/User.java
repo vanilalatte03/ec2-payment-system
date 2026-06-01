@@ -1,5 +1,7 @@
 package com.teamec2.paymentsystem.domain.user.entity;
 
+import com.teamec2.paymentsystem.global.exception.BusinessException;
+import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -49,5 +51,21 @@ public class User {
 
     public static User create(String email, String password, String name, String phone) {
         return new User(email, password, name, phone);
+    }
+
+    // 증가 포인트 메서드
+    public void increasePointBalance(Long amount) {
+        if (amount <= 0) {
+            throw new BusinessException(ErrorCode.POINT_INCREASE_AMOUNT_INVALID);
+        }
+        this.pointBalance += amount;
+    }
+
+    // 감소 포인트 메서드
+    public void decreasePointBalance(Long amount) {
+        if (amount <= 0) {
+            throw new BusinessException(ErrorCode.POINT_DECREASE_AMOUNT_INVALID);
+        }
+        this.pointBalance -= amount;
     }
 }
