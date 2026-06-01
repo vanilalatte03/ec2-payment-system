@@ -20,7 +20,7 @@ import java.util.UUID;
  */
 @Entity
 @Getter
-@Table(name = "payment")
+@Table(name = "payments")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment extends BaseEntity {
 
