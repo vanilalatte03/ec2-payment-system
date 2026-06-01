@@ -13,7 +13,7 @@ class OrderTest {
     @Test
     void 결제대기주문_회원이직접취소하면_취소상태가된다() {
         // given
-        Order order = Order.create(회원_생성(), "ORDER-001", 1000, 0);
+        Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
 
         // when
         order.cancelPendingPayment();
@@ -25,7 +25,7 @@ class OrderTest {
     @Test
     void 결제완료주문_회원이직접취소하면_ORDER_CANCEL_NOT_ALLOWED가발생한다() {
         // given
-        Order order = Order.create(회원_생성(), "ORDER-001", 1000, 0);
+        Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
         order.complete();
 
         // when
@@ -39,7 +39,7 @@ class OrderTest {
     @Test
     void 취소된주문_결제완료처리하면_INVALID_ORDER_STATUS가발생한다() {
         // given
-        Order order = Order.create(회원_생성(), "ORDER-001", 1000, 0);
+        Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
         order.cancelPendingPayment();
 
         // when
@@ -53,7 +53,7 @@ class OrderTest {
     @Test
     void 결제완료주문_전액환불처리하면_취소상태가된다() {
         // given
-        Order order = Order.create(회원_생성(), "ORDER-001", 1000, 0);
+        Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
         order.complete();
 
         // when
@@ -66,7 +66,7 @@ class OrderTest {
     @Test
     void 결제완료상태가아닌주문_전액환불취소처리하면_REFUND_NOT_ALLOWED가발생한다() {
         // given
-        Order order = Order.create(회원_생성(), "ORDER-001", 1000, 0);
+        Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
 
         // when
         // then
@@ -82,7 +82,7 @@ class OrderTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Order.create(null, "ORDER-001", 1000, 0))
+        assertThatThrownBy(() -> Order.create(null, "ORDER-001", 1000L, 0L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
@@ -95,10 +95,36 @@ class OrderTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Order.create(user, " ", 1000, 0))
+        assertThatThrownBy(() -> Order.create(user, " ", 1000L, 0L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+    }
+
+    @Test
+    void 주문생성_주문금액이없으면_INVALID_ORDER_PRICE가발생한다() {
+        // given
+        User user = 회원_생성();
+
+        // when
+        // then
+        assertThatThrownBy(() -> Order.create(user, "ORDER-001", null, 0L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_ORDER_PRICE);
+    }
+
+    @Test
+    void 주문생성_사용포인트가없으면_INVALID_USED_POINT가발생한다() {
+        // given
+        User user = 회원_생성();
+
+        // when
+        // then
+        assertThatThrownBy(() -> Order.create(user, "ORDER-001", 1000L, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_USED_POINT);
     }
 
     @Test
@@ -108,7 +134,7 @@ class OrderTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Order.create(user, "ORDER-001", 1000, -1))
+        assertThatThrownBy(() -> Order.create(user, "ORDER-001", 1000L, -1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_USED_POINT);
@@ -121,7 +147,7 @@ class OrderTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Order.create(user, "ORDER-001", 1000, 1001))
+        assertThatThrownBy(() -> Order.create(user, "ORDER-001", 1000L, 1001L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_USED_POINT);

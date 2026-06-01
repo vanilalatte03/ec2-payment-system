@@ -7,11 +7,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OrderStatusTest {
 
     @Test
-    void 결제완료상태는_전액환불맥락에서_취소상태로_전이할수있다() {
+    void 주문상태는_결제대기_결제완료_취소를_가진다() {
         // when
-        boolean canTransit = OrderStatus.COMPLETED.canTransitTo(OrderStatus.CANCELED);
+        OrderStatus[] statuses = OrderStatus.values();
 
         // then
-        assertThat(canTransit).isTrue();
+        assertThat(statuses).containsExactly(
+                OrderStatus.PAYMENT_PENDING,
+                OrderStatus.COMPLETED,
+                OrderStatus.CANCELED
+        );
     }
 }
