@@ -69,26 +69,30 @@ public class Order extends BaseEntity {
     }
 
     public void complete() {
-        if (!status.canCompletePayment()) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
-        }
-
-        this.status = OrderStatus.COMPLETED;
+        changeStatus(OrderStatus.COMPLETED, ErrorCode.INVALID_ORDER_STATUS);
     }
 
     public void cancelPendingPayment() {
-        if (!status.canCancelPendingPayment()) {
-            throw new BusinessException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
-        }
-
-        this.status = OrderStatus.CANCELED;
+        changeStatusFrom(OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
     }
 
     public void cancelCompletedByRefund() {
-        if (!status.canCancelCompletedByRefund()) {
-            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+        changeStatusFrom(OrderStatus.COMPLETED, OrderStatus.CANCELED, ErrorCode.REFUND_NOT_ALLOWED);
+    }
+
+    private void changeStatus(OrderStatus targetStatus, ErrorCode errorCode) {
+        if (!status.canTransitionTo(targetStatus)) {
+            throw new BusinessException(errorCode);
         }
 
-        this.status = OrderStatus.CANCELED;
+        this.status = targetStatus;
+    }
+
+    private void changeStatusFrom(OrderStatus sourceStatus, OrderStatus targetStatus, ErrorCode errorCode) {
+        if (status != sourceStatus) {
+            throw new BusinessException(errorCode);
+        }
+
+        changeStatus(targetStatus, errorCode);
     }
 }

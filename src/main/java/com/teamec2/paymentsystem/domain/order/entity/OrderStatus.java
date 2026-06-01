@@ -5,15 +5,11 @@ public enum OrderStatus {
     COMPLETED,
     CANCELED;
 
-    public boolean canCompletePayment() {
-        return this == PAYMENT_PENDING;
-    }
-
-    public boolean canCancelPendingPayment() {
-        return this == PAYMENT_PENDING;
-    }
-
-    public boolean canCancelCompletedByRefund() {
-        return this == COMPLETED;
+    public boolean canTransitionTo(OrderStatus target) {
+        return switch (this) {
+            case PAYMENT_PENDING -> target == COMPLETED || target == CANCELED;
+            case COMPLETED -> target == CANCELED;
+            case CANCELED -> false;
+        };
     }
 }

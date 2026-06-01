@@ -22,67 +22,67 @@ class OrderStatusTest {
     @Test
     void 결제대기상태는_결제완료처리할수있다() {
         // when
-        boolean canCompletePayment = OrderStatus.PAYMENT_PENDING.canCompletePayment();
+        boolean canTransition = OrderStatus.PAYMENT_PENDING.canTransitionTo(OrderStatus.COMPLETED);
 
         // then
-        assertThat(canCompletePayment).isTrue();
+        assertThat(canTransition).isTrue();
     }
 
     @Test
     void 결제완료상태는_결제완료처리할수없다() {
         // when
-        boolean canCompletePayment = OrderStatus.COMPLETED.canCompletePayment();
+        boolean canTransition = OrderStatus.COMPLETED.canTransitionTo(OrderStatus.COMPLETED);
 
         // then
-        assertThat(canCompletePayment).isFalse();
+        assertThat(canTransition).isFalse();
     }
 
     @Test
     void 결제대기상태는_회원직접취소할수있다() {
         // when
-        boolean canCancel = OrderStatus.PAYMENT_PENDING.canCancelPendingPayment();
+        boolean canTransition = OrderStatus.PAYMENT_PENDING.canTransitionTo(OrderStatus.CANCELED);
 
         // then
-        assertThat(canCancel).isTrue();
+        assertThat(canTransition).isTrue();
     }
 
     @Test
-    void 결제완료상태는_회원직접취소할수없다() {
+    void 결제완료상태는_취소상태로_변경할수있다() {
         // when
-        boolean canCancel = OrderStatus.COMPLETED.canCancelPendingPayment();
+        boolean canTransition = OrderStatus.COMPLETED.canTransitionTo(OrderStatus.CANCELED);
 
         // then
-        assertThat(canCancel).isFalse();
+        assertThat(canTransition).isTrue();
     }
 
     @Test
-    void 결제완료상태는_전액환불로_취소할수있다() {
+    void 결제대기상태는_취소상태로_변경할수있다() {
         // when
-        boolean canCancel = OrderStatus.COMPLETED.canCancelCompletedByRefund();
+        boolean canTransition = OrderStatus.PAYMENT_PENDING.canTransitionTo(OrderStatus.CANCELED);
 
         // then
-        assertThat(canCancel).isTrue();
+        assertThat(canTransition).isTrue();
     }
 
     @Test
-    void 결제대기상태는_전액환불로_취소할수없다() {
+    void 결제대기상태는_결제대기로_변경할수없다() {
         // when
-        boolean canCancel = OrderStatus.PAYMENT_PENDING.canCancelCompletedByRefund();
+        boolean canTransition = OrderStatus.PAYMENT_PENDING.canTransitionTo(OrderStatus.PAYMENT_PENDING);
 
         // then
-        assertThat(canCancel).isFalse();
+        assertThat(canTransition).isFalse();
     }
 
     @Test
-    void 취소상태는_목적별_상태변경을_할수없다() {
+    void 취소상태는_다른상태로_변경할수없다() {
         // when
-        boolean canCompletePayment = OrderStatus.CANCELED.canCompletePayment();
-        boolean canCancelPendingPayment = OrderStatus.CANCELED.canCancelPendingPayment();
-        boolean canCancelCompletedByRefund = OrderStatus.CANCELED.canCancelCompletedByRefund();
+        boolean canTransitionToPaymentPending = OrderStatus.CANCELED.canTransitionTo(OrderStatus.PAYMENT_PENDING);
+        boolean canTransitionToCompleted = OrderStatus.CANCELED.canTransitionTo(OrderStatus.COMPLETED);
+        boolean canTransitionToCanceled = OrderStatus.CANCELED.canTransitionTo(OrderStatus.CANCELED);
 
         // then
-        assertThat(canCompletePayment).isFalse();
-        assertThat(canCancelPendingPayment).isFalse();
-        assertThat(canCancelCompletedByRefund).isFalse();
+        assertThat(canTransitionToPaymentPending).isFalse();
+        assertThat(canTransitionToCompleted).isFalse();
+        assertThat(canTransitionToCanceled).isFalse();
     }
 }
