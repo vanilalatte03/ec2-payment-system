@@ -184,6 +184,7 @@ Authorization: Bearer {accessToken}
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
 | `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 성공/내부 실패 보상 취소 실패 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
+| `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
 | `POINT_ACCOUNT_NOT_FOUND` | 404 | 포인트 계정 없음 |
 | `POINT_LEDGER_SYNC_FAILED` | 500 | 포인트 스냅샷과 원장 동기화 실패 |
 | `REFUND_ITEM_REQUIRED` | 400 | 환불할 주문 상품 목록 누락 |

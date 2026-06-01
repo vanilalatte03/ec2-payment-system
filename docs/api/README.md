@@ -20,27 +20,28 @@
 
 ## 엔드포인트 요약
 
-| 도메인 | 기능 | Method | Path | 인증 |
-| --- | --- | --- | --- | --- |
-| 인증 | 회원가입 | POST | `/api/auth/signup` | 불필요 |
-| 인증 | 로그인 | POST | `/api/auth/login` | 불필요 |
-| 인증 | 로그아웃 | POST | `/api/auth/logout` | 필요 |
-| 상품 | 상품 목록 조회 | GET | `/api/products` | 불필요 |
-| 상품 | 상품 단건 조회 | GET | `/api/products/{productId}` | 불필요 |
-| 장바구니 | 상품 담기 | POST | `/api/carts/items` | 필요 |
-| 장바구니 | 장바구니 조회 | GET | `/api/carts` | 필요 |
-| 장바구니 | 장바구니 수량 변경 | PATCH | `/api/carts/items/{cartItemId}` | 필요 |
+| 도메인 | 기능            | Method | Path | 인증 |
+| --- |---------------| --- | --- | --- |
+| 인증 | 회원가입          | POST | `/api/auth/signup` | 불필요 |
+| 인증 | 로그인           | POST | `/api/auth/login` | 불필요 |
+| 인증 | 로그아웃          | POST | `/api/auth/logout` | 필요 |
+| 상품 | 상품 목록 조회      | GET | `/api/products` | 불필요 |
+| 상품 | 상품 단건 조회      | GET | `/api/products/{productId}` | 불필요 |
+| 장바구니 | 상품 담기         | POST | `/api/carts/items` | 필요 |
+| 장바구니 | 장바구니 조회       | GET | `/api/carts` | 필요 |
+| 장바구니 | 장바구니 수량 변경    | PATCH | `/api/carts/items/{cartItemId}` | 필요 |
 | 장바구니 | 장바구니 상품 개별 삭제 | DELETE | `/api/carts/items/{cartItemId}` | 필요 |
-| 장바구니 | 장바구니 전체 비우기 | DELETE | `/api/carts` | 필요 |
-| 주문 | 주문서 미리보기 | GET | `/api/orders/preview` | 필요 |
-| 주문 | 주문/결제 생성 | POST | `/api/orders` | 필요 |
-| 주문 | 주문 내역 조회 | GET | `/api/orders` | 필요 |
-| 주문 | 주문 상세 조회 | GET | `/api/orders/{orderId}` | 필요 |
-| 주문 | 주문 상태 변경 | PATCH | `/api/orders/{orderId}/status` | 필요 |
-| 결제 | 결제 확정 | POST | `/api/payments/confirm` | 필요 |
-| 포인트 | 포인트 잔액 조회 | GET | `/api/points/balance` | 필요 |
-| 포인트 | 포인트 거래 내역 조회 | GET | `/api/points/transactions` | 필요 |
-| 환불 | 환불 요청 | POST | `/api/refunds` | 필요 |
+| 장바구니 | 장바구니 전체 비우기   | DELETE | `/api/carts` | 필요 |
+| 주문 | 주문서 미리보기      | GET | `/api/orders/preview` | 필요 |
+| 주문 | 주문/결제 생성      | POST | `/api/orders` | 필요 |
+| 주문 | 주문 내역 조회      | GET | `/api/orders` | 필요 |
+| 주문 | 주문 상세 조회      | GET | `/api/orders/{orderId}` | 필요 |
+| 주문 | 주문 상태 변경      | PATCH | `/api/orders/{orderId}/status` | 필요 |
+| 결제 | 결제 확정         | POST | `/api/payments/confirm` | 필요 |
+| 포인트 | 포인트 잔액 조회     | GET | `/api/points/balance` | 필요 |
+| 포인트 | 포인트 거래 내역 조회  | GET | `/api/points/transactions` | 필요 |
+| 환불 | 부분 환불 요청      | POST | `/api/orders/{orderId}/refunds` | 필요 |
+| 환불 | 전체 환불 요청      | POST | `/api/payments/{paymentId}/refunds` | 필요 |
 | 웹훅 | PortOne 웹훅 수신 | POST | `/api/webhooks/portone` | 서명 검증 |
 
 ## 설계 메모

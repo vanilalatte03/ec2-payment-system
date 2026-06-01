@@ -353,64 +353,74 @@ INSERT INTO payments (
         NOW()
     );
 
--- 포인트 거래 데이터
-INSERT INTO point_transactions (
-    id,
-    member_id,
-    payment_id,
-    type,
-    amount,
-    created_at
-) VALUES
-    (10001, 10001, 10001, 'USE', 5000, NOW()),
-    (10002, 10001, 10001, 'EARN', 730, NOW()),
-    (10003, 10001, 10003, 'EARN', 945, NOW()),
-    (10004, 10001, 10003, 'EARN_CANCEL', 480, NOW()),
-    (10005, 10001, 10004, 'USE', 20000, NOW()),
-    (10006, 10001, 10004, 'EARN', 1080, NOW()),
-    (10007, 10001, 10004, 'USE_RESTORE', 20000, NOW()),
-    (10008, 10001, 10004, 'EARN_CANCEL', 1080, NOW());
-
 -- 환불 데이터
 INSERT INTO refunds (
     id,
+    order_id,
     payment_id,
     reason,
+    refund_amount,
     point_refund_amount,
     pg_refund_amount,
     status,
     created_at,
     refunded_at
 ) VALUES
-    (
-        10001,
-        10003,
-        '사이즈 변경으로 일부 상품 환불',
-        0,
-        48000,
-        'COMPLETED',
-        NOW(),
-        NOW()
-    ),
-    (
-        10002,
-        10004,
-        '고객 요청으로 전체 환불',
-        20000,
-        108000,
-        'COMPLETED',
-        NOW(),
-        NOW()
-    );
+      (
+          10001,
+          10003,
+          10003,
+          '사이즈 변경으로 일부 상품 환불',
+          48000,
+          0,
+          48000,
+          'COMPLETED',
+          NOW(),
+          NOW()
+      ),
+      (
+          10002,
+          10004,
+          10004,
+          '고객 요청으로 전체 환불',
+          128000,
+          20000,
+          108000,
+          'COMPLETED',
+          NOW(),
+          NOW()
+      );
 
+-- 포인트 거래 데이터
+INSERT INTO point_transactions (
+    id,
+    member_id,
+    payment_id,
+    refund_id,
+    type,
+    amount,
+    created_at
+) VALUES
+      (10001, 10001, 10001, NULL,  'USE',         5000, NOW()),
+      (10002, 10001, 10001, NULL,  'EARN',         730, NOW()),
+      (10003, 10001, 10003, NULL,  'EARN',         945, NOW()),
+      (10004, 10001, 10003, 10001, 'EARN_CANCEL',  480, NOW()),
+      (10005, 10001, 10004, NULL,  'USE',        20000, NOW()),
+      (10006, 10001, 10004, NULL,  'EARN',        1080, NOW()),
+      (10007, 10001, 10004, 10002, 'USE_RESTORE', 20000, NOW()),
+      (10008, 10001, 10004, 10002, 'EARN_CANCEL',  1080, NOW());
+
+-- 환불 상품 데이터
 INSERT INTO refund_items (
     id,
     refund_id,
     order_item_id,
     refund_quantity,
+    unit_price,
+    refund_amount,
     point_refund_amount,
     pg_refund_amount,
     created_at
 ) VALUES
-    (10001, 10001, 10004, 1, 0, 48000, NOW()),
-    (10002, 10002, 10006, 1, 20000, 108000, NOW());
+      (10001, 10001, 10004, 1,  48000,  48000,     0,  48000, NOW()),
+      (10002, 10002, 10006, 1, 128000, 128000, 20000, 108000, NOW());
