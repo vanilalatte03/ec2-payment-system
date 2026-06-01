@@ -141,7 +141,7 @@
 | --- | --- | --- | --- | --- |
 | `status` | OrderStatus | N | 없음 | 주문 상태 |
 | `page` | int | N | `0` | 페이지 번호 |
-| `size` | int | N | `20` | 페이지 크기 |
+| `size` | int | N | `10` | 페이지 크기 |
 
 ### Response Data
 
@@ -159,7 +159,7 @@
     }
   ],
   "page": 0,
-  "size": 20,
+  "size": 10,
   "totalElements": 1,
   "totalPages": 1,
   "hasNext": false

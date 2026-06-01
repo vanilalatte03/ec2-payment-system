@@ -45,7 +45,7 @@ erDiagram
         BIGINT id PK "장바구니 상품 ID"
         BIGINT product_id FK "상품 ID"
         BIGINT cart_id FK "장바구니 ID"
-        INT count "수량"
+        INT quantity "수량"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
     }
@@ -66,7 +66,7 @@ erDiagram
         BIGINT id PK "주문 ID"
         BIGINT user_id FK "유저 ID"
         VARCHAR order_number "주문번호"
-        INT total_sum "주문 총액"
+        INT total_amount "주문 총액"
         INT used_point "사용 포인트"
         VARCHAR status "주문 상태"
         DATETIME created_at "생성일시"
@@ -77,7 +77,7 @@ erDiagram
         BIGINT id PK "주문상품ID"
         BIGINT order_id FK "주문 ID"
         BIGINT product_id FK "상품 ID"
-        VARCHAR name "상품명"
+        VARCHAR product_name "상품명"
         INT price "가격"
         INT count "수량"
         DATETIME created_at "생성일시"
@@ -166,7 +166,7 @@ erDiagram
 | 장바구니 상품 ID | id | BIGINT | NOT NULL | PK |
 | 상품 ID | product_id | BIGINT | NOT NULL | FK: product.id, UNIQUE |
 | 장바구니 ID | cart_id | BIGINT | NOT NULL | FK: cart.id, UNIQUE |
-| 수량 | count | INT | NOT NULL |  |
+| 수량 | quantity | INT | NOT NULL |  |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
@@ -186,29 +186,29 @@ erDiagram
 
 ### orders
 
-| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
-| --- | --- | --- | --- | --- |
-| 주문 ID | id | BIGINT | NOT NULL | PK |
-| 유저 ID | user_id | BIGINT | NOT NULL | FK: user.id |
+| 논리명 | 컬럼명          | 타입 | NULL | 제약/비고 |
+| --- |--------------| --- | --- | --- |
+| 주문 ID | id           | BIGINT | NOT NULL | PK |
+| 유저 ID | user_id      | BIGINT | NOT NULL | FK: user.id |
 | 주문번호 | order_number | VARCHAR | NOT NULL |  |
-| 주문 총액 | total_sum | INT | NOT NULL |  |
+| 주문 총액 | total_amount | INT | NOT NULL |  |
 | 사용 포인트 | used_point | INT | NOT NULL |  |
-| 주문 상태 | status | VARCHAR | NOT NULL | PAYMENT_PENDING, COMPLETED, CANCELED |
-| 생성일시 | created_at | DATETIME | NOT NULL |  |
-| 수정일시 | updated_at | DATETIME | NULL |  |
+| 주문 상태 | status       | VARCHAR | NOT NULL | PAYMENT_PENDING, COMPLETED, CANCELED |
+| 생성일시 | created_at   | DATETIME | NOT NULL |  |
+| 수정일시 | updated_at   | DATETIME | NULL |  |
 
 ### order_items
 
-| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
-| --- | --- | --- | --- | --- |
-| 주문상품ID | id | BIGINT | NOT NULL | PK |
-| 주문 ID | order_id | BIGINT | NOT NULL | FK: order.id |
-| 상품 ID | product_id | BIGINT | NOT NULL | FK: product.id |
-| 상품명 | name | VARCHAR(100) | NOT NULL |  |
-| 가격 | price | INT | NOT NULL |  |
-| 수량 | count | INT | NOT NULL |  |
-| 생성일시 | created_at | DATETIME | NOT NULL |  |
-| 수정일시 | updated_at | DATETIME | NULL |  |
+| 논리명 | 컬럼명          | 타입 | NULL | 제약/비고 |
+| --- |--------------| --- | --- | --- |
+| 주문상품ID | id           | BIGINT | NOT NULL | PK |
+| 주문 ID | order_id     | BIGINT | NOT NULL | FK: order.id |
+| 상품 ID | product_id   | BIGINT | NOT NULL | FK: product.id |
+| 상품명 | product_name | VARCHAR(100) | NOT NULL |  |
+| 가격 | price        | INT | NOT NULL |  |
+| 수량 | count        | INT | NOT NULL |  |
+| 생성일시 | created_at   | DATETIME | NOT NULL |  |
+| 수정일시 | updated_at   | DATETIME | NULL |  |
 
 ### payments
 
