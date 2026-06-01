@@ -7,12 +7,12 @@ import com.teamec2.paymentsystem.domain.auth.dto.SignupRequest;
 import com.teamec2.paymentsystem.domain.auth.dto.SignupResponse;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
+import com.teamec2.paymentsystem.global.exception.BusinessException;
+import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +24,7 @@ public class AuthService {
     @Transactional
     public SignupResponse signup(SignupRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         User user = User.create(
@@ -60,7 +60,7 @@ public class AuthService {
         return new LogoutResponse(true);
     }
 
-    private ResponseStatusException invalidLoginCredentials() {
-        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
+    private BusinessException invalidLoginCredentials() {
+        return new BusinessException(ErrorCode.INVALID_LOGIN_CREDENTIALS);
     }
 }

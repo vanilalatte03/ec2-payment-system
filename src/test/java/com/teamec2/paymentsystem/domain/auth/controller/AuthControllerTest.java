@@ -2,6 +2,7 @@ package com.teamec2.paymentsystem.domain.auth.controller;
 
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
+import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AuthControllerTest {
+
+    private static final int BODY_STATUS = 200;
 
     @Autowired
     MockMvc mockMvc;
@@ -44,14 +47,18 @@ class AuthControllerTest {
                                   "name": "홍길동",
                                   "phone": "010-1234-5678"
                                 }
-                                """.formatted(email)))
+                """.formatted(email)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.userId").isNumber())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.name").value("홍길동"))
-                .andExpect(jsonPath("$.phone").value("010-1234-5678"))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.userId").isNumber())
+                .andExpect(jsonPath("$.data.email").value(email))
+                .andExpect(jsonPath("$.data.name").value("홍길동"))
+                .andExpect(jsonPath("$.data.phone").value("010-1234-5678"))
                 .andExpect(jsonPath("$.password").doesNotExist())
-                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.data.password").doesNotExist())
+                .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
     }
 
     @Test
@@ -84,8 +91,12 @@ class AuthControllerTest {
                                   "name": "홍길동",
                                   "phone": "010-1234-5678"
                                 }
-                                """.formatted(email)))
-                .andExpect(status().isConflict());
+                """.formatted(email)))
+                .andExpect(status().is(ErrorCode.EMAIL_ALREADY_EXISTS.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.EMAIL_ALREADY_EXISTS.name()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.EMAIL_ALREADY_EXISTS.getMessage()))
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -100,8 +111,11 @@ class AuthControllerTest {
                                   "name": "",
                                   "phone": ""
                                 }
-                                """))
-                .andExpect(status().isBadRequest());
+                """))
+                .andExpect(status().is(ErrorCode.VALIDATION_FAILED.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_FAILED.name()))
+                .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
@@ -116,8 +130,11 @@ class AuthControllerTest {
                                   "name": "",
                                   "phone": ""
                                 }
-                                """))
-                .andExpect(status().isBadRequest());
+                """))
+                .andExpect(status().is(ErrorCode.VALIDATION_FAILED.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_FAILED.name()))
+                .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
@@ -133,14 +150,19 @@ class AuthControllerTest {
                                   "email": "%s",
                                   "password": "Password123!"
                                 }
-                                """.formatted(email)))
+                """.formatted(email)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").isNumber())
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.name").value("홍길동"))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.userId").isNumber())
+                .andExpect(jsonPath("$.data.email").value(email))
+                .andExpect(jsonPath("$.data.name").value("홍길동"))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist())
-                .andExpect(jsonPath("$.accessToken").doesNotExist());
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.data.password").doesNotExist())
+                .andExpect(jsonPath("$.data.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.data.accessToken").doesNotExist());
     }
 
     @Test
@@ -153,8 +175,12 @@ class AuthControllerTest {
                                   "email": "unknown@example.com",
                                   "password": "wrong-password"
                                 }
-                                """))
-                .andExpect(status().isUnauthorized());
+                """))
+                .andExpect(status().is(ErrorCode.INVALID_LOGIN_CREDENTIALS.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_LOGIN_CREDENTIALS.name()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.INVALID_LOGIN_CREDENTIALS.getMessage()))
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -170,8 +196,10 @@ class AuthControllerTest {
                                   "email": "%s",
                                   "password": "WrongPassword123!"
                                 }
-                                """.formatted(email)))
-                .andExpect(status().isUnauthorized())
+                """.formatted(email)))
+                .andExpect(status().is(ErrorCode.INVALID_LOGIN_CREDENTIALS.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_LOGIN_CREDENTIALS.name()))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist())
                 .andExpect(jsonPath("$.accessToken").doesNotExist());
@@ -187,8 +215,11 @@ class AuthControllerTest {
                                   "email": "invalid-email",
                                   "password": ""
                                 }
-                                """))
-                .andExpect(status().isBadRequest());
+                """))
+                .andExpect(status().is(ErrorCode.VALIDATION_FAILED.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_FAILED.name()))
+                .andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
@@ -196,7 +227,9 @@ class AuthControllerTest {
     void logoutSuccess() throws Exception {
         mockMvc.perform(post("/api/auth/logout"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.loggedOut").value(true));
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.loggedOut").value(true));
     }
 
     private void signup(String email, String password) throws Exception {

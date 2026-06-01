@@ -1,19 +1,17 @@
 package com.teamec2.paymentsystem.domain.user.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "users")
 public class User {
@@ -37,7 +35,8 @@ public class User {
     @Column(name = "point_balance", nullable = false)
     private long pointBalance;
 
-    @Column(name = "created_at", nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     private User(String email, String password, String name, String phone) {
@@ -46,7 +45,6 @@ public class User {
         this.name = name;
         this.phone = phone;
         this.pointBalance = 0L;
-        this.createdAt = LocalDateTime.now();
     }
 
     public static User create(String email, String password, String name, String phone) {
