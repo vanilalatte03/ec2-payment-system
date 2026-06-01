@@ -68,9 +68,12 @@ public enum ErrorCode {
     PAYMENT_COMPENSATION_FAILED(HttpStatus.BAD_GATEWAY, "외부 성공/내부 실패 보상 취소에 실패했습니다."),
 
     // Point
+    POINT_INCREASE_AMOUNT_INVALID(HttpStatus.BAD_REQUEST, "증가할 포인트는 0보다 커야 합니다."),
+    POINT_DECREASE_AMOUNT_INVALID(HttpStatus.BAD_REQUEST, "차감할 포인트는 0보다 커야 합니다."),
     INSUFFICIENT_POINT(HttpStatus.BAD_REQUEST, "포인트 잔액이 부족합니다."),
     POINT_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "포인트 계정을 찾을 수 없습니다."),
     POINT_LEDGER_SYNC_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "포인트 스냅샷과 원장 동기화에 실패했습니다."),
+    POINT_ERROR_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "포인트 관련 예외가 발생했습니다."),
 
     // Refund
     REFUND_ITEM_REQUIRED(HttpStatus.BAD_REQUEST, "환불할 주문 상품 목록이 필요합니다."),

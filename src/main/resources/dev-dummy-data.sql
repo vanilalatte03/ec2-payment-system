@@ -30,8 +30,7 @@ INSERT INTO users (
     password,
     phone,
     point_balance,
-    created_at,
-    updated_at
+    created_at
 ) VALUES
     (
         10001,
@@ -40,7 +39,6 @@ INSERT INTO users (
         '$2b$10$GPazGXUOf.Ek2M3YYbt4GuGluvmUlm9.dA6M7MVQca4CQ0/iufLP.',
         '010-1234-5678',
         -3805,
-        NOW(),
         NOW()
     ),
     (
@@ -50,7 +48,6 @@ INSERT INTO users (
         '$2b$10$GPazGXUOf.Ek2M3YYbt4GuGluvmUlm9.dA6M7MVQca4CQ0/iufLP.',
         '010-2222-3333',
         0,
-        NOW(),
         NOW()
     );
 
