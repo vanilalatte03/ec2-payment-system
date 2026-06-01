@@ -118,6 +118,10 @@ public class Payment extends BaseEntity {
      * @param approvedAt 결제 승인 일시
      */
     public void complete(LocalDateTime approvedAt) {
+        if (approvedAt == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
         changeStatus(PaymentStatus.COMPLETED);
         this.approvedAt = approvedAt;
     }
@@ -128,6 +132,10 @@ public class Payment extends BaseEntity {
      * @param failedAt 결제 실패 일시
      */
     public void fail(LocalDateTime failedAt) {
+        if (failedAt == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
         changeStatus(PaymentStatus.FAILED);
         this.failedAt = failedAt;
     }
@@ -136,6 +144,10 @@ public class Payment extends BaseEntity {
      * 결제를 부분 환불 상태로 변경한다.
      */
     public void markAsPartialRefunded() {
+        if (this.status == PaymentStatus.PARTIAL_REFUNDED) {
+            return;
+        }
+
         changeStatus(PaymentStatus.PARTIAL_REFUNDED);
     }
 

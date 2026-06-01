@@ -96,6 +96,19 @@ class PaymentTest {
     }
 
     @Test
+    void 결제완료처리_승인시각이없으면_MISSING_REQUIRED_FIELD가발생한다() {
+        // given
+        Payment payment = 결제_생성();
+
+        // when
+        // then
+        assertThatThrownBy(() -> payment.complete(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+    }
+
+    @Test
     void 결제대기상태_실패처리하면_FAILED와실패시각을저장한다() {
         // given
         Payment payment = 결제_생성();
@@ -110,10 +123,37 @@ class PaymentTest {
     }
 
     @Test
+    void 결제실패처리_실패시각이없으면_MISSING_REQUIRED_FIELD가발생한다() {
+        // given
+        Payment payment = 결제_생성();
+
+        // when
+        // then
+        assertThatThrownBy(() -> payment.fail(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+    }
+
+    @Test
     void 결제완료상태_부분환불처리하면_PARTIAL_REFUNDED가된다() {
         // given
         Payment payment = 결제_생성();
         payment.complete(LocalDateTime.of(2026, 6, 1, 12, 30));
+
+        // when
+        payment.markAsPartialRefunded();
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PARTIAL_REFUNDED);
+    }
+
+    @Test
+    void 부분환불상태_다시부분환불처리하면_PARTIAL_REFUNDED를유지한다() {
+        // given
+        Payment payment = 결제_생성();
+        payment.complete(LocalDateTime.of(2026, 6, 1, 12, 30));
+        payment.markAsPartialRefunded();
 
         // when
         payment.markAsPartialRefunded();
