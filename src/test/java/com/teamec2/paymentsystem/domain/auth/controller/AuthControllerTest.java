@@ -48,7 +48,7 @@ class AuthControllerTest {
                                   "phone": "010-1234-5678"
                                 }
                 """.formatted(email)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value(BODY_STATUS))
                 .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
                 .andExpect(jsonPath("$.data.userId").isNumber())
@@ -243,7 +243,7 @@ class AuthControllerTest {
                           "phone": "010-1234-5678"
                         }
                         """.formatted(email, password)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
     }
 
     private String uniqueEmail() {
