@@ -10,7 +10,7 @@ public record PortoneProperties(
         @NotBlank String baseUrl,
         @NotBlank String apiSecret,
         @NotBlank String storeId,
-        @NotBlank String channelKey,
-        @NotBlank String webhookSecret
+        String channelKey,
+        String webhookSecret
 ) {
 }

@@ -17,7 +17,7 @@ public class PortoneConfig {
     public RestClient portoneRestClient(PortoneProperties portoneProperties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(3));
-        requestFactory.setReadTimeout(Duration.ofSeconds(60));
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
 
         return RestClient.builder()
                 .baseUrl(portoneProperties.baseUrl())
