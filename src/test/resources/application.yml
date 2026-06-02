@@ -10,6 +10,9 @@ spring:
       ddl-auto: create-drop
     show-sql: false
 
+jwt:
+  secret: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+  access-token-expiration-millis: 3600000
 portone:
   base-url: https://api.portone.io
   api-secret: test-api-secret
