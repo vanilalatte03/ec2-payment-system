@@ -44,7 +44,7 @@ public class CartItemService {
         validateProductOnSale(product);
 
         CartItem cartItem = cartItemRepository
-                .findByCartIdAndProductIdForUpdate(cart.getId(), productId)
+                .findByCartIdAndProductId(cart.getId(), productId)
                 .orElse(null);
 
         int finalQuantity;

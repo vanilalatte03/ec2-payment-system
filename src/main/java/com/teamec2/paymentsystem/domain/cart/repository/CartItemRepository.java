@@ -1,9 +1,7 @@
 package com.teamec2.paymentsystem.domain.cart.repository;
 
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -37,15 +35,6 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
             where ci.cart.id = :cartId and ci.id = :id
             """)
     Optional<CartItem> findByCartIdAndIdWithProduct(Long cartId, Long id);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select ci
-            from CartItem ci
-            join fetch ci.product
-            where ci.cart.id = :cartId and ci.product.id = :productId
-            """)
-    Optional<CartItem> findByCartIdAndProductIdForUpdate(Long cartId, Long productId);
 
     List<CartItem> findAllByCartId(Long cartId);
 
