@@ -9,6 +9,7 @@ import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
+import com.teamec2.paymentsystem.global.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -53,7 +55,18 @@ public class AuthService {
             throw invalidLoginCredentials();
         }
 
-        return new LoginResponse(user.getId(), user.getEmail(), user.getName());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail());
+
+        return new LoginResponse(
+                "Bearer",
+                accessToken,
+                jwtTokenProvider.getAccessTokenExpiresInSeconds(),
+                new LoginResponse.UserSummary(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getName()
+                )
+        );
     }
 
     public LogoutResponse logout() {
