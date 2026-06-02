@@ -1,0 +1,81 @@
+@baseUrl = http://localhost:8080
+@email = cart-customer-{{$timestamp}}@example.com
+@password = Password123!
+@productId = 10001
+@cartItemId = 1
+
+### 장바구니 테스트용 회원가입
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "010-1234-5678"
+}
+
+### 장바구니 테스트용 로그인
+# 응답의 data.accessToken 값을 아래 accessToken 변수에 복사해서 사용합니다.
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+@accessToken = 여기에_로그인_응답_accessToken_입력
+
+### 장바구니 상품 담기
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{productId}},
+  "quantity": 2
+}
+
+### 장바구니 상품 담기 실패 - 수량이 1 미만
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{productId}},
+  "quantity": 0
+}
+
+### 장바구니 조회
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+### 장바구니 조회 실패 - 토큰 없음
+GET {{baseUrl}}/api/carts
+
+### 장바구니 수량 변경
+PATCH {{baseUrl}}/api/carts/items/{{cartItemId}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "quantity": 3
+}
+
+### 장바구니 수량 변경 실패 - 수량이 1 미만
+PATCH {{baseUrl}}/api/carts/items/{{cartItemId}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "quantity": 0
+}
+
+### 장바구니 상품 개별 삭제
+DELETE {{baseUrl}}/api/carts/items/{{cartItemId}}
+Authorization: Bearer {{accessToken}}
+
+### 장바구니 전체 비우기
+DELETE {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}

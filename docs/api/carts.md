@@ -85,7 +85,8 @@
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
-| `CART_NOT_FOUND` | 404 | 회원의 장바구니가 없음 |
+
+회원의 장바구니가 아직 없으면 `items: []`, `totalQuantity: 0`, `totalAmount: 0`을 반환합니다.
 
 ## 장바구니 수량 변경
 
