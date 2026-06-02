@@ -1,6 +1,7 @@
 package com.teamec2.paymentsystem.global.security.jwt;
 
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
+import com.teamec2.paymentsystem.global.security.CustomUserDetailsService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -12,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -22,7 +22,7 @@ import java.util.Date;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
-    private final UserDetailsService userDetailsService;
+    private final CustomUserDetailsService customUserDetailsService;
 
     @Value("${jwt.secret}")
     private String secret;
@@ -30,12 +30,12 @@ public class JwtTokenProvider {
     @Value("${jwt.access-token-expiration-millis}")
     private long accessTokenExpirationMillis;
 
-    public String createAccessToken(String email) {
+    public String createAccessToken(Long userId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + accessTokenExpirationMillis);
 
         return Jwts.builder()
-                .subject(email)
+                .subject(String.valueOf(userId))
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(getSigningKey())
@@ -52,10 +52,13 @@ public class JwtTokenProvider {
 
     public ErrorCode getTokenErrorCode(String token) {
         try {
-            Jwts.parser()
+            Claims claims = Jwts.parser()
                     .verifyWith(getSigningKey())
                     .build()
-                    .parseSignedClaims(token);
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            Long.valueOf(claims.getSubject());
 
             return null;
         } catch (ExpiredJwtException e) {
@@ -65,13 +68,13 @@ public class JwtTokenProvider {
         }
     }
 
-    public String getEmail(String token) {
-        return getClaims(token).getSubject();
+    public Long getUserId(String token) {
+        return Long.valueOf(getClaims(token).getSubject());
     }
 
     public Authentication getAuthentication(String token) {
-        String email = getEmail(token);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+        Long userId = getUserId(token);
+        UserDetails userDetails = customUserDetailsService.loadUserById(userId);
 
         return new UsernamePasswordAuthenticationToken(
                 userDetails,

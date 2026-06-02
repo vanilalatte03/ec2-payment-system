@@ -53,7 +53,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/portone").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/error").permitAll()
+                        .requestMatchers("/error").permitAll()
 
                         // 인증 필요한 api 요청
                         .anyRequest().authenticated()

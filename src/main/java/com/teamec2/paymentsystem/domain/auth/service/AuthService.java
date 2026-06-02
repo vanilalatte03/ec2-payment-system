@@ -55,7 +55,7 @@ public class AuthService {
             throw invalidLoginCredentials();
         }
 
-        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId());
 
         return new LoginResponse(
                 "Bearer",
