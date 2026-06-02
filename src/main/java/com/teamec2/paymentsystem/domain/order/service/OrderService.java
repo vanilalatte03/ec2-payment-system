@@ -54,7 +54,7 @@ public class OrderService {
 
         // 주문은 장바구니에 담긴 상품을 기준으로 생성하므로 회원의 장바구니가 필요합니다.
         Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_EMPTY));
 
         // cartItemIds가 있으면 선택 상품만, 없으면 장바구니 전체 상품을 주문 대상으로 가져옵니다.
         List<CartItem> cartItems = findOrderTargetCartItems(cart.getId(), distinctCartItemIds);
