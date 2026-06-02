@@ -9,3 +9,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+
+portone:
+  base-url: https://api.portone.io
+  api-secret: test-api-secret
+  store-id: test-store-id
+  channel-key: test-channel-key
+  webhook-secret: test-webhook-secret
