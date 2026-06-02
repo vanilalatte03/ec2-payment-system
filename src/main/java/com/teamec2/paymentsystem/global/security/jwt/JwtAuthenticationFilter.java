@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityErrorResponseWriter securityErrorResponseWriter;
+
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String method = request.getMethod();
+
+        return (method.equals("POST") && path.equals("/api/auth/signup"))
+                || (method.equals("POST") && path.equals("/api/auth/login"))
+                || (method.equals("GET") && path.equals("/api/products"))
+                || (method.equals("GET") && path.startsWith("/api/products/"))
+                || (method.equals("POST") && path.equals("/api/webhooks/portone"));
+    }
 
     @Override
     protected void doFilterInternal(
@@ -45,7 +59,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Authentication authentication = jwtTokenProvider.getAuthentication(token);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
-        } catch (Exception e) {
+        } catch (AuthenticationException e) {
             SecurityContextHolder.clearContext();
             securityErrorResponseWriter.write(response, ErrorCode.UNAUTHORIZED);
             return;

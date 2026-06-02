@@ -171,6 +171,24 @@ class AuthControllerTest {
     }
 
     @Test
+    void 로그인_public엔드포인트는_잘못된토큰이있어도_성공한다() throws Exception {
+        String email = uniqueEmail();
+        signup(email, "Password123!");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .header("Authorization", "Bearer invalid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "password": "Password123!"
+                                }
+                                """.formatted(email)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isString());
+    }
+
+    @Test
     void 로그인_존재하지않는이메일이면_401을반환한다() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -261,7 +279,7 @@ class AuthControllerTest {
 
     @Test
     void 로그아웃_만료된토큰이면_인증실패를반환한다() throws Exception {
-        String accessToken = expiredAccessToken(uniqueEmail());
+        String accessToken = expiredAccessToken("1");
 
         mockMvc.perform(post("/api/auth/logout")
                         .header("Authorization", "Bearer " + accessToken))
@@ -274,7 +292,7 @@ class AuthControllerTest {
 
     @Test
     void 로그아웃_토큰회원이없으면_인증실패를반환한다() throws Exception {
-        String accessToken = jwtTokenProvider.createAccessToken(uniqueEmail());
+        String accessToken = jwtTokenProvider.createAccessToken(Long.MAX_VALUE);
 
         mockMvc.perform(post("/api/auth/logout")
                         .header("Authorization", "Bearer " + accessToken))
@@ -314,13 +332,13 @@ class AuthControllerTest {
         return com.jayway.jsonpath.JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
     }
 
-    private String expiredAccessToken(String email) {
+    private String expiredAccessToken(String userId) {
         Date issuedAt = new Date(System.currentTimeMillis() - 7200000);
         Date expiration = new Date(System.currentTimeMillis() - 3600000);
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_JWT_SECRET));
 
         return Jwts.builder()
-                .subject(email)
+                .subject(userId)
                 .issuedAt(issuedAt)
                 .expiration(expiration)
                 .signWith(key)
