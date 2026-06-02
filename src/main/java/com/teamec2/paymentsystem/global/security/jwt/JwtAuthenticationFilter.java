@@ -2,6 +2,9 @@ package com.teamec2.paymentsystem.global.security.jwt;
 
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import com.teamec2.paymentsystem.global.security.SecurityErrorResponseWriter;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,15 +53,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             if (token != null) {
-                ErrorCode tokenErrorCode = jwtTokenProvider.getTokenErrorCode(token);
-                if (tokenErrorCode != null) {
-                    securityErrorResponseWriter.write(response, tokenErrorCode);
-                    return;
-                }
-
-                Authentication authentication = jwtTokenProvider.getAuthentication(token);
+                Claims claims = jwtTokenProvider.parseClaims(token);
+                Authentication authentication = jwtTokenProvider.getAuthentication(claims);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
+        } catch (ExpiredJwtException e) {
+            SecurityContextHolder.clearContext();
+            securityErrorResponseWriter.write(response, ErrorCode.EXPIRED_TOKEN);
+            return;
+        } catch (JwtException | IllegalArgumentException e) {
+            SecurityContextHolder.clearContext();
+            securityErrorResponseWriter.write(response, ErrorCode.INVALID_TOKEN);
+            return;
         } catch (AuthenticationException e) {
             SecurityContextHolder.clearContext();
             securityErrorResponseWriter.write(response, ErrorCode.UNAUTHORIZED);
