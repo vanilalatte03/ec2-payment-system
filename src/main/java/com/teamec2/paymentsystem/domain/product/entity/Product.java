@@ -54,4 +54,18 @@ public class Product extends BaseEntity {
         this.status = status;
         this.category = category;
     }
+
+    // 주문 생성 시점에 재고를 먼저 차감합니다.
+    // 재고가 부족하면 예외가 발생하고, 주문 생성 트랜잭션이 함께 롤백됩니다.
+    public void decreaseStock(int quantity) {
+        if (quantity <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
+        }
+
+        if (this.stock < quantity) {
+            throw new BusinessException(ErrorCode.ORDER_STOCK_SHORTAGE);
+        }
+
+        this.stock -= quantity;
+    }
 }
