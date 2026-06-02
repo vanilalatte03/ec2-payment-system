@@ -80,7 +80,7 @@
 ```json
 {
   "orderId": 200,
-  "orderNumber": "ORD-20260529-000001",
+  "orderNumber": "ORD-20260529-550E8400E29B41D4A716446655440000",
   "orderStatus": "PAYMENT_PENDING",
   "paymentId": 300,
   "portonePaymentId": "pay_20260529_000001",
@@ -150,7 +150,7 @@
   "content": [
     {
       "orderId": 200,
-      "orderNumber": "ORD-20260529-000001",
+      "orderNumber": "ORD-20260529-550E8400E29B41D4A716446655440000",
       "status": "COMPLETED",
       "totalAmount": 78000,
       "usedPointAmount": 5000,
@@ -194,7 +194,7 @@
 ```json
 {
   "orderId": 200,
-  "orderNumber": "ORD-20260529-000001",
+  "orderNumber": "ORD-20260529-550E8400E29B41D4A716446655440000",
   "status": "COMPLETED",
   "totalAmount": 78000,
   "createdAt": "2026-05-29T18:30:00+09:00",
@@ -269,7 +269,7 @@
 ```json
 {
   "orderId": 200,
-  "orderNumber": "ORD-20260529-000001",
+  "orderNumber": "ORD-20260529-550E8400E29B41D4A716446655440000",
   "previousOrderStatus": "PAYMENT_PENDING",
   "currentOrderStatus": "CANCELED",
   "paymentStatus": "FAILED",
