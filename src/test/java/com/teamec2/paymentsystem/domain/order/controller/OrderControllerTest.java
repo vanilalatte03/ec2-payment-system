@@ -13,6 +13,7 @@ import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
 import com.teamec2.paymentsystem.domain.product.entity.ProductCategory;
 import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
@@ -69,6 +70,9 @@ class OrderControllerTest {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
     JwtTokenProvider jwtTokenProvider;
 
     @BeforeEach
@@ -82,6 +86,7 @@ class OrderControllerTest {
     }
 
     private void clearDatabase() {
+        pointTransactionRepository.deleteAll();
         paymentRepository.deleteAll();
         orderItemRepository.deleteAll();
         orderRepository.deleteAll();
