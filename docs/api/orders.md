@@ -79,31 +79,36 @@
 
 ```json
 {
-  "orderId": 200,
-  "orderNumber": "ORD-20260529-000001",
-  "orderStatus": "PAYMENT_PENDING",
-  "paymentId": 300,
-  "portonePaymentId": "pay_20260529_000001",
-  "paymentStatus": "PENDING",
-  "paymentType": "POINT_CARD",
-  "totalAmount": 78000,
-  "usePointAmount": 5000,
-  "pgAmount": 73000,
+  "order": {
+    "orderId": 200,
+    "orderNumber": "ORD-20260529-000001",
+    "status": "PAYMENT_PENDING",
+    "totalAmount": 78000,
+    "items": [
+      {
+        "orderItemId": 400,
+        "productId": 10,
+        "productName": "무선 키보드",
+        "quantity": 2,
+        "unitPrice": 39000,
+        "lineAmount": 78000
+      }
+    ]
+  },
+  "payment": {
+    "paymentId": 300,
+    "portonePaymentId": "pay_20260529_000001",
+    "status": "PENDING",
+    "type": "POINT_CARD",
+    "usePointAmount": 5000,
+    "pgAmount": 73000
+  },
   "nextAction": "OPEN_PORTONE_PAYMENT",
-  "items": [
-    {
-      "orderItemId": 400,
-      "productId": 10,
-      "productName": "무선 키보드",
-      "quantity": 2,
-      "unitPrice": 39000,
-      "lineAmount": 78000
-    }
-  ]
+  "message": "주문과 결제 정보가 생성되었습니다."
 }
 ```
 
-`pgAmount`가 `0`이면 `paymentType`은 `POINT_ONLY`, `nextAction`은 `CONFIRM_POINT_ONLY`로 내려줍니다. 이 경우 클라이언트는 PortOne 결제창을 열지 않고 결제 확정 API를 호출합니다.
+`payment.pgAmount`가 `0`이면 `payment.type`은 `POINT_ONLY`, `nextAction`은 `CONFIRM_POINT_ONLY`로 내려줍니다. 이 경우 클라이언트는 PortOne 결제창을 열지 않고 결제 확정 API를 호출합니다.
 
 ### 처리 규칙
 
