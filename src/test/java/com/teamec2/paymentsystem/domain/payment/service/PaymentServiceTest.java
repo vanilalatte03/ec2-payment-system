@@ -49,10 +49,10 @@ class PaymentServiceTest {
     PaymentRepository paymentRepository;
 
     @Autowired
-    PointService pointService;
+    PointTransactionRepository pointTransactionRepository;
 
     @Autowired
-    PointTransactionRepository pointTransactionRepository;
+    PointService pointService;
 
     @Autowired
     TestPaymentGateway testPaymentGateway;
@@ -79,10 +79,9 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PG결제성공이면_주문과결제를완료한다() {
         // given
-        User user = 회원_저장(10000L);
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
-        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
-        pointService.reserveUsedPoints(payment);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
 
@@ -95,10 +94,13 @@ class PaymentServiceTest {
         // then
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
 
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(foundPayment.getApprovedAt()).isEqualTo(approvedAt);
+        assertThat(foundUser.getPointBalance()).isEqualTo(8L);
+        assertThat(pointTransactionRepository.count()).isEqualTo(2);
         assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
 
         assertThat(response.orderId()).isEqualTo(order.getId());
@@ -115,8 +117,7 @@ class PaymentServiceTest {
         // given
         User user = 회원_저장(1000L);
         Order order = 주문_저장(user, 1000L, 1000L);
-        Payment payment = 결제_저장(order, 1000L, 1000L, 0L);
-        pointService.reserveUsedPoints(payment);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 1000L, 0L);
 
         // when
         ConfirmPaymentResponse response = paymentService.confirmPayment(
@@ -127,11 +128,14 @@ class PaymentServiceTest {
         // then
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
 
         assertThat(testPaymentGateway.getCallCount()).isZero();
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(foundPayment.getApprovedAt()).isNotNull();
+        assertThat(foundUser.getPointBalance()).isZero();
+        assertThat(pointTransactionRepository.count()).isEqualTo(1);
         assertThat(response.paymentType()).isEqualTo(PaymentType.POINT_ONLY);
         assertThat(response.pgAmount()).isZero();
         assertThat(response.cartCleared()).isFalse();
@@ -140,7 +144,7 @@ class PaymentServiceTest {
     @Test
     void 결제확정_이미완료된결제이면_상태변경없이_성공응답한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
         order.complete();
         orderRepository.saveAndFlush(order);
@@ -170,10 +174,10 @@ class PaymentServiceTest {
     @Test
     void 결제확정_타인주문이면_ORDER_ACCESS_DENIED가발생한다() {
         // given
-        User owner = 회원_저장();
+        User owner = 회원_저장(200L);
         User otherUser = 회원_저장();
         Order order = 주문_저장(owner, 1000L, 200L);
-        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
 
         // when
         // then
@@ -191,9 +195,9 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PortOne결제ID가다르면_PAYMENT_PORTONE_ID_MISMATCH가발생한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
-        결제_저장(order, 1000L, 200L, 800L);
+        포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
 
         // when
         // then
@@ -211,9 +215,9 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PortOne상태가PAID가아니면_PAYMENT_STATUS_NOT_PAID가발생한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
-        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
         testPaymentGateway.response(
                 payment.getPortonePaymentId(),
                 "FAILED",
@@ -237,9 +241,9 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PortOne금액이다르면_PAYMENT_AMOUNT_MISMATCH가발생한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
-        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
         testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
 
         // when
@@ -258,9 +262,9 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PortOne승인시각이없으면_EXTERNAL_API_FAILED가발생한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
-        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, null);
 
         // when
@@ -283,6 +287,7 @@ class PaymentServiceTest {
     private User 회원_저장(Long pointBalance) {
         User user = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
 
+        // 포인트를 사용하는 결제 fixture는 실제 주문 생성 정책처럼 충분한 잔액을 미리 준비합니다.
         if (pointBalance > 0) {
             user.increasePointBalance(pointBalance);
         }
@@ -296,6 +301,12 @@ class PaymentServiceTest {
 
     private Payment 결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {
         return paymentRepository.save(Payment.createPending(order, totalAmount, usedPointAmount, pgAmount, pgAmount / 100));
+    }
+
+    private Payment 포인트_예약된_결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {
+        Payment payment = 결제_저장(order, totalAmount, usedPointAmount, pgAmount);
+        pointService.reserveUsedPoints(payment);
+        return payment;
     }
 
     private String uniqueEmail() {
