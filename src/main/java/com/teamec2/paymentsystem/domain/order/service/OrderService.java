@@ -4,7 +4,6 @@ import com.teamec2.paymentsystem.domain.cart.entity.Cart;
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
 import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
-import com.teamec2.paymentsystem.domain.order.dto.CreateOrderItemResponse;
 import com.teamec2.paymentsystem.domain.order.dto.CreateOrderResponse;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
 import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
@@ -113,7 +112,11 @@ public class OrderService {
 
         // 장바구니는 여기서 비우지 않습니다.
         // 비우는 시점은 비즈니스 규칙대로 결제 완료 이후가 되어야 합니다.
-        return toResponse(savedOrder, savedPayment, savedOrderItems);
+        return toResponse(
+                savedOrder,
+                savedPayment,
+                savedOrderItems
+        );
     }
 
     // 사용 포인트는 null이 아니고 0 이상이어야 합니다.
@@ -165,37 +168,11 @@ public class OrderService {
         return pgAmount / 100;
     }
 
-    // 저장된 주문, 결제, 주문 상품 정보를 클라이언트가 바로 사용할 응답 형태로 바꿉니다.
     private CreateOrderResponse toResponse(Order order, Payment payment, List<OrderItem> orderItems) {
-        List<CreateOrderItemResponse> itemResponses = orderItems.stream()
-                .map(orderItem -> new CreateOrderItemResponse(
-                        orderItem.getId(),
-                        orderItem.getProductId(),
-                        orderItem.getProductName(),
-                        orderItem.getQuantity(),
-                        orderItem.getPrice(),
-                        orderItem.getSubtotal()
-                ))
-                .toList();
-
-        // PG 결제 금액이 0원이면 PortOne 결제창을 열 필요가 없습니다.
-        String nextAction = payment.getPgAmount() == 0
-                ? "CONFIRM_POINT_ONLY"
-                : "OPEN_PORTONE_PAYMENT";
-
-        return new CreateOrderResponse(
-                order.getId(),
-                order.getOrderNumber(),
-                order.getStatus(),
-                payment.getId(),
-                payment.getPortonePaymentId(),
-                payment.getStatus(),
-                payment.getPaymentType(),
-                payment.getTotalAmount(),
-                payment.getUsedPointAmount(),
-                payment.getPgAmount(),
-                nextAction,
-                itemResponses
+        return CreateOrderResponse.from(
+                order,
+                payment,
+                orderItems
         );
     }
 }

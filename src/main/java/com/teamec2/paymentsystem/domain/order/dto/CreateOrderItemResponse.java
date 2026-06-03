@@ -1,5 +1,7 @@
 package com.teamec2.paymentsystem.domain.order.dto;
 
+import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
+
 /**
  * 주문 상품 응답 DTO입니다.
  *
@@ -14,4 +16,21 @@ public record CreateOrderItemResponse (
         int unitPrice,
         Long lineAmount
 ) {
+
+    /**
+     * 주문 상품 엔티티를 주문 상품 응답 DTO로 변환합니다.
+     *
+     * @param orderItem 주문 상품 엔티티
+     * @return 주문 상품 응답 DTO
+     */
+    public static CreateOrderItemResponse from(OrderItem orderItem) {
+        return new CreateOrderItemResponse(
+                orderItem.getId(),
+                orderItem.getProductId(),
+                orderItem.getProductName(),
+                orderItem.getQuantity(),
+                orderItem.getPrice(),
+                orderItem.getSubtotal()
+        );
+    }
 }

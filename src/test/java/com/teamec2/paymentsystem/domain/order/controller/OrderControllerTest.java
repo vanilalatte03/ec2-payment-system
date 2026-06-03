@@ -114,24 +114,24 @@ class OrderControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value(BODY_STATUS))
                 .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
-                .andExpect(jsonPath("$.data.orderId").isNumber())
-                .andExpect(jsonPath("$.data.orderNumber").exists())
-                .andExpect(jsonPath("$.data.orderStatus").value(OrderStatus.PAYMENT_PENDING.name()))
-                .andExpect(jsonPath("$.data.paymentId").isNumber())
-                .andExpect(jsonPath("$.data.portonePaymentId").exists())
-                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.PENDING.name()))
-	                .andExpect(jsonPath("$.data.paymentType").value(PaymentType.POINT_CARD.name()))
-	                .andExpect(jsonPath("$.data.totalAmount").value(78000))
-	                .andExpect(jsonPath("$.data.usePointAmount").value(5000))
-	                .andExpect(jsonPath("$.data.pgAmount").value(73000))
+                .andExpect(jsonPath("$.data.order.orderId").isNumber())
+                .andExpect(jsonPath("$.data.order.orderNumber").exists())
+                .andExpect(jsonPath("$.data.order.status").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.payment.paymentId").isNumber())
+                .andExpect(jsonPath("$.data.payment.portonePaymentId").exists())
+                .andExpect(jsonPath("$.data.payment.status").value(PaymentStatus.PENDING.name()))
+	                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.POINT_CARD.name()))
+	                .andExpect(jsonPath("$.data.order.totalAmount").value(78000))
+	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(5000))
+	                .andExpect(jsonPath("$.data.payment.pgAmount").value(73000))
                 .andExpect(jsonPath("$.data.nextAction").value("OPEN_PORTONE_PAYMENT"))
-                .andExpect(jsonPath("$.data.items.length()").value(1))
-                .andExpect(jsonPath("$.data.items[0].orderItemId").isNumber())
-	                .andExpect(jsonPath("$.data.items[0].productId").value(selectedProduct.getId()))
-	                .andExpect(jsonPath("$.data.items[0].productName").value("오버핏 티셔츠"))
-	                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
-	                .andExpect(jsonPath("$.data.items[0].unitPrice").value(39000))
-	                .andExpect(jsonPath("$.data.items[0].lineAmount").value(78000));
+                .andExpect(jsonPath("$.data.order.items.length()").value(1))
+                .andExpect(jsonPath("$.data.order.items[0].orderItemId").isNumber())
+	                .andExpect(jsonPath("$.data.order.items[0].productId").value(selectedProduct.getId()))
+	                .andExpect(jsonPath("$.data.order.items[0].productName").value("오버핏 티셔츠"))
+	                .andExpect(jsonPath("$.data.order.items[0].quantity").value(2))
+	                .andExpect(jsonPath("$.data.order.items[0].unitPrice").value(39000))
+	                .andExpect(jsonPath("$.data.order.items[0].lineAmount").value(78000));
 
         List<Order> orders = orderRepository.findAll();
         List<OrderItem> orderItems = orderItemRepository.findAll();
@@ -169,14 +169,14 @@ class OrderControllerTest {
 	                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value(BODY_STATUS))
-                .andExpect(jsonPath("$.data.orderStatus").value(OrderStatus.PAYMENT_PENDING.name()))
-                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.PENDING.name()))
-	                .andExpect(jsonPath("$.data.paymentType").value(PaymentType.CARD.name()))
-	                .andExpect(jsonPath("$.data.totalAmount").value(103000))
-	                .andExpect(jsonPath("$.data.usePointAmount").value(0))
-	                .andExpect(jsonPath("$.data.pgAmount").value(103000))
+                .andExpect(jsonPath("$.data.order.status").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.payment.status").value(PaymentStatus.PENDING.name()))
+	                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.CARD.name()))
+	                .andExpect(jsonPath("$.data.order.totalAmount").value(103000))
+	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(0))
+	                .andExpect(jsonPath("$.data.payment.pgAmount").value(103000))
                 .andExpect(jsonPath("$.data.nextAction").value("OPEN_PORTONE_PAYMENT"))
-                .andExpect(jsonPath("$.data.items.length()").value(2));
+                .andExpect(jsonPath("$.data.order.items.length()").value(2));
 
         assertThat(orderRepository.count()).isEqualTo(1);
         assertThat(orderItemRepository.count()).isEqualTo(2);
@@ -205,10 +205,10 @@ class OrderControllerTest {
 	                                }
 	                                """.formatted(cartItem.getId())))
                 .andExpect(status().isCreated())
-	                .andExpect(jsonPath("$.data.paymentType").value(PaymentType.POINT_ONLY.name()))
-	                .andExpect(jsonPath("$.data.totalAmount").value(78000))
-	                .andExpect(jsonPath("$.data.usePointAmount").value(78000))
-	                .andExpect(jsonPath("$.data.pgAmount").value(0))
+	                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.POINT_ONLY.name()))
+	                .andExpect(jsonPath("$.data.order.totalAmount").value(78000))
+	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(78000))
+	                .andExpect(jsonPath("$.data.payment.pgAmount").value(0))
 	                .andExpect(jsonPath("$.data.nextAction").value("CONFIRM_POINT_ONLY"));
 	    }
 
@@ -231,13 +231,13 @@ class OrderControllerTest {
 	                                }
 	                                """.formatted(cartItem.getId(), cartItem.getId())))
 	                .andExpect(status().isCreated())
-	                .andExpect(jsonPath("$.data.totalAmount").value(24000))
-	                .andExpect(jsonPath("$.data.items.length()").value(1))
-	                .andExpect(jsonPath("$.data.items[0].orderItemId").isNumber())
-	                .andExpect(jsonPath("$.data.items[0].productId").value(product.getId()))
-	                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
-	                .andExpect(jsonPath("$.data.items[0].unitPrice").value(12000))
-	                .andExpect(jsonPath("$.data.items[0].lineAmount").value(24000));
+	                .andExpect(jsonPath("$.data.order.totalAmount").value(24000))
+	                .andExpect(jsonPath("$.data.order.items.length()").value(1))
+	                .andExpect(jsonPath("$.data.order.items[0].orderItemId").isNumber())
+	                .andExpect(jsonPath("$.data.order.items[0].productId").value(product.getId()))
+	                .andExpect(jsonPath("$.data.order.items[0].quantity").value(2))
+	                .andExpect(jsonPath("$.data.order.items[0].unitPrice").value(12000))
+	                .andExpect(jsonPath("$.data.order.items[0].lineAmount").value(24000));
 
 	        assertThat(orderRepository.count()).isEqualTo(1);
 	        assertThat(orderItemRepository.count()).isEqualTo(1);
