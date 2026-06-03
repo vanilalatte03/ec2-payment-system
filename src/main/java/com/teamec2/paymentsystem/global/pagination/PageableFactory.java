@@ -6,6 +6,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+/**
+ * Controller: page=0, size=10 수신
+ * Service: 정렬 조건 결정
+ * PageableFactory: 값 검증 후 pageRequest 생성
+ * Repository: Page 반환
+ * PageResponse.from(): API 응답 형태로 변환
+ */
+
 public final class PageableFactory {
 
     private static final int MAX_SIZE = 100;
