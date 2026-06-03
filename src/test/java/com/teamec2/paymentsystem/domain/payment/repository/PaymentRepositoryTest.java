@@ -71,6 +71,24 @@ class PaymentRepositoryTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 주문ID로_결제를조회할수있다() {
+        // given
+        Payment payment = 결제_저장("ORDER-001");
+        Long orderId = payment.getOrder().getId();
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // when
+        Optional<Payment> foundPayment = paymentRepository.findByOrderIdForUpdate(orderId);
+
+        // then
+        assertThat(foundPayment).isPresent();
+        assertThat(foundPayment.get().getId()).isEqualTo(payment.getId());
+        assertThat(foundPayment.get().getOrder().getId()).isEqualTo(orderId);
+    }
+
     private Payment 결제_저장(String orderNumber) {
         Order order = 주문_저장(orderNumber);
         return paymentRepository.save(Payment.createPending(order, 1000L, 200L, 800L, 8L));
