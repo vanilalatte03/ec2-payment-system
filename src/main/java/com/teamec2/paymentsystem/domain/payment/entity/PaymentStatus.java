@@ -20,7 +20,7 @@ public enum PaymentStatus {
     PARTIAL_REFUNDED,
 
     /** 전체 금액이 환불된 상태 */
-    REFUNDED;
+    FULL_REFUNDED;
 
     /**
      * 현재 상태에서 대상 상태로 전이할 수 있는지 확인한다.
@@ -31,9 +31,9 @@ public enum PaymentStatus {
     public boolean canTransitionTo(PaymentStatus target) {
         return switch (this) {
             case PENDING -> target == COMPLETED || target == FAILED;
-            case COMPLETED -> target == PARTIAL_REFUNDED || target == REFUNDED;
-            case PARTIAL_REFUNDED -> target == REFUNDED;
-            case FAILED, REFUNDED -> false;
+            case COMPLETED -> target == PARTIAL_REFUNDED || target == FULL_REFUNDED;
+            case PARTIAL_REFUNDED -> target == FULL_REFUNDED;
+            case FAILED, FULL_REFUNDED -> false;
         };
     }
 }

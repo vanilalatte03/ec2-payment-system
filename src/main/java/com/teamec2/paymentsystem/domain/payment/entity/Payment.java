@@ -167,7 +167,7 @@ public class Payment extends BaseEntity {
      * 결제를 전액 환불 상태로 변경한다.
      */
     public void markAsRefunded() {
-        changeStatus(PaymentStatus.REFUNDED);
+        changeStatus(PaymentStatus.FULL_REFUNDED);
     }
 
     private void changeStatus(PaymentStatus newStatus) {
