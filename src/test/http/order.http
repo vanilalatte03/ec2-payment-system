@@ -60,13 +60,13 @@ Authorization: Bearer {{accessToken}}
 > {%
     client.test("주문 생성 성공", function () {
         client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
-        client.assert(response.body.data.orderStatus === "PAYMENT_PENDING", "주문 상태는 PAYMENT_PENDING이어야 합니다.");
-        client.assert(response.body.data.paymentStatus === "PENDING", "결제 상태는 PENDING이어야 합니다.");
-        client.assert(response.body.data.paymentType === "CARD", "포인트를 쓰지 않으면 CARD 결제 타입이어야 합니다.");
-        client.assert(response.body.data.pgAmount === response.body.data.totalAmount, "PG 결제 금액은 주문 총액과 같아야 합니다.");
+        client.assert(response.body.data.order.status === "PAYMENT_PENDING", "주문 상태는 PAYMENT_PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.status === "PENDING", "결제 상태는 PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.type === "CARD", "포인트를 쓰지 않으면 CARD 결제 타입이어야 합니다.");
+        client.assert(response.body.data.payment.pgAmount === response.body.data.order.totalAmount, "PG 결제 금액은 주문 총액과 같아야 합니다.");
         client.assert(response.body.data.nextAction === "OPEN_PORTONE_PAYMENT", "PortOne 결제창을 열어야 합니다.");
-        client.assert(response.body.data.portonePaymentId !== null, "portonePaymentId가 있어야 합니다.");
-        client.assert(response.body.data.items.length === 1, "주문 상품은 1개여야 합니다.");
+        client.assert(response.body.data.payment.portonePaymentId !== null, "portonePaymentId가 있어야 합니다.");
+        client.assert(response.body.data.order.items.length === 1, "주문 상품은 1개여야 합니다.");
     });
 %}
 
