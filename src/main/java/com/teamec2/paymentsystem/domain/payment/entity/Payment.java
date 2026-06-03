@@ -112,6 +112,18 @@ public class Payment extends BaseEntity {
         );
     }
 
+    public boolean isCompleted() {
+        return status == PaymentStatus.COMPLETED;
+    }
+
+    public boolean isPending() {
+        return status == PaymentStatus.PENDING;
+    }
+
+    public boolean isPointOnly() {
+        return pgAmount == 0;
+    }
+
     /**
      * 결제 검증 성공 후 결제를 완료 상태로 변경한다.
      *
@@ -155,7 +167,7 @@ public class Payment extends BaseEntity {
      * 결제를 전액 환불 상태로 변경한다.
      */
     public void markAsRefunded() {
-        changeStatus(PaymentStatus.REFUNDED);
+        changeStatus(PaymentStatus.FULL_REFUNDED);
     }
 
     private void changeStatus(PaymentStatus newStatus) {

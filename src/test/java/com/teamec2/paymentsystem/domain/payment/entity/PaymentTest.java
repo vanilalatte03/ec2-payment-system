@@ -172,7 +172,7 @@ class PaymentTest {
         payment.markAsRefunded();
 
         // then
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FULL_REFUNDED);
     }
 
     @Test
@@ -186,7 +186,7 @@ class PaymentTest {
         payment.markAsRefunded();
 
         // then
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FULL_REFUNDED);
     }
 
     @Test

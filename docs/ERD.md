@@ -217,7 +217,7 @@ erDiagram
 | 결제ID | id | BIGINT | NOT NULL | PK |
 | 주문 ID | order_id | BIGINT | NOT NULL | FK: orders.id, UNIQUE |
 | 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | UNIQUE |
-| 결제 상태 | status | VARCHAR(30) | NOT NULL | PENDING, COMPLETED, FAILED, PARTIAL_REFUNDED, REFUNDED |
+| 결제 상태 | status | VARCHAR(30) | NOT NULL | PENDING, COMPLETED, FAILED, PARTIAL_REFUNDED, FULL_REFUNDED |
 | 결제 타입 | payment_type | VARCHAR(30) | NOT NULL | CARD, POINT_ONLY, POINT_CARD |
 | 총 금액 | total_amount | BIGINT | NOT NULL | used_point + pg_amount |
 | 사용 포인트 | used_point_amount | BIGINT | NOT NULL | used_point_amount >= 0 |
