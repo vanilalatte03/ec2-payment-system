@@ -8,6 +8,7 @@ import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,8 @@ public class PaymentService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
+
+    private final PointService pointService;
 
     /**
      * PortOne 결제 조회 결과를 검증한 뒤 주문과 결제를 완료 상태로 변경한다.
@@ -53,6 +56,8 @@ public class PaymentService {
         validateConfirmable(order, payment);
 
         LocalDateTime approvedAt = resolveApprovedAtAfterVerification(payment);
+
+        // 이 시점에 포인트 사용, 결제 완료, 포인트 적립까지 함께 처리합니다.
         completePayment(order, payment, approvedAt);
 
         return toConfirmPaymentResponse(order, payment);
@@ -140,8 +145,14 @@ public class PaymentService {
     }
 
     private void completePayment(Order order, Payment payment, LocalDateTime approvedAt) {
+        // 결제 시 사용한 포인트 차감
+        pointService.confirmReservedPoints(payment);
+
         payment.complete(approvedAt);
         order.complete();
+
+        // PG 실결제 시 금액의 1% 포인트 적립
+        pointService.earnPoints(payment);
     }
 
     private ConfirmPaymentResponse toConfirmPaymentResponse(Order order, Payment payment) {
