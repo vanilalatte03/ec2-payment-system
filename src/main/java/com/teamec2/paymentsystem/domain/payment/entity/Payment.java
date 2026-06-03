@@ -112,6 +112,18 @@ public class Payment extends BaseEntity {
         );
     }
 
+    public boolean isCompleted() {
+        return status == PaymentStatus.COMPLETED;
+    }
+
+    public boolean isPending() {
+        return status == PaymentStatus.PENDING;
+    }
+
+    public boolean isPointOnly() {
+        return pgAmount == 0;
+    }
+
     /**
      * 결제 검증 성공 후 결제를 완료 상태로 변경한다.
      *

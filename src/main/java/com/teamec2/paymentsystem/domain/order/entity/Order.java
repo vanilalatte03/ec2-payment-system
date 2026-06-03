@@ -68,6 +68,10 @@ public class Order extends BaseEntity {
         return new Order(user, orderNumber, totalAmount, usedPoint);
     }
 
+    public boolean isPaymentPending() {
+        return status == OrderStatus.PAYMENT_PENDING;
+    }
+
     public void complete() {
         changeStatus(OrderStatus.COMPLETED, ErrorCode.INVALID_ORDER_STATUS);
     }
