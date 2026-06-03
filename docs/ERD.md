@@ -37,6 +37,7 @@ erDiagram
     carts {
         BIGINT id PK "장바구니 ID"
         BIGINT user_id FK "유저 ID"
+        BIGINT version "낙관락 버전"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
     }
@@ -156,6 +157,7 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | 장바구니 ID | id | BIGINT | NOT NULL | PK |
 | 유저 ID | user_id | BIGINT | NOT NULL | FK: users.id |
+| 낙관락 버전 | version | BIGINT | NOT NULL | 장바구니 변경 충돌 감지용 |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
