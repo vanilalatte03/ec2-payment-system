@@ -238,7 +238,7 @@ erDiagram
 | 결제ID    | payment_id | BIGINT | NOT NULL | FK: payments.id                     |
 | 유저 ID   | user_id    | BIGINT | NOT NULL | FK: users.id                        |
 | 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`인 경우 저장 |
-| 거래타입    | type       | VARCHAR | NOT NULL | USE, EARN, USE_RESTORE, EARN_CANCEL |
+| 거래타입    | type       | VARCHAR | NOT NULL | USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL |
 | 거래금액    | amount     | BIGINT | NOT NULL |                                     |
 | 생성일시    | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
 

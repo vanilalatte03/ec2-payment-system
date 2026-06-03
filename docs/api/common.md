@@ -122,7 +122,9 @@ Authorization: Bearer {accessToken}
 
 | 값 | 설명 |
 | --- | --- |
+| `USE_RESERVE` | 주문 생성 시 사용 포인트 예약 |
 | `USE` | 포인트 사용 |
+| `USE_CANCEL` | 결제 확정 전 예약 포인트 취소/복구 |
 | `EARN` | 포인트 적립 |
 | `USE_RESTORE` | 환불에 따른 사용 포인트 복구 |
 | `EARN_CANCEL` | 환불에 따른 적립 포인트 회수 |
