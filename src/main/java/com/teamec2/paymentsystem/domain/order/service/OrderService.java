@@ -75,6 +75,10 @@ public class OrderService {
                 throw new BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE);
             }
 
+            if (product.getStock() < cartItem.getQuantity()) {
+                throw new BusinessException(ErrorCode.ORDER_STOCK_SHORTAGE);
+            }
+
             product.decreaseStock(cartItem.getQuantity());
         }
 

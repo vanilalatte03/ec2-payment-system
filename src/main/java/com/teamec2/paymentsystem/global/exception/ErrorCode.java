@@ -37,6 +37,7 @@ public enum ErrorCode {
     PRODUCT_OUT_OF_STOCK(HttpStatus.CONFLICT, "상품 재고가 부족합니다."),
     INVALID_PRICE(HttpStatus.BAD_REQUEST, "가격은 0 이상이어야 합니다."),
     INVALID_STOCK(HttpStatus.BAD_REQUEST,"재고는 0 이상이어야 합니다."),
+    INVALID_RESTORE_STOCK_QUANTITY(HttpStatus.BAD_REQUEST, "취소 수량은 1개 이상이어야 합니다."),
 
     // Cart
     CART_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니를 찾을 수 없습니다."),
@@ -77,6 +78,7 @@ public enum ErrorCode {
 
     // Refund
     REFUND_ITEM_REQUIRED(HttpStatus.BAD_REQUEST, "환불할 주문 상품 목록이 필요합니다."),
+    INVALID_REFUND_QUANTITY(HttpStatus.BAD_REQUEST, "환불 수량은 1개 이상이어야 합니다."),
     REFUND_QUANTITY_EXCEEDED(HttpStatus.BAD_REQUEST, "잔여 환불 가능 수량을 초과했습니다."),
     REFUND_NOT_ALLOWED(HttpStatus.CONFLICT, "환불 가능한 결제 상태가 아닙니다."),
     REFUND_PG_CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "PG 취소에 실패했습니다."),

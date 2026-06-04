@@ -55,25 +55,43 @@ public class Product extends BaseEntity {
         this.category = category;
     }
 
-    // 주문 생성 시점에 재고를 먼저 차감합니다.
-    // 재고가 부족하면 예외가 발생하고, 주문 생성 트랜잭션이 함께 롤백됩니다.
     public void decreaseStock(int quantity) {
-        if (quantity <= 0) {
+        if (quantity < 1) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
+        }
+
+        if (this.status == ProductStatus.DISCONTINUED) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE);
+        }
+
+        if (this.stock == 0) {
+            this.status = ProductStatus.SOLD_OUT;
+
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
         }
 
         if (this.stock < quantity) {
-            throw new BusinessException(ErrorCode.ORDER_STOCK_SHORTAGE);
+            throw new BusinessException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         }
 
         this.stock -= quantity;
+
+        if (this.stock == 0) {
+            this.status = ProductStatus.SOLD_OUT;
+        }
     }
 
+    // 주문 취소 시 수량 변경
     public void restoreStock(int quantity) {
-        if (quantity <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
+        if (quantity < 1) {
+            throw new BusinessException(ErrorCode.INVALID_RESTORE_STOCK_QUANTITY);
         }
 
         this.stock += quantity;
+
+        // 품절 상품이 취소되었다면 판매중으로 복구
+        if (this.status == ProductStatus.SOLD_OUT && this.stock > 0) {
+            this.status = ProductStatus.ON_SALE;
+        }
     }
 }
