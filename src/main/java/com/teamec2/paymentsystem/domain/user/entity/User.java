@@ -55,7 +55,7 @@ public class User {
 
     // 증가 포인트 메서드
     public void increasePointBalance(Long amount) {
-        if (amount <= 0) {
+        if (amount == null || amount <= 0) {
             throw new BusinessException(ErrorCode.POINT_INCREASE_AMOUNT_INVALID);
         }
         this.pointBalance += amount;
@@ -63,9 +63,15 @@ public class User {
 
     // 감소 포인트 메서드
     public void decreasePointBalance(Long amount) {
-        if (amount <= 0) {
+        if (amount == null || amount <= 0) {
             throw new BusinessException(ErrorCode.POINT_DECREASE_AMOUNT_INVALID);
         }
+
+        // 포인트 잔액은 음수가 되면 안 되므로, 차감 전 현재 잔액이 충분한지 검증합니다.
+        if (this.pointBalance < amount) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_POINT);
+        }
+
         this.pointBalance -= amount;
     }
 }

@@ -287,7 +287,7 @@ Idempotency-Key: "refund-cancel-request-{refundId}"
 - 환불 요청을 `PROCESSING`으로 저장하고 트랜잭션을 종료한 후 PG 취소를 요청한다.
 - 포인트 전액 결제는 PG 호출을 생략한다.
 - PG 취소 성공 시 재고, 포인트, 주문·결제 상태를 반영한다.
-- 부분 환불은 `PARTIAL_REFUNDED`, 전체 환불은 `REFUNDED`로 처리한다.
+- 부분 환불은 `PARTIAL_REFUNDED`, 전체 환불은 `FULL_REFUNDED`로 처리한다.
 - 명확한 PG 취소 실패는 `FAILED`로 변경한다.
 - 타임아웃·네트워크 오류는 `PROCESSING`을 유지하고 재시도한다.
 - 재시도 시 새 환불을 생성하지 않고 동일한 멱등 키를 사용한다.

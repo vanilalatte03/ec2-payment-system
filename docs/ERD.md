@@ -107,6 +107,7 @@ erDiagram
         BIGINT user_id FK "유저 ID"
         BIGINT refund_id FK "환불ID, nullable"
         VARCHAR type "거래타입"
+        VARCHAR idempotency_key "멱등 키"
         BIGINT amount "거래금액"
         DATETIME created_at "생성일시"
     }
@@ -232,7 +233,7 @@ erDiagram
 
 ### point_transactions
 제약 조건:
-- `UNIQUE (refund_id, type)`
+- `UNIQUE (idempotency_key)`
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
@@ -240,8 +241,9 @@ erDiagram
 | 결제ID    | payment_id | BIGINT | NOT NULL | FK: payments.id                     |
 | 유저 ID   | user_id    | BIGINT | NOT NULL | FK: users.id                        |
 | 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`인 경우 저장 |
-| 거래타입    | type       | VARCHAR | NOT NULL | USE, EARN, USE_RESTORE, EARN_CANCEL |
-| 거래금액    | amount     | BIGINT | NOT NULL |                                     |
+| 거래타입    | type       | VARCHAR | NOT NULL | USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL |
+| 멱등 키 | idempotency_key | VARCHAR | NOT NULL | UNIQUE. 결제성 거래는 `PAYMENT:{paymentId}:{type}`, 환불성 거래는 `REFUND:{refundId}:{type}` |
+| 거래금액    | amount     | BIGINT | NOT NULL | `EARN_CANCEL`은 멱등 기록을 위해 0 허용, 그 외 타입은 1 이상 |
 | 생성일시    | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
 
 ### refunds
