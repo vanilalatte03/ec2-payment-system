@@ -100,7 +100,7 @@
     "portonePaymentId": "pay_20260529_000001",
     "status": "PENDING",
     "type": "POINT_CARD",
-    "usePointAmount": 5000,
+    "usedPointAmount": 5000,
     "pgAmount": 73000
   },
   "nextAction": "OPEN_PORTONE_PAYMENT",

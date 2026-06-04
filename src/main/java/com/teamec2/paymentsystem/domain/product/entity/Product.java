@@ -67,7 +67,7 @@ public class Product extends BaseEntity {
         if (this.stock == 0) {
             this.status = ProductStatus.SOLD_OUT;
 
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+            throw new BusinessException(ErrorCode.PRODUCT_OUT_OF_STOCK);
         }
 
         if (this.stock < quantity) {
