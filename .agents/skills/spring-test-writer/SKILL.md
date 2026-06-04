@@ -23,6 +23,8 @@ Spring Boot 프로젝트에서 테스트 후보를 제안하거나, 사용자가
 
 ## 문서 로딩 규칙
 
+이 섹션의 `references/...` 경로는 워크스페이스 루트가 아니라, 이 `SKILL.md`가 있는 스킬 디렉터리 기준으로 해석한다.
+
 문서는 아래 조건에 맞을 때만 읽는다.
 
 - `references/test-convention.md`
