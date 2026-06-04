@@ -65,8 +65,7 @@ public class PaymentConfirmTxService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
         validateOrderOwner(order, userId);
 
-        Payment payment = paymentRepository.findByOrderIdForUpdate(order.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+        Payment payment = findPaymentByOrderIdForUpdate(order.getId());
         validateRequestedPayment(payment, request.portonePaymentId());
 
         if (payment.isCompleted()) {
@@ -105,8 +104,7 @@ public class PaymentConfirmTxService {
      */
     @Transactional
     public ConfirmPaymentResponse complete(Long paymentId, LocalDateTime approvedAt) {
-        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+        Payment payment = findPaymentByIdForUpdate(paymentId);
         Order order = payment.getOrder();
 
         if (payment.isCompleted()) {
@@ -140,8 +138,7 @@ public class PaymentConfirmTxService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failAfterCompensation(Long paymentId) {
-        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+        Payment payment = findPaymentByIdForUpdate(paymentId);
 
         if (!payment.isPending()) {
             return;
@@ -169,6 +166,16 @@ public class PaymentConfirmTxService {
         for (OrderItem orderItem : orderItems) {
             orderItem.getProduct().restoreStock(orderItem.getQuantity());
         }
+    }
+
+    private Payment findPaymentByOrderIdForUpdate(Long orderId) {
+        return paymentRepository.findByOrderIdForUpdate(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    private Payment findPaymentByIdForUpdate(Long paymentId) {
+        return paymentRepository.findByIdForUpdate(paymentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
     }
 
     /**
