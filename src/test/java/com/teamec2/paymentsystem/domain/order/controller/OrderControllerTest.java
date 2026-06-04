@@ -13,6 +13,8 @@ import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
+import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
 import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
 import com.teamec2.paymentsystem.domain.product.entity.ProductCategory;
@@ -141,6 +143,7 @@ class OrderControllerTest {
         List<Order> orders = orderRepository.findAll();
         List<OrderItem> orderItems = orderItemRepository.findAll();
         List<Payment> payments = paymentRepository.findAll();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
 
         assertThat(orders).hasSize(1);
         assertThat(orderItems).hasSize(1);
@@ -151,6 +154,12 @@ class OrderControllerTest {
         assertThat(productRepository.findById(selectedProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
         assertThat(productRepository.findById(notSelectedProduct.getId()).orElseThrow().getStock()).isEqualTo(5);
         assertThat(cartItemRepository.findAll()).hasSize(2);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(5000L);
+        assertThat(pointTransactions).hasSize(1);
+        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.USE_RESERVE);
+        assertThat(pointTransactions.get(0).getAmount()).isEqualTo(5000L);
+        assertThat(pointTransactions.get(0).getIdempotencyKey())
+                .isEqualTo("PAYMENT:%d:USE_RESERVE".formatted(payments.get(0).getId()));
     }
 
     @Test
@@ -189,6 +198,8 @@ class OrderControllerTest {
         assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
         assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
         assertThat(cartItemRepository.findAll()).hasSize(2);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isZero();
+        assertThat(pointTransactionRepository.count()).isZero();
     }
 
     @Test
@@ -215,6 +226,16 @@ class OrderControllerTest {
 	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(78000))
 	                .andExpect(jsonPath("$.data.payment.pgAmount").value(0))
 	                .andExpect(jsonPath("$.data.nextAction").value("CONFIRM_POINT_ONLY"));
+
+            List<Payment> payments = paymentRepository.findAll();
+            List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+
+            assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isZero();
+            assertThat(pointTransactions).hasSize(1);
+            assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.USE_RESERVE);
+            assertThat(pointTransactions.get(0).getAmount()).isEqualTo(78000L);
+            assertThat(pointTransactions.get(0).getIdempotencyKey())
+                    .isEqualTo("PAYMENT:%d:USE_RESERVE".formatted(payments.get(0).getId()));
 	    }
 
 	    @Test
@@ -308,6 +329,8 @@ class OrderControllerTest {
         assertThat(orderItemRepository.count()).isZero();
         assertThat(paymentRepository.count()).isZero();
         assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(1000L);
+        assertThat(pointTransactionRepository.count()).isZero();
     }
 
     @Test

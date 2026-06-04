@@ -11,6 +11,10 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
+import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
+import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -26,10 +30,12 @@ import org.springframework.context.annotation.Primary;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 @SpringBootTest
 class PaymentServiceTest {
@@ -47,6 +53,12 @@ class PaymentServiceTest {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PointService pointService;
+
+    @Autowired
+    PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
     TestPaymentGateway testPaymentGateway;
 
     @BeforeEach
@@ -62,6 +74,7 @@ class PaymentServiceTest {
     }
 
     private void clearDatabase() {
+        pointTransactionRepository.deleteAll();
         paymentRepository.deleteAll();
         orderRepository.deleteAll();
         userRepository.deleteAll();
@@ -70,9 +83,10 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PG결제성공이면_주문과결제를완료한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(10000L);
         Order order = 주문_저장(user, 1000L, 200L);
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
 
@@ -101,11 +115,74 @@ class PaymentServiceTest {
     }
 
     @Test
+    void 결제확정_성공시_예약포인트를_USE로확정하고_적립원장을생성한다() {
+        // given
+        User user = 회원_저장(10000L);
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
+
+        // when
+        paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        );
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(9808L);
+        assertThat(pointTransactions)
+                .extracting(PointTransaction::getType, PointTransaction::getAmount, PointTransaction::getIdempotencyKey)
+                .containsExactlyInAnyOrder(
+                        tuple(PointTransactionType.USE, 200L, "PAYMENT:%d:USE".formatted(payment.getId())),
+                        tuple(PointTransactionType.EARN, 8L, "PAYMENT:%d:EARN".formatted(payment.getId()))
+                );
+    }
+
+    @Test
+    void 결제확정_중복호출시_포인트원장을중복생성하지않는다() {
+        // given
+        User user = 회원_저장(10000L);
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
+
+        // when
+        paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        );
+        paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        );
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(9808L);
+        assertThat(pointTransactions)
+                .extracting(PointTransaction::getType, PointTransaction::getAmount, PointTransaction::getIdempotencyKey)
+                .containsExactlyInAnyOrder(
+                        tuple(PointTransactionType.USE, 200L, "PAYMENT:%d:USE".formatted(payment.getId())),
+                        tuple(PointTransactionType.EARN, 8L, "PAYMENT:%d:EARN".formatted(payment.getId()))
+                );
+    }
+
+    @Test
     void 결제확정_포인트전액결제이면_PortOne조회없이_완료한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(1000L);
         Order order = 주문_저장(user, 1000L, 1000L);
         Payment payment = 결제_저장(order, 1000L, 1000L, 0L);
+        pointService.reserveUsedPoints(payment);
 
         // when
         ConfirmPaymentResponse response = paymentService.confirmPayment(
@@ -266,7 +343,17 @@ class PaymentServiceTest {
     }
 
     private User 회원_저장() {
-        return userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+        return 회원_저장(0L);
+    }
+
+    private User 회원_저장(Long pointBalance) {
+        User user = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
+
+        if (pointBalance > 0) {
+            user.increasePointBalance(pointBalance);
+        }
+
+        return userRepository.save(user);
     }
 
     private Order 주문_저장(User user, Long totalAmount, Long usedPoint) {
