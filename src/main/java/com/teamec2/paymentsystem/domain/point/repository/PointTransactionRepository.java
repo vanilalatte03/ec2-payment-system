@@ -41,10 +41,15 @@ public interface PointTransactionRepository extends JpaRepository<PointTransacti
            Pageable pageable
    );
 
-   Optional<PointTransaction> findByPayment_IdAndType(
-           Long paymentId,
-           PointTransactionType type
-   );
+    /**
+     * 멱등 키가 이미 존재하는지 확인합니다.
+     * 잔액 변경 전에 중복 처리 여부를 빠르게 판단하기 위해 사용합니다.
+     */
+    boolean existsByIdempotencyKey(String idempotencyKey);
 
-    boolean existsByPayment_IdAndType(Long paymentId, PointTransactionType type);
+    /**
+     * 멱등 키로 포인트 원장을 조회합니다.
+     * 예약 확정이나 중복 호출 처리에서 기존 원장을 찾기 위해 사용합니다.
+     */
+    Optional<PointTransaction> findByIdempotencyKey(String idempotencyKey);
 }
