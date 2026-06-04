@@ -38,7 +38,7 @@ INSERT INTO users (
         'sparta@nbcamp.com',
         '$2b$10$GPazGXUOf.Ek2M3YYbt4GuGluvmUlm9.dA6M7MVQca4CQ0/iufLP.',
         '010-1234-5678',
-        -3805,
+        235,
         NOW()
     ),
     (
@@ -235,7 +235,7 @@ INSERT INTO orders (
     created_at,
     updated_at
 ) VALUES
-    (10001, 10001, 'ORD-20260529-10001', 78000, 5000, 'COMPLETED', NOW(), NOW()),
+    (10001, 10001, 'ORD-20260529-10001', 78000, 1000, 'COMPLETED', NOW(), NOW()),
     (10002, 10001, 'ORD-20260529-10002', 89000, 0, 'PAYMENT_PENDING', NOW(), NOW()),
     (10003, 10001, 'ORD-20260529-10003', 94500, 0, 'COMPLETED', NOW(), NOW()),
     (10004, 10001, 'ORD-20260529-10004', 128000, 20000, 'CANCELED', NOW(), NOW()),
@@ -282,9 +282,9 @@ INSERT INTO payments (
         'COMPLETED',
         'POINT_CARD',
         78000,
-        5000,
-        73000,
-        730,
+        1000,
+        77000,
+        770,
         NOW(),
         NULL,
         NOW(),
@@ -324,7 +324,7 @@ INSERT INTO payments (
         10004,
         10004,
         'pay_dev_20260529_10004',
-        'REFUNDED',
+        'FULL_REFUNDED',
         'POINT_CARD',
         128000,
         20000,
@@ -390,23 +390,25 @@ INSERT INTO refunds (
       );
 
 -- 포인트 거래 데이터
+-- 회원 10001의 point_balance는 아래 원장 합계 235와 일치하며, 음수 포인트 잔액 금지 정책을 따른다.
 INSERT INTO point_transactions (
     id,
     user_id,
     payment_id,
     refund_id,
     type,
+    idempotency_key,
     amount,
     created_at
 ) VALUES
-      (10001, 10001, 10001, NULL,  'USE',         5000, NOW()),
-      (10002, 10001, 10001, NULL,  'EARN',         730, NOW()),
-      (10003, 10001, 10003, NULL,  'EARN',         945, NOW()),
-      (10004, 10001, 10003, 10001, 'EARN_CANCEL',  480, NOW()),
-      (10005, 10001, 10004, NULL,  'USE',        20000, NOW()),
-      (10006, 10001, 10004, NULL,  'EARN',        1080, NOW()),
-      (10007, 10001, 10004, 10002, 'USE_RESTORE', 20000, NOW()),
-      (10008, 10001, 10004, 10002, 'EARN_CANCEL',  1080, NOW());
+      (10001, 10001, 10001, NULL,  'USE',         'PAYMENT:10001:USE',          1000, NOW()),
+      (10002, 10001, 10001, NULL,  'EARN',        'PAYMENT:10001:EARN',          770, NOW()),
+      (10003, 10001, 10003, NULL,  'EARN',        'PAYMENT:10003:EARN',          945, NOW()),
+      (10004, 10001, 10003, 10001, 'EARN_CANCEL', 'REFUND:10001:EARN_CANCEL',    480, NOW()),
+      (10005, 10001, 10004, NULL,  'USE',         'PAYMENT:10004:USE',         20000, NOW()),
+      (10006, 10001, 10004, NULL,  'EARN',        'PAYMENT:10004:EARN',         1080, NOW()),
+      (10007, 10001, 10004, 10002, 'USE_RESTORE', 'REFUND:10002:USE_RESTORE',  20000, NOW()),
+      (10008, 10001, 10004, 10002, 'EARN_CANCEL', 'REFUND:10002:EARN_CANCEL',   1080, NOW());
 
 -- 환불 상품 데이터
 INSERT INTO refund_items (
