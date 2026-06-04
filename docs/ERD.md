@@ -227,6 +227,7 @@ erDiagram
 | 상품명 | product_name | VARCHAR(100) | NOT NULL |  |
 | 가격 | price        | INT | NOT NULL |  |
 | 수량 | quantity     | INT | NOT NULL |  |
+| 환불수량 | refunded_quantity | INT | NOT NULL | 기본값 0 |
 | 생성일시 | created_at   | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at   | DATETIME | NULL |  |
 

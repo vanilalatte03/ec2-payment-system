@@ -12,6 +12,8 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -48,6 +50,12 @@ class PaymentServiceTest {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PointService pointService;
+
+    @Autowired
+    PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
     TestPaymentGateway testPaymentGateway;
 
     @BeforeEach
@@ -63,6 +71,7 @@ class PaymentServiceTest {
     }
 
     private void clearDatabase() {
+        pointTransactionRepository.deleteAll();
         paymentRepository.deleteAll();
         orderRepository.deleteAll();
         userRepository.deleteAll();
@@ -71,9 +80,10 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PG결제성공이면_주문과결제를완료한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(10000L);
         Order order = 주문_저장(user, 1000L, 200L);
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
 
@@ -104,9 +114,10 @@ class PaymentServiceTest {
     @Test
     void 결제확정_포인트전액결제이면_PortOne조회없이_완료한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(1000L);
         Order order = 주문_저장(user, 1000L, 1000L);
         Payment payment = 결제_저장(order, 1000L, 1000L, 0L);
+        pointService.reserveUsedPoints(payment);
 
         // when
         ConfirmPaymentResponse response = paymentService.confirmPayment(
@@ -388,7 +399,17 @@ class PaymentServiceTest {
     }
 
     private User 회원_저장() {
-        return userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+        return 회원_저장(0L);
+    }
+
+    private User 회원_저장(Long pointBalance) {
+        User user = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
+
+        if (pointBalance > 0) {
+            user.increasePointBalance(pointBalance);
+        }
+
+        return userRepository.save(user);
     }
 
     private Order 주문_저장(User user, Long totalAmount, Long usedPoint) {

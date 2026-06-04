@@ -100,7 +100,7 @@
     "portonePaymentId": "pay_20260529_000001",
     "status": "PENDING",
     "type": "POINT_CARD",
-    "usePointAmount": 5000,
+    "usedPointAmount": 5000,
     "pgAmount": 73000
   },
   "nextAction": "OPEN_PORTONE_PAYMENT",
@@ -117,6 +117,7 @@
 - 서버가 PortOne에 전달할 `portonePaymentId`를 미리 채번하고 결제 레코드에 저장합니다.
 - 장바구니는 주문 생성 시 비우지 않습니다. 결제 완료 시점에 비웁니다.
 - 포인트 잔액이 부족하면 주문과 결제는 생성하지 않습니다.
+- 포인트를 사용하는 주문은 주문 생성 시점에 포인트를 예약 차감하고, 결제 확정 시 예약 원장을 최종 사용 원장으로 변경합니다.
 
 ### Errors
 

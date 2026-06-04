@@ -36,6 +36,9 @@ public class OrderItem extends BaseEntity {
     @Column(nullable = false, columnDefinition = "int UNSIGNED")
     private int quantity;
 
+    @Column(name = "refunded_quantity", nullable = false, columnDefinition = "int UNSIGNED DEFAULT 0")
+    private int refundedQuantity = 0;
+
     public OrderItem(Order order, Product product, int quantity) {
         if (order == null) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
@@ -58,6 +61,23 @@ public class OrderItem extends BaseEntity {
 
     public long getSubtotal() {
         return (long) price * quantity;
+    }
+
+    public int getRemainingRefundableQuantity() {
+        return quantity - refundedQuantity;
+    }
+
+    public void refund(int refundQuantity) {
+        if (refundQuantity < 1) {
+            throw new BusinessException(ErrorCode.INVALID_REFUND_QUANTITY);
+        }
+
+        if (refundQuantity > getRemainingRefundableQuantity()) {
+            throw new BusinessException(ErrorCode.REFUND_QUANTITY_EXCEEDED);
+        }
+
+        this.refundedQuantity += refundQuantity;
+        this.product.restoreStock(refundQuantity);
     }
 
     public Long getProductId() {
