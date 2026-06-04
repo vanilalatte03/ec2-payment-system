@@ -11,6 +11,8 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointPolicy;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
 import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
 import com.teamec2.paymentsystem.domain.user.entity.User;
@@ -34,6 +36,8 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final PaymentRepository paymentRepository;
     private final OrderNumberGenerator orderNumberGenerator;
+    private final PointPolicy pointPolicy;
+    private final PointService pointService;
 
     // 주문 생성, 재고 선차감, 결제 대기 생성은 하나의 작업처럼 성공하거나 실패해야 합니다.
     // 그래서 중간에 재고 부족 같은 예외가 발생하면 전체 DB 변경이 롤백되도록 @Transactional을 사용합니다.
@@ -46,7 +50,10 @@ public class OrderService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 주문 생성 시점에는 포인트를 실제 차감하지 않고, 사용할 수 있는 잔액인지 먼저 확인합니다.
+        // 주문/결제 데이터를 만들기 전에 포인트 부족 여부를 빠르게 확인합니다.
+        // 이 조회는 잠금 없는 1차 검증입니다.
+        // 실제 예약 차감과 동시성 검증은 PointService.reserveUsedPoints()에서
+        // user row에 비관락을 걸고 다시 수행합니다.
         if (user.getPointBalance() < usePointAmount) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_POINT);
         }
@@ -82,8 +89,9 @@ public class OrderService {
             product.decreaseStock(cartItem.getQuantity());
         }
 
+        // 실제 포인트 적립이 아닌 적립 예정 포인트 계산입니다.
         Long pgAmount = totalAmount - usePointAmount;
-        Long rewardPointAmount = calculateRewardPointAmount(pgAmount);
+        Long rewardPointAmount = pointPolicy.calculateRewardPoint(pgAmount);
 
         // 주문은 처음에는 결제대기 상태로 생성됩니다.
         Order order = Order.create(
@@ -113,6 +121,10 @@ public class OrderService {
                 rewardPointAmount
         );
         Payment savedPayment = paymentRepository.save(payment);
+
+        // 결제 대기 상태에서 사용할 포인트를 예약 차감합니다.
+        // 예약에 실패하면 @Transactional 때문에 주문/결제/재고 변경도 함께 롤백됩니다.
+        pointService.reserveUsedPoints(savedPayment);
 
         // 장바구니는 여기서 비우지 않습니다.
         // 비우는 시점은 비즈니스 규칙대로 결제 완료 이후가 되어야 합니다.
@@ -165,11 +177,6 @@ public class OrderService {
         return cartItems.stream()
                 .mapToLong(cartItem -> (long) cartItem.getProduct().getPrice() * cartItem.getQuantity())
                 .sum();
-    }
-
-    // 예시 정책으로 PG 결제 금액의 1%를 적립 예정 포인트로 계산합니다.
-    private Long calculateRewardPointAmount(Long pgAmount) {
-        return pgAmount / 100;
     }
 
     private CreateOrderResponse toResponse(Order order, Payment payment, List<OrderItem> orderItems) {
