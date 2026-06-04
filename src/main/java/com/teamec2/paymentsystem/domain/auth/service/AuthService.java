@@ -5,6 +5,8 @@ import com.teamec2.paymentsystem.domain.auth.dto.LoginResponse;
 import com.teamec2.paymentsystem.domain.auth.dto.LogoutResponse;
 import com.teamec2.paymentsystem.domain.auth.dto.SignupRequest;
 import com.teamec2.paymentsystem.domain.auth.dto.SignupResponse;
+import com.teamec2.paymentsystem.domain.cart.entity.Cart;
+import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final CartRepository cartRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -35,7 +38,10 @@ public class AuthService {
                 request.name(),
                 request.phone()
         );
+
         User savedUser = userRepository.save(user);
+
+        cartRepository.save(new Cart(savedUser));
 
         return new SignupResponse(
                 savedUser.getId(),

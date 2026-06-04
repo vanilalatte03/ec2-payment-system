@@ -388,7 +388,7 @@ class OrderControllerTest {
 
     private CartItem 장바구니상품_저장(User user, Product product, int quantity) {
         Cart cart = cartRepository.findByUserId(user.getId())
-                .orElseGet(() -> cartRepository.save(new Cart(user)));
+                .orElseThrow();
 
         return cartItemRepository.save(new CartItem(cart, product, quantity));
     }
@@ -400,7 +400,9 @@ class OrderControllerTest {
             user.increasePointBalance(pointBalance);
         }
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        cartRepository.save(new Cart(savedUser));
+        return savedUser;
     }
 
     private Product 상품_저장(String name, int price, int stock, ProductStatus status) {

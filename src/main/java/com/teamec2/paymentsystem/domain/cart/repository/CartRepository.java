@@ -11,11 +11,11 @@ import java.util.Optional;
 public interface CartRepository extends JpaRepository<Cart, Long> {
     Optional<Cart> findByUserId(Long userId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select c from Cart c where c.id = :id")
-    Optional<Cart> findByIdForUpdate(Long id);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Lock(LockModeType.OPTIMISTIC_FORCE_INCREMENT)
     @Query("select c from Cart c where c.user.id = :userId")
-    Optional<Cart> findByUserIdForUpdate(Long userId);
+    Optional<Cart> findByUserIdWithOptimisticLock(Long userId);
+
+    @Lock(LockModeType.OPTIMISTIC_FORCE_INCREMENT)
+    @Query("select c from Cart c where c.id = :id")
+    Optional<Cart> findByIdWithOptimisticLock(Long id);
 }

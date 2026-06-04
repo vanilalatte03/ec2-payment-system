@@ -52,7 +52,7 @@ public class OrderService {
         }
 
         // 주문은 장바구니에 담긴 상품을 기준으로 생성하므로 회원의 장바구니가 필요합니다.
-        Cart cart = cartRepository.findByUserId(userId)
+        Cart cart = cartRepository.findByUserIdWithOptimisticLock(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_EMPTY));
 
         // cartItemIds가 있으면 선택 상품만, 없으면 장바구니 전체 상품을 주문 대상으로 가져옵니다.
@@ -139,10 +139,10 @@ public class OrderService {
     // 선택 주문이면 cartItemIds에 해당하는 상품만 조회하고, 전체 주문이면 장바구니 전체 상품을 조회합니다.
     private List<CartItem> findOrderTargetCartItems(Long cartId, List<Long> cartItemIds) {
         if (cartItemIds == null || cartItemIds.isEmpty()) {
-            return cartItemRepository.findOrderTargetItems(cartId);
+            return cartItemRepository.findOrderItemsByCartId(cartId);
         }
 
-        return cartItemRepository.findOrderTargetItems(cartId, cartItemIds);
+        return cartItemRepository.findOrderItemsByCartIdAndIdIn(cartId, cartItemIds);
     }
 
     // 주문 대상이 비어 있거나, 요청한 장바구니 상품 일부를 찾지 못한 경우 주문을 만들 수 없습니다.

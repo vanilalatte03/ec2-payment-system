@@ -1,10 +1,13 @@
 package com.teamec2.paymentsystem.global.exception;
 
 import com.teamec2.paymentsystem.global.response.ApiResponse;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -25,6 +28,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode, exception.getMessage()));
+    }
+
+    // 동시에 같은 데이터를 수정해서 버전 충돌이 발생했을 때 사용하는 에러
+    @ExceptionHandler({
+            ObjectOptimisticLockingFailureException.class,
+            OptimisticLockException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockException() {
+        return ResponseEntity
+                .status(ErrorCode.CONFLICT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.CONFLICT));
+    }
+
+    // unique 제약 조건처럼 DB 상태와 충돌하는 요청에 사용하는 에러
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException() {
+        return ResponseEntity
+                .status(ErrorCode.CONFLICT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.CONFLICT));
     }
 
     // @Valid 요청 body 검증에 실패했을 때 사용하는 에러
