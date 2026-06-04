@@ -59,6 +59,7 @@ git diff --name-only
 ## 리뷰 기준
 
 리뷰할 코드 범위에 맞는 reference 문서만 읽고 적용한다.
+이 섹션의 `references/...` 경로는 워크스페이스 루트가 아니라, 이 `SKILL.md`가 있는 스킬 디렉터리 기준으로 해석한다.
 
 - `references/backend-review-checklist.md`
   - Controller, Service, Repository, Entity, DTO, validation, security, transaction, idempotency를 리뷰할 때
