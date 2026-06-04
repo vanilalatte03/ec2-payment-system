@@ -5,6 +5,7 @@ import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
+import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
@@ -224,7 +225,60 @@ class PaymentServiceTest {
     }
 
     @Test
-    void 결제확정_PortOne금액이다르면_PAYMENT_AMOUNT_MISMATCH가발생한다() {
+    void 결제확정_PortOne응답이없으면_EXTERNAL_API_FAILED가발생하고_보상취소하지않는다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXTERNAL_API_FAILED);
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelCallCount()).isZero();
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void 결제확정_PortOne승인금액이없으면_EXTERNAL_API_FAILED가발생하고_보상취소하지않는다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        testPaymentGateway.success(payment.getPortonePaymentId(), null, LocalDateTime.of(2026, 6, 1, 12, 30));
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EXTERNAL_API_FAILED);
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelCallCount()).isZero();
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void 결제확정_PortOne금액이다르면_보상취소후_PAYMENT_AMOUNT_MISMATCH가발생한다() {
         // given
         User user = 회원_저장();
         Order order = 주문_저장(user, 1000L, 200L);
@@ -242,6 +296,19 @@ class PaymentServiceTest {
                 .isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
 
         assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelPaymentId()).isEqualTo(payment.getPortonePaymentId());
+        assertThat(testPaymentGateway.getCancelAmount()).isEqualTo(700L);
+        assertThat(testPaymentGateway.getCancelReason()).isEqualTo("PAYMENT_CONFIRM_INTERNAL_FAILURE");
+        assertThat(testPaymentGateway.getCancelIdempotencyKey())
+                .isEqualTo("payment-confirm-compensation-" + payment.getId());
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(foundPayment.getFailedAt()).isNotNull();
     }
 
     @Test
@@ -263,6 +330,61 @@ class PaymentServiceTest {
                 .isEqualTo(ErrorCode.EXTERNAL_API_FAILED);
 
         assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 결제확정_보상취소가실패하면_PAYMENT_COMPENSATION_FAILED가발생하고_내부상태는대기상태로남는다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
+        testPaymentGateway.failCancel();
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void 결제확정_보상취소응답이_SUCCEEDED가아니면_PAYMENT_COMPENSATION_FAILED가발생하고_내부상태는대기상태로남는다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
+        testPaymentGateway.cancelStatus("REQUESTED");
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentService.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
     }
 
     private User 회원_저장() {
@@ -299,11 +421,38 @@ class PaymentServiceTest {
 
         private PaymentGatewayResponse response;
         private int callCount;
+        private int cancelCallCount;
+        private String cancelPaymentId;
+        private Long cancelAmount;
+        private String cancelReason;
+        private String cancelIdempotencyKey;
+        private boolean cancelFailure;
+        private String cancelStatus = "SUCCEEDED";
 
         @Override
         public PaymentGatewayResponse getPayment(String paymentId) {
             callCount++;
             return response;
+        }
+
+        @Override
+        public PaymentCancelResponse cancelPayment(
+                String paymentId,
+                Long cancelAmount,
+                String reason,
+                String idempotencyKey
+        ) {
+            cancelCallCount++;
+            this.cancelPaymentId = paymentId;
+            this.cancelAmount = cancelAmount;
+            this.cancelReason = reason;
+            this.cancelIdempotencyKey = idempotencyKey;
+
+            if (cancelFailure) {
+                throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+            }
+
+            return new PaymentCancelResponse("cancel_test", cancelStatus);
         }
 
         void success(String paymentId, Long paidAmount, LocalDateTime approvedAt) {
@@ -318,9 +467,44 @@ class PaymentServiceTest {
             return callCount;
         }
 
+        int getCancelCallCount() {
+            return cancelCallCount;
+        }
+
+        String getCancelPaymentId() {
+            return cancelPaymentId;
+        }
+
+        Long getCancelAmount() {
+            return cancelAmount;
+        }
+
+        String getCancelReason() {
+            return cancelReason;
+        }
+
+        String getCancelIdempotencyKey() {
+            return cancelIdempotencyKey;
+        }
+
+        void failCancel() {
+            cancelFailure = true;
+        }
+
+        void cancelStatus(String cancelStatus) {
+            this.cancelStatus = cancelStatus;
+        }
+
         void reset() {
             response = null;
             callCount = 0;
+            cancelCallCount = 0;
+            cancelPaymentId = null;
+            cancelAmount = null;
+            cancelReason = null;
+            cancelIdempotencyKey = null;
+            cancelFailure = false;
+            cancelStatus = "SUCCEEDED";
         }
     }
 }
