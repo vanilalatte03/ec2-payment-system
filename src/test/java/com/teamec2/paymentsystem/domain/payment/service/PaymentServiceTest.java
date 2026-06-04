@@ -11,6 +11,8 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
+import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
 import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.user.entity.User;
@@ -28,6 +30,7 @@ import org.springframework.context.annotation.Primary;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,12 +98,22 @@ class PaymentServiceTest {
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
         User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
 
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(foundPayment.getApprovedAt()).isEqualTo(approvedAt);
         assertThat(foundUser.getPointBalance()).isEqualTo(8L);
-        assertThat(pointTransactionRepository.count()).isEqualTo(2);
+        assertThat(pointTransactions).hasSize(2);
+        assertThat(pointTransactions)
+                .extracting(PointTransaction::getType)
+                .containsExactlyInAnyOrder(PointTransactionType.USE, PointTransactionType.EARN);
+        assertThat(pointTransactions)
+                .extracting(PointTransaction::getIdempotencyKey)
+                .containsExactlyInAnyOrder(
+                        "PAYMENT:%d:USE".formatted(payment.getId()),
+                        "PAYMENT:%d:EARN".formatted(payment.getId())
+                );
         assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
 
         assertThat(response.orderId()).isEqualTo(order.getId());
@@ -129,13 +142,17 @@ class PaymentServiceTest {
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
         User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
 
         assertThat(testPaymentGateway.getCallCount()).isZero();
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(foundPayment.getApprovedAt()).isNotNull();
         assertThat(foundUser.getPointBalance()).isZero();
-        assertThat(pointTransactionRepository.count()).isEqualTo(1);
+        assertThat(pointTransactions).hasSize(1);
+        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.USE);
+        assertThat(pointTransactions.get(0).getIdempotencyKey())
+                .isEqualTo("PAYMENT:%d:USE".formatted(payment.getId()));
         assertThat(response.paymentType()).isEqualTo(PaymentType.POINT_ONLY);
         assertThat(response.pgAmount()).isZero();
         assertThat(response.cartCleared()).isFalse();
