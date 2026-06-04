@@ -13,6 +13,7 @@ public record CreateOrderItemResponse (
         Long productId,
         String productName,
         int quantity,
+        int refundedQuantity,
         int unitPrice,
         Long lineAmount
 ) {
@@ -29,6 +30,7 @@ public record CreateOrderItemResponse (
                 orderItem.getProductId(),
                 orderItem.getProductName(),
                 orderItem.getQuantity(),
+                orderItem.getRefundedQuantity(),
                 orderItem.getPrice(),
                 orderItem.getSubtotal()
         );

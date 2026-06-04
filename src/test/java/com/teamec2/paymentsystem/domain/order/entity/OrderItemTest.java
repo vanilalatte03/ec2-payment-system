@@ -108,6 +108,53 @@ class OrderItemTest {
         assertThat(subtotal).isEqualTo(3_000_000_000L);
     }
 
+    @Test
+    void 주문상품환불_수량만큼_환불수량을누적하고_상품재고를복구한다() {
+        // given
+        Order order = 주문_생성();
+        Product product = 상품_생성();
+        OrderItem orderItem = new OrderItem(order, product, 3);
+
+        // when
+        orderItem.refund(2);
+
+        // then
+        assertThat(orderItem.getRefundedQuantity()).isEqualTo(2);
+        assertThat(orderItem.getRemainingRefundableQuantity()).isEqualTo(1);
+        assertThat(product.getStock()).isEqualTo(12);
+    }
+
+    @Test
+    void 주문상품환불_잔여환불가능수량을초과하면_REFUND_QUANTITY_EXCEEDED가발생한다() {
+        // given
+        Order order = 주문_생성();
+        Product product = 상품_생성();
+        OrderItem orderItem = new OrderItem(order, product, 3);
+        orderItem.refund(2);
+
+        // when
+        // then
+        assertThatThrownBy(() -> orderItem.refund(2))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.REFUND_QUANTITY_EXCEEDED);
+    }
+
+    @Test
+    void 주문상품환불_수량이0이면_INVALID_REFUND_QUANTITY가발생한다() {
+        // given
+        Order order = 주문_생성();
+        Product product = 상품_생성();
+        OrderItem orderItem = new OrderItem(order, product, 3);
+
+        // when
+        // then
+        assertThatThrownBy(() -> orderItem.refund(0))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_REFUND_QUANTITY);
+    }
+
     private Order 주문_생성() {
         return Order.create(
                 회원_생성(),
