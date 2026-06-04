@@ -40,8 +40,8 @@ Spring Boot 시작 시 자동 실행되도록 연결하지 않았습니다. 현�
 | 장바구니 | 회원별 장바구니 1개씩 |
 | 장바구니 상품 | 기본 계정 2개, 보조 계정 1개 |
 | 주문 | 결제 완료, 결제 대기, 부분 환불, 전액 환불, 결제 실패 케이스 |
-| 결제 | `COMPLETED`, `PENDING`, `PARTIAL_REFUNDED`, `REFUNDED`, `FAILED` |
-| 포인트 | 음수 없는 잔액 스냅샷, 확정 사용, 적립, 사용 복구, 적립 회수 거래 |
+| 결제 | `COMPLETED`, `PENDING`, `PARTIAL_REFUNDED`, `FULL_REFUNDED`, `FAILED` |
+| 포인트 | 음수 없는 잔액 스냅샷, 멱등 키가 포함된 확정 사용, 적립, 사용 복구, 적립 회수 거래 |
 | 환불 | 부분 환불 1건, 전체 환불 1건 |
 
 ## 필수 기능별 테스트 데이터
@@ -76,7 +76,7 @@ Spring Boot 시작 시 자동 실행되도록 연결하지 않았습니다. 현�
 | `10001` | `COMPLETED` | `10001` | `COMPLETED` | 주문 상세 조회, 신규 환불 요청 |
 | `10002` | `PAYMENT_PENDING` | `10002` | `PENDING` | 결제 확정, 주문 취소 |
 | `10003` | `COMPLETED` | `10003` | `PARTIAL_REFUNDED` | 부분 환불 상태 조회 |
-| `10004` | `CANCELED` | `10004` | `REFUNDED` | 전체 환불 상태 조회 |
+| `10004` | `CANCELED` | `10004` | `FULL_REFUNDED` | 전체 환불 상태 조회 |
 | `10005` | `CANCELED` | `10005` | `FAILED` | 결제 실패 상태 조회 |
 
 ## 상품 테스트 포인트
