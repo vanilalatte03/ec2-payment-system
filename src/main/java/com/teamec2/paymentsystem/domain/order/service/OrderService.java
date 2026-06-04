@@ -50,7 +50,10 @@ public class OrderService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 주문 생성 시점에는 포인트를 실제 차감하지 않고, 사용할 수 있는 잔액인지 먼저 확인합니다.
+        // 주문/결제 데이터를 만들기 전에 포인트 부족 여부를 빠르게 확인합니다.
+        // 이 조회는 잠금 없는 1차 검증입니다.
+        // 실제 예약 차감과 동시성 검증은 PointService.reserveUsedPoints()에서
+        // user row에 비관락을 걸고 다시 수행합니다.
         if (user.getPointBalance() < usePointAmount) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_POINT);
         }
@@ -119,7 +122,7 @@ public class OrderService {
         );
         Payment savedPayment = paymentRepository.save(payment);
 
-        // 결제 대기 상태에서 사용할 포인트를 먼저 예약합니다.
+        // 결제 대기 상태에서 사용할 포인트를 예약 차감합니다.
         // 예약에 실패하면 @Transactional 때문에 주문/결제/재고 변경도 함께 롤백됩니다.
         pointService.reserveUsedPoints(savedPayment);
 
