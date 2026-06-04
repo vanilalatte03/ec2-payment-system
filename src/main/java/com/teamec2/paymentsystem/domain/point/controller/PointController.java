@@ -4,7 +4,6 @@ import com.teamec2.paymentsystem.domain.point.dto.PointBalanceResponse;
 import com.teamec2.paymentsystem.domain.point.dto.PointTransactionResponse;
 import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
 import com.teamec2.paymentsystem.domain.point.service.PointQueryService;
-import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.global.pagination.PageResponse;
 import com.teamec2.paymentsystem.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;

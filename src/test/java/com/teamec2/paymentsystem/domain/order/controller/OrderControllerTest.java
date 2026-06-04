@@ -151,6 +151,7 @@ class OrderControllerTest {
         assertThat(orders.get(0).getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
         assertThat(payments.get(0).getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(payments.get(0).getPaymentType()).isEqualTo(PaymentType.POINT_CARD);
+        assertThat(payments.get(0).getRewardPointAmount()).isEqualTo(730L);
         assertThat(productRepository.findById(selectedProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
         assertThat(productRepository.findById(notSelectedProduct.getId()).orElseThrow().getStock()).isEqualTo(5);
         assertThat(cartItemRepository.findAll()).hasSize(2);
@@ -195,6 +196,7 @@ class OrderControllerTest {
         assertThat(orderRepository.count()).isEqualTo(1);
         assertThat(orderItemRepository.count()).isEqualTo(2);
         assertThat(paymentRepository.count()).isEqualTo(1);
+        assertThat(paymentRepository.findAll().get(0).getRewardPointAmount()).isEqualTo(1030L);
         assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
         assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
         assertThat(cartItemRepository.findAll()).hasSize(2);
@@ -231,6 +233,7 @@ class OrderControllerTest {
             List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
 
             assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isZero();
+            assertThat(payments.get(0).getRewardPointAmount()).isZero();
             assertThat(pointTransactions).hasSize(1);
             assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.USE_RESERVE);
             assertThat(pointTransactions.get(0).getAmount()).isEqualTo(78000L);
@@ -330,6 +333,38 @@ class OrderControllerTest {
         assertThat(paymentRepository.count()).isZero();
         assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(10);
         assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(1000L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 주문생성_사용포인트가주문금액보다크면_INVALID_USED_POINT를반환하고_예약하지않는다() throws Exception {
+        // given
+        User user = 회원_저장(100000L);
+        Product product = 상품_저장("포인트 초과 상품", 10000, 10, ProductStatus.ON_SALE);
+        CartItem cartItem = 장바구니상품_저장(user, product, 1);
+
+        // when
+        // then
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+	                                {
+	                                  "cartItemIds": [%d],
+	                                  "usePointAmount": 15000
+	                                }
+	                                """.formatted(cartItem.getId())))
+                .andExpect(status().is(ErrorCode.INVALID_USED_POINT.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_USED_POINT.name()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.INVALID_USED_POINT.getMessage()))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        assertThat(orderRepository.count()).isZero();
+        assertThat(orderItemRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(100000L);
         assertThat(pointTransactionRepository.count()).isZero();
     }
 
