@@ -26,7 +26,7 @@ public class CartService {
     public CartResponse getCart(Long userId) {
         return cartRepository.findByUserId(userId)
                 .map(cart -> {
-                    List<CartItem> items = cartItemRepository.findAllByCartIdWithProduct(cart.getId());
+                    List<CartItem> items = cartItemRepository.findWithProductByCartId(cart.getId());
 
                     List<CartItemResponse> itemResponses = items.stream()
                             .map(item -> new CartItemResponse(
@@ -56,7 +56,7 @@ public class CartService {
 
     @Transactional
     public ClearCartResponse clearCart(Long userId) {
-        Cart cart = cartRepository.findByUserIdForUpdate(userId)
+        Cart cart = cartRepository.findByUserIdWithOptimisticLock(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
         int deletedCount = cartItemRepository.countByCartId(cart.getId());

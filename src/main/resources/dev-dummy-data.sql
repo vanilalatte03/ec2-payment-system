@@ -200,11 +200,12 @@ INSERT INTO products (
 INSERT INTO carts (
     id,
     user_id,
+    version,
     created_at,
     updated_at
 ) VALUES
-    (10001, 10001, NOW(), NOW()),
-    (10002, 10002, NOW(), NOW());
+    (10001, 10001, 0, NOW(), NOW()),
+    (10002, 10002, 0, NOW(), NOW());
 
 INSERT INTO cart_items (
     id,

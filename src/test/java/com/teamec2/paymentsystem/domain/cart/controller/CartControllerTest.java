@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -92,7 +93,22 @@ class CartControllerTest {
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
         CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
 
-        org.assertj.core.api.Assertions.assertThat(cartItem.getQuantity()).isEqualTo(2);
+        assertThat(cartItem.getQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    void 장바구니상품담기_성공하면_장바구니버전을증가시킨다() throws Exception {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("버전 테스트 상품", 10000, 10, ProductStatus.ON_SALE);
+        Long beforeVersion = 장바구니버전(user);
+
+        // when
+        장바구니상품_담기(accessToken(user), product.getId(), 1);
+
+        // then
+        Long afterVersion = 장바구니버전(user);
+        assertThat(afterVersion).isGreaterThan(beforeVersion);
     }
 
     @Test
@@ -111,7 +127,7 @@ class CartControllerTest {
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
         CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
 
-        org.assertj.core.api.Assertions.assertThat(cartItem.getQuantity()).isEqualTo(5);
+        assertThat(cartItem.getQuantity()).isEqualTo(5);
     }
 
     @Test
@@ -191,7 +207,7 @@ class CartControllerTest {
     }
 
     @Test
-    void 장바구니조회_장바구니가없으면_빈목록을반환한다() throws Exception {
+    void 장바구니조회_상품이없으면_빈목록과장바구니식별자를반환한다() throws Exception {
         // given
         User user = 회원_저장();
 
@@ -201,7 +217,7 @@ class CartControllerTest {
                         .header("Authorization", "Bearer " + accessToken(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(BODY_STATUS))
-                .andExpect(jsonPath("$.data.cartId").doesNotExist())
+                .andExpect(jsonPath("$.data.cartId").isNumber())
                 .andExpect(jsonPath("$.data.items.length()").value(0))
                 .andExpect(jsonPath("$.data.totalQuantity").value(0))
                 .andExpect(jsonPath("$.data.totalAmount").value(0));
@@ -234,7 +250,34 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.cartTotalAmount").value(168000));
 
         CartItem changedCartItem = cartItemRepository.findById(cartItem.getId()).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(changedCartItem.getQuantity()).isEqualTo(4);
+        assertThat(changedCartItem.getQuantity()).isEqualTo(4);
+    }
+
+    @Test
+    void 장바구니수량변경_재고를초과하면_CART_STOCK_EXCEEDED를반환하고_수량을바꾸지않는다() throws Exception {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("재고 제한 상품", 15000, 3, ProductStatus.ON_SALE);
+        CartItem cartItem = 장바구니상품_저장(user, product, 2);
+
+        // when
+        // then
+        mockMvc.perform(patch("/api/carts/items/{cartItemId}", cartItem.getId())
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "quantity": 4
+                                }
+                                """))
+                .andExpect(status().is(ErrorCode.CART_STOCK_EXCEEDED.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.CART_STOCK_EXCEEDED.name()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.CART_STOCK_EXCEEDED.getMessage()))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        CartItem unchangedCartItem = cartItemRepository.findById(cartItem.getId()).orElseThrow();
+        assertThat(unchangedCartItem.getQuantity()).isEqualTo(2);
     }
 
     @Test
@@ -304,7 +347,7 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.cartItemId").value(cartItem.getId()))
                 .andExpect(jsonPath("$.data.cartTotalAmount").value(0));
 
-        org.assertj.core.api.Assertions.assertThat(cartItemRepository.findById(cartItem.getId())).isEmpty();
+        assertThat(cartItemRepository.findById(cartItem.getId())).isEmpty();
     }
 
     @Test
@@ -326,7 +369,7 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.cartItemId").value(cartItem.getId()))
                 .andExpect(jsonPath("$.data.cartTotalAmount").value(117000));
 
-        org.assertj.core.api.Assertions.assertThat(cartItemRepository.findById(cartItem.getId())).isEmpty();
+        assertThat(cartItemRepository.findById(cartItem.getId())).isEmpty();
     }
 
     @Test
@@ -347,7 +390,25 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.deletedCount").value(2));
 
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(cartItemRepository.findAllByCartId(cart.getId())).isEmpty();
+        assertThat(cartItemRepository.findAllByCartId(cart.getId())).isEmpty();
+    }
+
+    @Test
+    void 장바구니전체비우기_성공하면_장바구니버전을증가시킨다() throws Exception {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("전체 삭제 버전 상품", 39000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, product, 1);
+        Long beforeVersion = 장바구니버전(user);
+
+        // when
+        mockMvc.perform(delete("/api/carts")
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk());
+
+        // then
+        Long afterVersion = 장바구니버전(user);
+        assertThat(afterVersion).isGreaterThan(beforeVersion);
     }
 
     @Test
@@ -379,17 +440,25 @@ class CartControllerTest {
 
     private CartItem 장바구니상품_저장(User user, Product product, int quantity) {
         Cart cart = cartRepository.findByUserId(user.getId())
-                .orElseGet(() -> cartRepository.save(new Cart(user)));
+                .orElseThrow();
 
         return cartItemRepository.save(new CartItem(cart, product, quantity));
     }
 
     private User 회원_저장() {
-        return userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+        User user = userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+        cartRepository.save(new Cart(user));
+        return user;
     }
 
     private Product 상품_저장(String name, int price, int stock, ProductStatus status) {
         return productRepository.save(new Product(name, price, stock, "테스트 상품입니다.", status, ProductCategory.TOP));
+    }
+
+    private Long 장바구니버전(User user) {
+        return cartRepository.findByUserId(user.getId())
+                .orElseThrow()
+                .getVersion();
     }
 
     private String accessToken(User user) {

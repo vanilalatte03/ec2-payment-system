@@ -9,20 +9,17 @@ import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
 import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
 import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
-import com.teamec2.paymentsystem.domain.user.entity.User;
-import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class CartItemService {
 
     private final CartItemRepository cartItemRepository;
-    private final UserRepository userRepository;
     private final CartRepository cartRepository;
     private final ProductRepository productRepository;
 
@@ -32,11 +29,8 @@ public class CartItemService {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        User user = userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        Cart cart = cartRepository.findByUserIdForUpdate(userId)
-                .orElseGet(() -> cartRepository.save(new Cart(user)));
+        Cart cart = cartRepository.findByUserIdWithOptimisticLock(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -77,17 +71,17 @@ public class CartItemService {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        CartItem cartItem = cartItemRepository.findByIdWithCartUserAndProduct(cartItemId)
+        CartItem cartItem = cartItemRepository.findWithOwnerAndProductById(cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         if (!cartItem.getCart().getUser().getId().equals(userId)) {
             throw new BusinessException(ErrorCode.CART_ITEM_ACCESS_DENIED);
         }
 
-        Cart cart = cartRepository.findByIdForUpdate(cartItem.getCart().getId())
+        Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
-        cartItem = cartItemRepository.findByCartIdAndIdWithProduct(cart.getId(), cartItemId)
+        cartItem = cartItemRepository.findWithProductByCartIdAndId(cart.getId(), cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         Product product = cartItem.getProduct();
@@ -106,17 +100,17 @@ public class CartItemService {
 
     @Transactional
     public DeleteCartItemResponse deleteCartItem(Long userId, Long cartItemId) {
-        CartItem cartItem = cartItemRepository.findByIdWithCartUserAndProduct(cartItemId)
+        CartItem cartItem = cartItemRepository.findWithOwnerAndProductById(cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         if (!cartItem.getCart().getUser().getId().equals(userId)) {
             throw new BusinessException(ErrorCode.CART_ITEM_ACCESS_DENIED);
         }
 
-        Cart cart = cartRepository.findByIdForUpdate(cartItem.getCart().getId())
+        Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
-        cartItem = cartItemRepository.findByCartIdAndIdWithProduct(cart.getId(), cartItemId)
+        cartItem = cartItemRepository.findWithProductByCartIdAndId(cart.getId(), cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         cartItemRepository.delete(cartItem);

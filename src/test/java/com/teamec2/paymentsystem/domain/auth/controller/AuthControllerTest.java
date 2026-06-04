@@ -1,5 +1,7 @@
 package com.teamec2.paymentsystem.domain.auth.controller;
 
+import com.teamec2.paymentsystem.domain.cart.entity.Cart;
+import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -20,6 +22,7 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +39,9 @@ class AuthControllerTest {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    CartRepository cartRepository;
 
     @Autowired
     PasswordEncoder passwordEncoder;
@@ -80,8 +86,25 @@ class AuthControllerTest {
         User user = userRepository.findByEmail(email)
                 .orElseThrow();
 
-        org.assertj.core.api.Assertions.assertThat(user.getPassword()).isNotEqualTo(rawPassword);
-        org.assertj.core.api.Assertions.assertThat(passwordEncoder.matches(rawPassword, user.getPassword())).isTrue();
+        assertThat(user.getPassword()).isNotEqualTo(rawPassword);
+        assertThat(passwordEncoder.matches(rawPassword, user.getPassword())).isTrue();
+    }
+
+    @Test
+    void 회원가입_성공하면_회원장바구니를생성한다() throws Exception {
+        // given
+        String email = uniqueEmail();
+
+        // when
+        signup(email, "Password123!");
+
+        // then
+        User user = userRepository.findByEmail(email)
+                .orElseThrow();
+        Cart cart = cartRepository.findByUserId(user.getId())
+                .orElseThrow();
+
+        assertThat(cart.getUser().getId()).isEqualTo(user.getId());
     }
 
     @Test
