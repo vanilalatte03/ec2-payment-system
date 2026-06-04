@@ -8,6 +8,7 @@ import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class PaymentConfirmTxService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final OrderItemRepository orderItemRepository;
+    private final PointService pointService;
 
     /**
      * 결제 확정 대상 주문과 결제를 조회하고, 확정 가능한 상태인지 검증한다.
@@ -129,6 +131,7 @@ public class PaymentConfirmTxService {
      * <p>정리 순서는 다음과 같다.
      * <ol>
      *     <li>주문 생성 때 선차감했던 재고를 복구한다.</li>
+     *     <li>주문 생성 때 예약 차감했던 포인트를 복구한다.</li>
      *     <li>주문을 결제대기에서 취소 상태로 변경한다.</li>
      *     <li>결제를 실패 상태로 변경한다.</li>
      * </ol>
@@ -147,6 +150,7 @@ public class PaymentConfirmTxService {
         Order order = payment.getOrder();
 
         restoreStock(order);
+        pointService.cancelReservedPoints(payment);
         order.cancelPendingPayment();
         payment.fail(LocalDateTime.now());
     }

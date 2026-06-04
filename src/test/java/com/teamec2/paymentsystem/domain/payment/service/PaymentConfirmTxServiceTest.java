@@ -10,7 +10,10 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
+import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
 import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
 import com.teamec2.paymentsystem.domain.product.entity.ProductCategory;
 import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
@@ -51,6 +54,9 @@ class PaymentConfirmTxServiceTest {
 
     @Autowired
     PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
+    PointService pointService;
 
     @Autowired
     PortoneWebhookEventRepository webhookEventRepository;
@@ -110,8 +116,53 @@ class PaymentConfirmTxServiceTest {
         assertThat(foundSecondProduct.getStock()).isEqualTo(10);
     }
 
+    @Test
+    void 보상취소성공후_예약차감한포인트를복구하고_취소원장을기록한다() {
+        // given
+        User user = 회원_저장(1000L);
+        Product product = 상품_저장("후드 집업", 55000, 4);
+        Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, product, 1);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
+
+        User reservedUser = userRepository.findById(user.getId()).orElseThrow();
+        String reserveKey = PointTransaction.paymentIdempotencyKey(payment, PointTransactionType.USE_RESERVE);
+        String cancelKey = PointTransaction.paymentIdempotencyKey(payment, PointTransactionType.USE_CANCEL);
+
+        assertThat(reservedUser.getPointBalance()).isEqualTo(800L);
+        assertThat(pointTransactionRepository.existsByIdempotencyKey(reserveKey)).isTrue();
+
+        // when
+        paymentConfirmTxService.failAfterCompensation(payment.getId());
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        Product foundProduct = productRepository.findById(product.getId()).orElseThrow();
+        PointTransaction cancelTransaction = pointTransactionRepository.findByIdempotencyKey(cancelKey).orElseThrow();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(1000L);
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(foundProduct.getStock()).isEqualTo(5);
+        assertThat(cancelTransaction.getType()).isEqualTo(PointTransactionType.USE_CANCEL);
+        assertThat(cancelTransaction.getAmount()).isEqualTo(200L);
+    }
+
     private User 회원_저장() {
-        return userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+        return 회원_저장(0L);
+    }
+
+    private User 회원_저장(Long pointBalance) {
+        User user = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
+
+        if (pointBalance > 0) {
+            user.increasePointBalance(pointBalance);
+        }
+
+        return userRepository.save(user);
     }
 
     private Product 상품_저장(String name, int price, int stock) {

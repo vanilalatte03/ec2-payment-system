@@ -291,9 +291,10 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PortOne금액이다르면_보상취소후_PAYMENT_AMOUNT_MISMATCH가발생한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(1000L);
         Order order = 주문_저장(user, 1000L, 200L);
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
         testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
 
         // when
@@ -325,9 +326,10 @@ class PaymentServiceTest {
     @Test
     void 결제확정_PortOne승인시각이없으면_EXTERNAL_API_FAILED가발생한다() {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(1000L);
         Order order = 주문_저장(user, 1000L, 200L);
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, null);
 
         // when
