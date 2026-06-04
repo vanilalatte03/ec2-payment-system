@@ -18,4 +18,4 @@ portone:
   api-secret: test-api-secret
   store-id: test-store-id
   channel-key: test-channel-key
-  webhook-secret: test-webhook-secret
+  webhook-secret: whsec_MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=

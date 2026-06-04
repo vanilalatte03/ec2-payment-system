@@ -20,7 +20,9 @@ erDiagram
 
     payment ||--o{ point_transaction : creates
     payment ||--o{ refund : refunded_by
+    payment ||--o{ webhook_event : receives
     refund o|--o{ point_transaction : creates
+    refund o|--o{ webhook_event : receives
     refund ||--o{ refund_item : contains
     order_item ||--o{ refund_item : refunded_as
 
@@ -123,6 +125,21 @@ erDiagram
         VARCHAR status "환불 상태"
         DATETIME created_at "생성일시"
         DATETIME refunded_at "환불완료일시"
+    }
+
+    webhook_events {
+        BIGINT id PK "이벤트 ID"
+        BIGINT refund_id FK "환불ID, nullable"
+        BIGINT payment_id FK "결제ID, nullable"
+        VARCHAR webhook_id "웹훅 ID"
+        VARCHAR status "이벤트 상태"
+        VARCHAR type "이벤트 타입"
+        VARCHAR portone_payment_id "포트원 ID"
+        VARCHAR failure_reason "실패 사유"
+        DATETIME processed_at "처리 완료 일시"
+        TEXT raw_payload "원본 페이로드"
+        DATETIME created_at "생성일시"
+        DATETIME updated_at "수정일시"
     }
 
     refund_items {
@@ -261,6 +278,25 @@ erDiagram
 | 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각                 |
 | 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각              |
 
+### webhook_events
+제약 조건:
+- `UNIQUE (webhook_id)`
+
+| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
+| --- | --- | --- | --- | --- |
+| 이벤트 ID | id | BIGINT | NOT NULL | PK |
+| 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. 환불 웹훅 처리 시 저장 |
+| 결제ID | payment_id | BIGINT | NULL | FK: payments.id. 결제 매칭 실패 또는 무시 이벤트면 NULL 가능 |
+| 웹훅 ID | webhook_id | VARCHAR(200) | NOT NULL | UNIQUE. PortOne `webhook-id` 헤더 값, 웹훅 메시지 멱등 키 |
+| 이벤트 상태 | status | VARCHAR(30) | NOT NULL | RECEIVED, PROCESSED, IGNORE, FAILED |
+| 이벤트 타입 | type | VARCHAR(50) | NOT NULL | 예: Transaction.Paid, Transaction.Failed, Transaction.Cancelled |
+| 포트원 ID | portone_payment_id | VARCHAR(100) | NULL | PortOne 결제 ID. 결제 ID를 추출할 수 없는 무시 이벤트면 NULL 가능 |
+| 실패 사유 | failure_reason | VARCHAR(500) | NULL | 처리 실패 또는 무시 사유 |
+| 처리 완료 일시 | processed_at | DATETIME | NULL | 처리 완료 시각 |
+| 원본 페이로드 | raw_payload | TEXT | NULL | 서명 검증에 사용한 원본 본문 |
+| 생성일시 | created_at | DATETIME | NOT NULL | 수신 이벤트 생성 시각 |
+| 수정일시 | updated_at | DATETIME | NOT NULL | 수신 이벤트 수정 시각 |
+
 ### refund_items
 
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
@@ -290,6 +326,8 @@ erDiagram
 | order - refund | 주문은 여러 환불 내역을 가질 수 있다. |
 | payment - point_transaction | 결제는 포인트 거래 내역을 생성할 수 있다. |
 | payment - refund | 결제는 여러 환불 내역을 가질 수 있다. |
+| payment - webhook_event | 결제는 여러 웹훅 수신 이벤트와 연결될 수 있다. |
 | refund - point_transaction | 환불은 사용 포인트 복구 및 적립 포인트 회수 거래 내역을 생성할 수 있다. |
+| refund - webhook_event | 환불은 여러 웹훅 수신 이벤트와 연결될 수 있다. |
 | refund - refund_item | 환불은 여러 환불 상품을 가진다. |
 | order_item - refund_item | 주문 상품은 환불 상품으로 참조된다. |
