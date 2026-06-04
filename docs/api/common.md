@@ -108,7 +108,7 @@ Authorization: Bearer {accessToken}
 | `COMPLETED` | 결제완료 |
 | `FAILED` | 결제실패 |
 | `PARTIAL_REFUNDED` | 부분환불 |
-| `REFUNDED` | 전액환불 |
+| `FULL_REFUNDED` | 전액환불 |
 
 ### PaymentType
 
