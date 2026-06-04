@@ -5,6 +5,10 @@ import com.teamec2.paymentsystem.infra.portone.webhook.entity.PortoneWebhookEven
 import com.teamec2.paymentsystem.infra.portone.webhook.repository.PortoneWebhookEventRepository;
 import io.portone.sdk.server.webhook.Webhook;
 import io.portone.sdk.server.webhook.WebhookTransaction;
+import io.portone.sdk.server.webhook.WebhookTransactionCancelledCancelPending;
+import io.portone.sdk.server.webhook.WebhookTransactionCancelledCancelled;
+import io.portone.sdk.server.webhook.WebhookTransactionCancelledPartialCancelled;
+import io.portone.sdk.server.webhook.WebhookTransactionFailed;
 import io.portone.sdk.server.webhook.WebhookTransactionPaid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -15,6 +19,10 @@ import org.springframework.stereotype.Service;
 public class PortoneWebhookEventService {
 
     private static final String TYPE_TRANSACTION_PAID = "Transaction.Paid";
+    private static final String TYPE_TRANSACTION_FAILED = "Transaction.Failed";
+    private static final String TYPE_TRANSACTION_CANCELLED = "Transaction.Cancelled";
+    private static final String TYPE_TRANSACTION_PARTIAL_CANCELLED = "Transaction.PartialCancelled";
+    private static final String TYPE_TRANSACTION_CANCEL_PENDING = "Transaction.CancelPending";
     private static final String REASON_UNSUPPORTED_EVENT_TYPE = "UNSUPPORTED_EVENT_TYPE";
 
     private final PortoneWebhookEventRepository webhookEventRepository;
@@ -131,6 +139,22 @@ public class PortoneWebhookEventService {
     private String resolveType(Webhook webhook) {
         if (webhook instanceof WebhookTransactionPaid) {
             return TYPE_TRANSACTION_PAID;
+        }
+
+        if (webhook instanceof WebhookTransactionFailed) {
+            return TYPE_TRANSACTION_FAILED;
+        }
+
+        if (webhook instanceof WebhookTransactionCancelledCancelled) {
+            return TYPE_TRANSACTION_CANCELLED;
+        }
+
+        if (webhook instanceof WebhookTransactionCancelledPartialCancelled) {
+            return TYPE_TRANSACTION_PARTIAL_CANCELLED;
+        }
+
+        if (webhook instanceof WebhookTransactionCancelledCancelPending) {
+            return TYPE_TRANSACTION_CANCEL_PENDING;
         }
 
         return webhook.getClass().getSimpleName();

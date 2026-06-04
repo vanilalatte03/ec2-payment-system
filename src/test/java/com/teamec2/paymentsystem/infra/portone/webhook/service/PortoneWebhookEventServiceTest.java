@@ -5,7 +5,9 @@ import com.teamec2.paymentsystem.infra.portone.webhook.entity.PortoneWebhookEven
 import com.teamec2.paymentsystem.infra.portone.webhook.entity.WebhookEventStatus;
 import com.teamec2.paymentsystem.infra.portone.webhook.repository.PortoneWebhookEventRepository;
 import io.portone.sdk.server.webhook.Webhook;
+import io.portone.sdk.server.webhook.WebhookTransactionDataFailed;
 import io.portone.sdk.server.webhook.WebhookTransactionDataPaid;
+import io.portone.sdk.server.webhook.WebhookTransactionFailed;
 import io.portone.sdk.server.webhook.WebhookTransactionPaid;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -131,6 +133,37 @@ class PortoneWebhookEventServiceTest {
     }
 
     @Test
+    void 웹훅수신_TransactionFailed이면_PortOne이벤트명으로_IGNORE상태저장한다() {
+        // given
+        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        PortoneWebhookReceiveResponse response = portoneWebhookEventService.receive(
+                WEBHOOK_ID,
+                failedWebhook("pay_123"),
+                RAW_PAYLOAD
+        );
+
+        // then
+        ArgumentCaptor<PortoneWebhookEvent> eventCaptor = ArgumentCaptor.forClass(PortoneWebhookEvent.class);
+        verify(webhookEventRepository).saveAndFlush(eventCaptor.capture());
+        PortoneWebhookEvent savedEvent = eventCaptor.getValue();
+
+        assertThat(response.received()).isTrue();
+        assertThat(response.processed()).isFalse();
+        assertThat(response.portonePaymentId()).isNull();
+        assertThat(response.reason()).isEqualTo("UNSUPPORTED_EVENT_TYPE");
+
+        assertThat(savedEvent.getStatus()).isEqualTo(WebhookEventStatus.IGNORE);
+        assertThat(savedEvent.getType()).isEqualTo("Transaction.Failed");
+        assertThat(savedEvent.getPortonePaymentId()).isEqualTo("pay_123");
+        assertThat(savedEvent.getFailureReason()).isEqualTo("UNSUPPORTED_EVENT_TYPE");
+        assertThat(savedEvent.getProcessedAt()).isNotNull();
+    }
+
+    @Test
     void 웹훅수신_저장중Unique충돌이고이미존재하면_중복응답한다() {
         // given
         when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false, true);
@@ -162,6 +195,16 @@ class PortoneWebhookEventServiceTest {
         );
 
         return new WebhookTransactionPaid(Instant.parse("2026-05-29T09:35:00Z"), data);
+    }
+
+    private WebhookTransactionFailed failedWebhook(String paymentId) {
+        WebhookTransactionDataFailed data = new WebhookTransactionDataFailed(
+                paymentId,
+                "store-123",
+                "transaction-123"
+        );
+
+        return new WebhookTransactionFailed(Instant.parse("2026-05-29T09:35:00Z"), data);
     }
 
     private static class UnsupportedWebhook implements Webhook {
