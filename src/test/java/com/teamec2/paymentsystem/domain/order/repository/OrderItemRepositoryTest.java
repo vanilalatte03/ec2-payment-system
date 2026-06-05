@@ -79,8 +79,8 @@ class OrderItemRepositoryTest {
         return product;
     }
 
-    private Order 주문_저장(User user, String orderNumber, Long totalAmount, Long usedPoint) {
-        Order order = Order.create(user, orderNumber, totalAmount, usedPoint);
+    private Order 주문_저장(User user, String orderNumber, Long totalAmount, Long usedPointAmount) {
+        Order order = Order.create(user, orderNumber, totalAmount, usedPointAmount);
         entityManager.persist(order);
         return order;
     }

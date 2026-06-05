@@ -98,7 +98,15 @@ Authorization: Bearer {accessToken}
 | --- | --- |
 | `PAYMENT_PENDING` | 결제대기 |
 | `COMPLETED` | 주문완료 |
+| `PARTIAL_CANCELED` | 일부 주문상품 취소 |
 | `CANCELED` | 주문취소 |
+
+### OrderItemStatus
+
+| 값 | 설명 |
+| --- | --- |
+| `ORDERED` | 주문됨 |
+| `CANCELED` | 주문상품 취소 |
 
 ### PaymentStatus
 
@@ -177,6 +185,10 @@ Authorization: Bearer {accessToken}
 | `ORDER_STOCK_SHORTAGE` | 409 | 주문 생성 중 재고 부족 |
 | `INVALID_ORDER_STATUS` | 400 | 요청할 수 없는 주문 상태 |
 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 결제대기 상태가 아니라 직접 취소 불가 |
+| `INVALID_ORDER_PRICE` | 400 | 주문 가격 오류 |
+| `INVALID_ORDER_QUANTITY` | 400 | 주문 수량 오류 |
+| `INVALID_ORDER_STOCK` | 400 | 주문 재고 오류 |
+| `INVALID_USED_POINT` | 400 | 사용 포인트 오류 |
 | `PAYMENT_NOT_FOUND` | 404 | 결제 없음 |
 | `PAYMENT_ACCESS_DENIED` | 403 | 타인의 결제 접근 |
 | `PAYMENT_ALREADY_PROCESSED` | 200 | 이미 완료된 결제 확정 요청 |

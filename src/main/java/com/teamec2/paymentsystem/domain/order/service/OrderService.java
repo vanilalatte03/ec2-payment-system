@@ -58,8 +58,8 @@ public class OrderService {
     // 주문 생성, 재고 선차감, 결제 대기 생성은 하나의 작업처럼 성공하거나 실패해야 합니다.
     // 그래서 중간에 재고 부족 같은 예외가 발생하면 전체 DB 변경이 롤백되도록 @Transactional을 사용합니다.
     @Transactional
-    public CreateOrderResponse createOrder(Long userId, List<Long> cartItemIds, Long usePointAmount) {
-        if (usePointAmount == null || usePointAmount < 0) {
+    public CreateOrderResponse createOrder(Long userId, List<Long> cartItemIds, Long usedPointAmount) {
+        if (usedPointAmount == null || usedPointAmount < 0) {
             throw new BusinessException(ErrorCode.INVALID_USED_POINT);
         }
 
@@ -72,7 +72,7 @@ public class OrderService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        if (user.getPointBalance() < usePointAmount) {
+        if (user.getPointBalance() < usedPointAmount) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_POINT);
         }
 
@@ -104,7 +104,7 @@ public class OrderService {
                 .mapToLong(cartItem -> (long) cartItem.getProduct().getPrice() * cartItem.getQuantity())
                 .sum();
 
-        if (usePointAmount > totalAmount) {
+        if (usedPointAmount > totalAmount) {
             throw new BusinessException(ErrorCode.INVALID_USED_POINT);
         }
 
@@ -127,7 +127,7 @@ public class OrderService {
         // 실제 포인트 적립이 아닌 적립 예정 포인트 계산입니다.
         // pgAmount는 PG 결제창에서 실제 카드/간편결제로 결제해야 하는 금액입니다.
         // totalAmount 전체 금액에서 사용 포인트를 뺀 값입니다.
-        Long pgAmount = totalAmount - usePointAmount;
+        Long pgAmount = totalAmount - usedPointAmount;
 
         // rewardPointAmount는 결제 완료 후 적립될 예정 포인트입니다.
         // 현재 정책은 PointPolicy가 계산하고, 실제 적립은 결제 확정 시점에 수행됩니다.
@@ -138,7 +138,7 @@ public class OrderService {
                 user,
                 orderNumberGenerator.generate(),
                 totalAmount,
-                usePointAmount
+                usedPointAmount
         );
 
         Order savedOrder = orderRepository.save(order);
@@ -162,7 +162,7 @@ public class OrderService {
         Payment payment = Payment.createPending(
                 savedOrder,
                 totalAmount,
-                usePointAmount,
+                usedPointAmount,
                 pgAmount,
                 rewardPointAmount
         );

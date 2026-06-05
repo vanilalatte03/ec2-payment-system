@@ -6,25 +6,25 @@
 
 ```mermaid
 erDiagram
-    user ||--|| cart : owns
-    user ||--o{ order : places
-    user ||--o{ point_transaction : has
+    users ||--|| carts : owns
+    users ||--o{ orders : places
+    users ||--o{ point_transactions : has
 
-    cart ||--o{ cart_item : contains
-    product ||--o{ cart_item : added_to
+    carts ||--o{ cart_items : contains
+    products ||--o{ cart_items : added_to
 
-    order ||--o{ order_item : contains
-    product ||--o{ order_item : ordered_as
-    order ||--|| payment : paid_by
-    order ||--o{ refund : refunded_by
+    orders ||--o{ order_items : contains
+    products ||--o{ order_items : ordered_as
+    orders ||--|| payments : paid_by
+    orders ||--o{ refunds : refunded_by
 
-    payment ||--o{ point_transaction : creates
-    payment ||--o{ refund : refunded_by
-    payment ||--o{ webhook_event : receives
-    refund o|--o{ point_transaction : creates
-    refund o|--o{ webhook_event : receives
-    refund ||--o{ refund_item : contains
-    order_item ||--o{ refund_item : refunded_as
+    payments ||--o{ point_transactions : creates
+    payments ||--o{ refunds : refunded_by
+    payments ||--o{ webhook_events : receives
+    refunds o|--o{ point_transactions : creates
+    refunds o|--o{ webhook_events : receives
+    refunds ||--o{ refund_items : contains
+    order_items ||--o{ refund_items : refunded_as
 
     users {
         BIGINT id PK "유저 ID"
@@ -70,7 +70,7 @@ erDiagram
         BIGINT user_id FK "유저 ID"
         VARCHAR order_number "주문번호"
         BIGINT total_amount "주문 총액"
-        BIGINT used_point "사용 포인트"
+        BIGINT used_point_amount "사용 포인트"
         VARCHAR status "주문 상태"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
@@ -84,8 +84,16 @@ erDiagram
         VARCHAR product_name "상품명"
         INT price "가격"
         INT quantity "수량"
+        INT refunded_quantity "환불수량"
+        VARCHAR status "주문상품 상태"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
+    }
+
+    order_number_sequences {
+        BIGINT id PK "주문번호 시퀀스 ID"
+        DATE order_date "주문일"
+        INT last_number "마지막 번호"
     }
 
     payments {
@@ -154,6 +162,7 @@ erDiagram
         BIGINT pg_refund_amount "PG 환불 금액"
         DATETIME created_at "생성일시"
     }
+
 ```
 
 ## 테이블 정의
@@ -192,7 +201,6 @@ erDiagram
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
 한 장바구니에는 같은 상품이 한 줄만 존재합니다. 같은 상품을 다시 담으면 새 row를 만들지 않고 기존 `cart_items.quantity`를 합산합니다.
-결제 완료 시에는 주문에 포함된 `cart_items`만 삭제되며, 같은 장바구니에 남아 있는 미주문 상품 row는 유지됩니다.
 
 ### products
 
@@ -216,8 +224,8 @@ erDiagram
 | 유저 ID | user_id      | BIGINT | NOT NULL | FK: users.id |
 | 주문번호 | order_number | VARCHAR | NOT NULL |  |
 | 주문 총액 | total_amount | BIGINT | NOT NULL |  |
-| 사용 포인트 | used_point | BIGINT | NOT NULL |  |
-| 주문 상태 | status       | VARCHAR | NOT NULL | PAYMENT_PENDING, COMPLETED, CANCELED |
+| 사용 포인트 | used_point_amount | BIGINT | NOT NULL |  |
+| 주문 상태 | status       | VARCHAR | NOT NULL | PAYMENT_PENDING, COMPLETED, PARTIAL_CANCELED, CANCELED |
 | 생성일시 | created_at   | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at   | DATETIME | NULL |  |
 
@@ -228,13 +236,22 @@ erDiagram
 | 주문상품ID | id           | BIGINT | NOT NULL | PK |
 | 주문 ID | order_id     | BIGINT | NOT NULL | FK: orders.id |
 | 상품 ID | product_id   | BIGINT | NOT NULL | FK: products.id |
-| 원본 장바구니 상품 ID | source_cart_item_id | BIGINT | NOT NULL | 결제 완료 시 이번 주문에 포함된 장바구니 상품만 삭제하기 위한 스냅샷 |
+| 원본 장바구니 상품 ID | source_cart_item_id | BIGINT | NOT NULL | 주문 생성 당시 원본 장바구니 상품 ID 스냅샷 |
 | 상품명 | product_name | VARCHAR(100) | NOT NULL |  |
 | 가격 | price        | INT | NOT NULL |  |
 | 수량 | quantity     | INT | NOT NULL |  |
 | 환불수량 | refunded_quantity | INT | NOT NULL | 기본값 0 |
+| 주문상품 상태 | status | VARCHAR(30) | NOT NULL | ORDERED, CANCELED |
 | 생성일시 | created_at   | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at   | DATETIME | NULL |  |
+
+### order_number_sequences
+
+| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
+| --- | --- | --- | --- | --- |
+| 주문번호 시퀀스 ID | id | BIGINT | NOT NULL | PK |
+| 주문일 | order_date | DATE | NOT NULL | UNIQUE |
+| 마지막 번호 | last_number | INT | NOT NULL | 날짜별 주문번호 증가값 |
 
 ### payments
 
@@ -245,7 +262,7 @@ erDiagram
 | 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | UNIQUE |
 | 결제 상태 | status | VARCHAR(30) | NOT NULL | PENDING, COMPLETED, FAILED, PARTIAL_REFUNDED, FULL_REFUNDED |
 | 결제 타입 | payment_type | VARCHAR(30) | NOT NULL | CARD, POINT_ONLY, POINT_CARD |
-| 총 금액 | total_amount | BIGINT | NOT NULL | used_point + pg_amount |
+| 총 금액 | total_amount | BIGINT | NOT NULL | used_point_amount + pg_amount |
 | 사용 포인트 | used_point_amount | BIGINT | NOT NULL | used_point_amount >= 0 |
 | PG 결제 금액 | pg_amount | BIGINT | NOT NULL | pg_amount >= 0 |
 | 적립 포인트 | reward_point_amount | BIGINT | NULL | reward_point_amount >= 0 |

@@ -58,7 +58,7 @@ Authorization: Bearer {{accessToken}}
 
 {
   "cartItemIds": [{{paymentCartItemId}}],
-  "usePointAmount": 0
+  "usedPointAmount": 0
 }
 
 > {%

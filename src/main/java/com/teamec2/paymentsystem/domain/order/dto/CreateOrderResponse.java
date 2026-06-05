@@ -78,7 +78,7 @@ public record CreateOrderResponse(
             String portonePaymentId,
             PaymentStatus status,
             PaymentType type,
-            Long usePointAmount,
+            Long usedPointAmount,
             Long pgAmount
     ) {
     }

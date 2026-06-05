@@ -230,7 +230,7 @@ INSERT INTO orders (
     user_id,
     order_number,
     total_amount,
-    used_point,
+    used_point_amount,
     status,
     created_at,
     updated_at

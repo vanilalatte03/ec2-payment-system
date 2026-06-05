@@ -31,7 +31,7 @@ public class OrderController {
         CreateOrderResponse response = orderService.createOrder(
                 userDetails.getUserId(),
                 request.cartItemIds(),
-                request.usePointAmount()
+                request.usedPointAmount()
         );
 
         return ResponseEntity

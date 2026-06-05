@@ -211,8 +211,8 @@ class PaymentConfirmTxServiceTest {
         ));
     }
 
-    private Order 주문_저장(User user, Long totalAmount, Long usedPoint) {
-        return orderRepository.save(Order.create(user, uniqueOrderNumber(), totalAmount, usedPoint));
+    private Order 주문_저장(User user, Long totalAmount, Long usedPointAmount) {
+        return orderRepository.save(Order.create(user, uniqueOrderNumber(), totalAmount, usedPointAmount));
     }
 
     private OrderItem 주문상품_저장(Order order, Product product, int quantity) {

@@ -127,7 +127,7 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d],
-	                                  "usePointAmount": 5000
+	                                  "usedPointAmount": 5000
 	                                }
 	                                """.formatted(selectedCartItem.getId())))
                 .andExpect(status().isCreated())
@@ -141,7 +141,7 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.payment.status").value(PaymentStatus.PENDING.name()))
 	                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.POINT_CARD.name()))
 	                .andExpect(jsonPath("$.data.order.totalAmount").value(78000))
-	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(5000))
+	                .andExpect(jsonPath("$.data.payment.usedPointAmount").value(5000))
 	                .andExpect(jsonPath("$.data.payment.pgAmount").value(73000))
                 .andExpect(jsonPath("$.data.nextAction").value("OPEN_PORTONE_PAYMENT"))
                 .andExpect(jsonPath("$.data.order.items.length()").value(1))
@@ -192,7 +192,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
 	                                {
-	                                  "usePointAmount": 0
+	                                  "usedPointAmount": 0
 	                                }
 	                                """))
                 .andExpect(status().isCreated())
@@ -201,7 +201,7 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.payment.status").value(PaymentStatus.PENDING.name()))
 	                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.CARD.name()))
 	                .andExpect(jsonPath("$.data.order.totalAmount").value(103000))
-	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(0))
+	                .andExpect(jsonPath("$.data.payment.usedPointAmount").value(0))
 	                .andExpect(jsonPath("$.data.payment.pgAmount").value(103000))
                 .andExpect(jsonPath("$.data.nextAction").value("OPEN_PORTONE_PAYMENT"))
                 .andExpect(jsonPath("$.data.order.items.length()").value(2));
@@ -235,13 +235,13 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d],
-	                                  "usePointAmount": 78000
+	                                  "usedPointAmount": 78000
 	                                }
 	                                """.formatted(cartItem.getId())))
                 .andExpect(status().isCreated())
 	                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.POINT_ONLY.name()))
 	                .andExpect(jsonPath("$.data.order.totalAmount").value(78000))
-	                .andExpect(jsonPath("$.data.payment.usePointAmount").value(78000))
+	                .andExpect(jsonPath("$.data.payment.usedPointAmount").value(78000))
 	                .andExpect(jsonPath("$.data.payment.pgAmount").value(0))
 	                .andExpect(jsonPath("$.data.nextAction").value("CONFIRM_POINT_ONLY"));
 
@@ -272,7 +272,7 @@ class OrderControllerTest {
 	                        .content("""
 	                                {
 	                                  "cartItemIds": [%d, %d],
-	                                  "usePointAmount": 0
+	                                  "usedPointAmount": 0
 	                                }
 	                                """.formatted(cartItem.getId(), cartItem.getId())))
 	                .andExpect(status().isCreated())
@@ -305,7 +305,7 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d],
-	                                  "usePointAmount": 0
+	                                  "usedPointAmount": 0
 	                                }
 	                                """.formatted(cartItem.getId())))
                 .andExpect(status().is(ErrorCode.ORDER_STOCK_SHORTAGE.getHttpStatus().value()))
@@ -335,7 +335,7 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d],
-	                                  "usePointAmount": 5000
+	                                  "usedPointAmount": 5000
 	                                }
 	                                """.formatted(cartItem.getId())))
                 .andExpect(status().is(ErrorCode.INSUFFICIENT_POINT.getHttpStatus().value()))
@@ -367,7 +367,7 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d],
-	                                  "usePointAmount": 15000
+	                                  "usedPointAmount": 15000
 	                                }
 	                                """.formatted(cartItem.getId())))
                 .andExpect(status().is(ErrorCode.INVALID_USED_POINT.getHttpStatus().value()))
@@ -400,7 +400,7 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d, %d],
-	                                  "usePointAmount": 0
+	                                  "usedPointAmount": 0
 	                                }
 	                                """.formatted(cartItem.getId(), unknownCartItemId)))
                 .andExpect(status().is(ErrorCode.CART_ITEM_NOT_FOUND.getHttpStatus().value()))
@@ -430,7 +430,7 @@ class OrderControllerTest {
                         .content("""
 	                                {
 	                                  "cartItemIds": [%d],
-	                                  "usePointAmount": 0
+	                                  "usedPointAmount": 0
 	                                }
 	                                """.formatted(cartItem.getId())))
                 .andExpect(status().is(ErrorCode.PRODUCT_NOT_ON_SALE.getHttpStatus().value()))
@@ -455,7 +455,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
 	                                {
-	                                  "usePointAmount": 0
+	                                  "usedPointAmount": 0
 	                                }
 	                                """))
                 .andExpect(status().isUnauthorized())
@@ -479,7 +479,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "usePointAmount": 15000
+                                  "usedPointAmount": 15000
                                 }
                                 """))
                 .andExpect(status().isCreated());
@@ -518,7 +518,7 @@ class OrderControllerTest {
 
         assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.PARTIAL_CANCELED);
         assertThat(updatedOrder.getTotalAmount()).isEqualTo(30000L);
-        assertThat(updatedOrder.getUsedPoint()).isEqualTo(15000L);
+        assertThat(updatedOrder.getUsedPointAmount()).isEqualTo(15000L);
         assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(updatedPayment.getTotalAmount()).isEqualTo(30000L);
         assertThat(updatedPayment.getUsedPointAmount()).isEqualTo(15000L);
@@ -541,7 +541,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "usePointAmount": 0
+                                  "usedPointAmount": 0
                                 }
                                 """))
                 .andExpect(status().isCreated());
@@ -597,7 +597,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "usePointAmount": 0
+                                  "usedPointAmount": 0
                                 }
                                 """))
                 .andExpect(status().isCreated());
@@ -639,7 +639,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "usePointAmount": 10000
+                                  "usedPointAmount": 10000
                                 }
                                 """))
                 .andExpect(status().isCreated());
@@ -669,7 +669,7 @@ class OrderControllerTest {
 
         assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(updatedOrder.getTotalAmount()).isEqualTo(12000L);
-        assertThat(updatedOrder.getUsedPoint()).isEqualTo(10000L);
+        assertThat(updatedOrder.getUsedPointAmount()).isEqualTo(10000L);
         assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(updatedPayment.getTotalAmount()).isEqualTo(12000L);
         assertThat(updatedPayment.getUsedPointAmount()).isEqualTo(10000L);

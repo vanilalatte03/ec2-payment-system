@@ -136,7 +136,7 @@ class OrderServiceTest {
         assertThat(cartItemRepository.count()).isEqualTo(2);
 
         assertThat(order.getTotalAmount()).isEqualTo(60000L);
-        assertThat(order.getUsedPoint()).isEqualTo(5000L);
+        assertThat(order.getUsedPointAmount()).isEqualTo(5000L);
         assertThat(orderItem.getSourceCartItemId()).isEqualTo(selectedCartItem.getId());
         assertThat(orderItem.getProductName()).isEqualTo("선택 상품");
         assertThat(orderItem.getPrice()).isEqualTo(30000);
@@ -225,7 +225,7 @@ class OrderServiceTest {
 
         assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.PARTIAL_CANCELED);
         assertThat(updatedOrder.getTotalAmount()).isEqualTo(30000L);
-        assertThat(updatedOrder.getUsedPoint()).isEqualTo(30000L);
+        assertThat(updatedOrder.getUsedPointAmount()).isEqualTo(30000L);
         assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(updatedPayment.getPaymentType()).isEqualTo(PaymentType.POINT_ONLY);
         assertThat(updatedPayment.getTotalAmount()).isEqualTo(30000L);
