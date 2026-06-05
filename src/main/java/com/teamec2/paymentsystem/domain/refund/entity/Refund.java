@@ -15,9 +15,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 /**
- * 환불 요청 1건의 대표 기록입니다.
- * 환불 생성 시점의 총 환불 금액, 포인트 환불 금액, PG 환불 금액,
- * PortOne 결제 식별자를 스냅샷으로 저장합니다.
+ * 환불 요청 1건의 대표 기록
+ * 환불 생성 시점의 총 환불 금액, 포인트 환불 금액, PG 환불 금액, PortOne 결제 식별자를 스냅샷으로 저장합니다.
  * 이후 주문/결제 정보가 변경되더라도 이미 생성된 환불 내역의 기준 정보는 변경되지 않습니다.
  */
 @Getter

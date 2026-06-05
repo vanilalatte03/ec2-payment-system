@@ -14,9 +14,8 @@ import java.time.LocalDateTime;
 
 /**
  * 환불 요청 1건의 상품별 상세 기록
- * 환불 요청에 포함된 주문 상품별 환불 스냅샷입니다.
- * OrderItem의 가격을 직접 참조하지 않고 unitPrice, refundAmount 를 저장하여
- * 추후 상품 가격 정책이 바뀌더라도 과거 환불 내역은 변경되지 않게 합니다.
+ * 환불 생성 시점의 주문 상품 단가, 환불 수량, 상품별 환불 금액을 스냅샷으로 저장합니다.
+ * 이후 OrderItem 또는 상품 가격 정책이 변경되더라도 이미 생성된 환불 내역의 금액은 변경되지 않습니다.
  */
 @Getter
 @Entity
@@ -72,6 +71,7 @@ public class RefundItem {
             Long pgRefundAmount
     ) {
         validateRequiredValues(refund, orderItem);
+        validateOrderItemBelongsToRefundOrder(refund, orderItem);
         validateQuantity(refundQuantity);
         validateRefundSourceAmounts(pointRefundAmount, pgRefundAmount);
 
@@ -147,6 +147,21 @@ public class RefundItem {
             Long pgRefundAmount
     ) {
         if (!refundAmount.equals(pointRefundAmount + pgRefundAmount)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    private static void validateOrderItemBelongsToRefundOrder(Refund refund, OrderItem orderItem) {
+
+        if (refund.getOrder() == null
+                || refund.getOrder().getId() == null
+                || orderItem.getOrder() == null
+                || orderItem.getOrder().getId() == null
+        ) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (!refund.getOrder().getId().equals(orderItem.getOrder().getId())) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
     }
