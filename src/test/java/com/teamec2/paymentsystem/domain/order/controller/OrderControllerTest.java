@@ -6,6 +6,7 @@ import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
 import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
+import com.teamec2.paymentsystem.domain.order.entity.OrderItemStatus;
 import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
 import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -108,6 +110,186 @@ class OrderControllerTest {
         cartRepository.deleteAll();
         productRepository.deleteAll();
         userRepository.deleteAll();
+    }
+
+    @Test
+    void 내주문내역조회_본인주문목록을_최신순으로반환한다() throws Exception {
+        // given
+        User user = 회원_저장(0L);
+        User otherUser = 회원_저장(0L);
+        Order oldOrder = orderRepository.save(Order.create(user, "ORD-TEST-OLD", 10000L, 0L));
+        Order latestOrder = orderRepository.save(Order.create(user, "ORD-TEST-LATEST", 20000L, 0L));
+        orderRepository.save(Order.create(otherUser, "ORD-TEST-OTHER", 30000L, 0L));
+
+        // when
+        // then
+        mockMvc.perform(get("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.orders.length()").value(2))
+                .andExpect(jsonPath("$.data.orders[0].orderId").value(latestOrder.getId()))
+                .andExpect(jsonPath("$.data.orders[0].orderNumber").value("ORD-TEST-LATEST"))
+                .andExpect(jsonPath("$.data.orders[0].status").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.orders[0].totalAmount").value(20000))
+                .andExpect(jsonPath("$.data.orders[0].orderedAt").exists())
+                .andExpect(jsonPath("$.data.orders[1].orderId").value(oldOrder.getId()))
+                .andExpect(jsonPath("$.data.orders[1].orderNumber").value("ORD-TEST-OLD"))
+                .andExpect(jsonPath("$.data.orders[1].status").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.orders[1].totalAmount").value(10000))
+                .andExpect(jsonPath("$.data.orders[1].orderedAt").exists());
+    }
+
+    @Test
+    void 주문상세조회_본인주문이면_주문상품스냅샷과_결제포인트요약을반환한다() throws Exception {
+        // given
+        User user = 회원_저장(10000L);
+        Product product = 상품_저장("상세 조회 상품", 30000, 10, ProductStatus.ON_SALE);
+        CartItem cartItem = 장바구니상품_저장(user, product, 2);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "cartItemIds": [%d],
+                                  "usedPointAmount": 5000
+                                }
+                                """.formatted(cartItem.getId())))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+        Payment payment = paymentRepository.findAll().get(0);
+        OrderItem orderItem = orderItemRepository.findAll().get(0);
+
+        // when
+        // then
+        mockMvc.perform(get("/api/orders/{orderId}", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.order.orderId").value(order.getId()))
+                .andExpect(jsonPath("$.data.order.orderNumber").value(order.getOrderNumber()))
+                .andExpect(jsonPath("$.data.order.status").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.order.totalAmount").value(60000))
+                .andExpect(jsonPath("$.data.order.usedPointAmount").value(5000))
+                .andExpect(jsonPath("$.data.order.orderedAt").exists())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].orderItemId").value(orderItem.getId()))
+                .andExpect(jsonPath("$.data.items[0].productId").value(product.getId()))
+                .andExpect(jsonPath("$.data.items[0].productName").value("상세 조회 상품"))
+                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.data.items[0].refundedQuantity").value(0))
+                .andExpect(jsonPath("$.data.items[0].status").value(OrderItemStatus.ORDERED.name()))
+                .andExpect(jsonPath("$.data.items[0].unitPrice").value(30000))
+                .andExpect(jsonPath("$.data.items[0].lineAmount").value(60000))
+                .andExpect(jsonPath("$.data.payment.paymentId").value(payment.getId()))
+                .andExpect(jsonPath("$.data.payment.portonePaymentId").value(payment.getPortonePaymentId()))
+                .andExpect(jsonPath("$.data.payment.status").value(PaymentStatus.PENDING.name()))
+                .andExpect(jsonPath("$.data.payment.type").value(PaymentType.POINT_CARD.name()))
+                .andExpect(jsonPath("$.data.payment.totalAmount").value(60000))
+                .andExpect(jsonPath("$.data.payment.usedPointAmount").value(5000))
+                .andExpect(jsonPath("$.data.payment.pgAmount").value(55000))
+                .andExpect(jsonPath("$.data.payment.rewardPointAmount").value(550))
+                .andExpect(jsonPath("$.data.pointSummary.usedPointAmount").value(5000))
+                .andExpect(jsonPath("$.data.pointSummary.rewardPointAmount").value(550));
+    }
+
+    @Test
+    void 주문상세조회_타인주문이면_ORDER_ACCESS_DENIED를반환한다() throws Exception {
+        // given
+        User owner = 회원_저장(0L);
+        User otherUser = 회원_저장(0L);
+        Product product = 상품_저장("타인 주문 상품", 10000, 10, ProductStatus.ON_SALE);
+        CartItem cartItem = 장바구니상품_저장(owner, product, 1);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(owner))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "cartItemIds": [%d],
+                                  "usedPointAmount": 0
+                                }
+                                """.formatted(cartItem.getId())))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+
+        // when
+        // then
+        mockMvc.perform(get("/api/orders/{orderId}", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(otherUser)))
+                .andExpect(status().is(ErrorCode.ORDER_ACCESS_DENIED.getHttpStatus().value()))
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.code").value(ErrorCode.ORDER_ACCESS_DENIED.name()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.ORDER_ACCESS_DENIED.getMessage()))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void 주문서미리보기_cartItemIds가없으면_장바구니전체를_현재가로반환하고_주문을생성하지않는다() throws Exception {
+        // given
+        User user = 회원_저장(0L);
+        Product firstProduct = 상품_저장("후드 집업", 55000, 10, ProductStatus.ON_SALE);
+        Product secondProduct = 상품_저장("볼캡", 24000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, firstProduct, 1);
+        장바구니상품_저장(user, secondProduct, 2);
+
+        // when
+        // then
+        mockMvc.perform(get("/api/orders/preview")
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(BODY_STATUS))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.totalQuantity").value(3))
+                .andExpect(jsonPath("$.data.totalAmount").value(103000));
+
+        assertThat(orderRepository.count()).isZero();
+        assertThat(orderItemRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void 주문서미리보기_cartItemIds가있으면_선택상품만_주문형태로반환한다() throws Exception {
+        // given
+        User user = 회원_저장(5000L);
+        Product selectedProduct = 상품_저장("오버핏 티셔츠", 39000, 10, ProductStatus.ON_SALE);
+        Product notSelectedProduct = 상품_저장("와이드 팬츠", 68000, 5, ProductStatus.ON_SALE);
+        CartItem selectedCartItem = 장바구니상품_저장(user, selectedProduct, 2);
+        장바구니상품_저장(user, notSelectedProduct, 1);
+
+        // when
+        // then
+        mockMvc.perform(get("/api/orders/preview")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .param("cartItemIds", selectedCartItem.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].cartItemId").value(selectedCartItem.getId()))
+                .andExpect(jsonPath("$.data.items[0].productId").value(selectedProduct.getId()))
+                .andExpect(jsonPath("$.data.items[0].productName").value("오버핏 티셔츠"))
+                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.data.items[0].unitPrice").value(39000))
+                .andExpect(jsonPath("$.data.items[0].lineAmount").value(78000))
+                .andExpect(jsonPath("$.data.items[0].stock").value(10))
+                .andExpect(jsonPath("$.data.items[0].status").value(ProductStatus.ON_SALE.name()))
+                .andExpect(jsonPath("$.data.totalQuantity").value(2))
+                .andExpect(jsonPath("$.data.totalAmount").value(78000));
+
+        assertThat(orderRepository.count()).isZero();
+        assertThat(orderItemRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(productRepository.findById(selectedProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(productRepository.findById(notSelectedProduct.getId()).orElseThrow().getStock()).isEqualTo(5);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(5000L);
+        assertThat(pointTransactionRepository.count()).isZero();
     }
 
     @Test
@@ -492,7 +674,7 @@ class OrderControllerTest {
 
         // when
         // then
-        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+        mockMvc.perform(patch("/api/orders/{orderId}/status", order.getId())
                         .header("Authorization", "Bearer " + accessToken(user))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -552,7 +734,7 @@ class OrderControllerTest {
                 .findFirst()
                 .orElseThrow();
 
-        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+        mockMvc.perform(patch("/api/orders/{orderId}/status", order.getId())
                         .header("Authorization", "Bearer " + accessToken(user))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -565,7 +747,7 @@ class OrderControllerTest {
 
         // when
         // then
-        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+        mockMvc.perform(patch("/api/orders/{orderId}/status", order.getId())
                         .header("Authorization", "Bearer " + accessToken(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.previousOrderStatus").value(OrderStatus.PARTIAL_CANCELED.name()))
@@ -606,7 +788,7 @@ class OrderControllerTest {
 
         // when
         // then
-        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+        mockMvc.perform(patch("/api/orders/{orderId}/status", order.getId())
                         .header("Authorization", "Bearer " + accessToken(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.previousOrderStatus").value(OrderStatus.PAYMENT_PENDING.name()))
@@ -648,7 +830,7 @@ class OrderControllerTest {
 
         // when
         // then
-        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+        mockMvc.perform(patch("/api/orders/{orderId}/status", order.getId())
                         .header("Authorization", "Bearer " + accessToken(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.CANCELED.name()))
