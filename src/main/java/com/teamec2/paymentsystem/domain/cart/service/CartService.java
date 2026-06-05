@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -63,5 +64,43 @@ public class CartService {
         cartItemRepository.deleteAllByCartId(cart.getId());
 
         return new ClearCartResponse(deletedCount);
+    }
+
+    @Transactional
+    public ClearCartResponse clearPurchasedItems(Long userId, List<CartItem> cartItems) {
+        if (cartItems == null || cartItems.isEmpty()) {
+            return new ClearCartResponse(0);
+        }
+
+        Cart cart = cartRepository.findByUserIdWithOptimisticLock(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
+
+        List<Long> cartItemIds = cartItems.stream()
+                .filter(Objects::nonNull)
+                .map(CartItem::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (cartItemIds.isEmpty()) {
+            return new ClearCartResponse(0);
+        }
+
+        List<CartItem> deleteTargets = cartItemRepository.findAllById(cartItemIds);
+
+        if (deleteTargets.size() != cartItemIds.size()) {
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        boolean hasOtherCartItem = deleteTargets.stream()
+                .anyMatch(cartItem -> !Objects.equals(cartItem.getCart().getId(), cart.getId()));
+
+        if (hasOtherCartItem) {
+            throw new BusinessException(ErrorCode.CART_ITEM_ACCESS_DENIED);
+        }
+
+        cartItemRepository.deleteAll(deleteTargets);
+
+        return new ClearCartResponse(deleteTargets.size());
     }
 }
