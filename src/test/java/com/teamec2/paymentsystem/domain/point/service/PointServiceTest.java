@@ -269,6 +269,48 @@ class PointServiceTest {
     }
 
     @Test
+    void 주문취소포인트복구_예약원장이있으면_잔액을복구하고_USE_CANCEL원장을생성한다() {
+        // given
+        User user = 회원_저장(10000L);
+        Order order = 주문_저장(user, 1000L, 500L);
+        Payment payment = 결제_저장(order, 1000L, 500L, 500L);
+        pointService.reserveUsedPoints(payment);
+
+        // when
+        pointService.restoreReservedPointsForOrderCancel(payment, 200L, List.of(1L));
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+        PointTransaction cancelTransaction = pointTransactions.stream()
+                .filter(pointTransaction -> pointTransaction.getType() == PointTransactionType.USE_CANCEL)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(9700L);
+        assertThat(pointTransactions).hasSize(2);
+        assertThat(cancelTransaction.getAmount()).isEqualTo(200L);
+    }
+
+    @Test
+    void 주문취소포인트복구_복구금액이있는데_예약원장이없으면_POINT_ERROR_EXCEPTION이발생한다() {
+        // given
+        User user = 회원_저장(10000L);
+        Order order = 주문_저장(user, 1000L, 500L);
+        Payment payment = 결제_저장(order, 1000L, 500L, 500L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.restoreReservedPointsForOrderCancel(payment, 200L, List.of(1L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.POINT_ERROR_EXCEPTION);
+
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(10000L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
     void 포인트예약확정_사용포인트가0이면_아무원장도필요하지않다() {
         // given
         User user = 회원_저장(10000L);

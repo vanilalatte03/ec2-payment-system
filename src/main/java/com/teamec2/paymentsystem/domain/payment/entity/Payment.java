@@ -153,6 +153,34 @@ public class Payment extends BaseEntity {
     }
 
     /**
+     * 결제 대기 상태인지 확인하고, 금액 합계가 맞는지 검증하고
+     * 결제 금액들을 갱신하고 결제 타입도 새 금액 기준으로 다시 계산한다.
+     *
+     * @param totalAmount 총 주문 금액
+     * @param usedPointAmount 사용 포인트
+     * @param pgAmount PG 결제 금액
+     * @param rewardPointAmount 적립 예정 포인트
+     */
+    public void updatePendingAmounts(
+            Long totalAmount,
+            Long usedPointAmount,
+            Long pgAmount,
+            Long rewardPointAmount
+    ) {
+        if (!isPending()) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+
+        validateAmounts(totalAmount, usedPointAmount, pgAmount, rewardPointAmount);
+
+        this.totalAmount = totalAmount;
+        this.usedPointAmount = usedPointAmount;
+        this.pgAmount = pgAmount;
+        this.rewardPointAmount = rewardPointAmount;
+        this.paymentType = PaymentType.from(usedPointAmount, pgAmount);
+    }
+
+    /**
      * 결제를 부분 환불 상태로 변경한다.
      */
     public void markAsPartialRefunded() {

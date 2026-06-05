@@ -42,6 +42,10 @@ public class OrderItem extends BaseEntity {
     @Column(name = "refunded_quantity", nullable = false, columnDefinition = "int UNSIGNED DEFAULT 0")
     private int refundedQuantity = 0;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private OrderItemStatus status = OrderItemStatus.ORDERED;
+
     public OrderItem(Order order, Product product, Long sourceCartItemId, int quantity) {
         if (order == null) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
@@ -73,6 +77,19 @@ public class OrderItem extends BaseEntity {
 
     public int getRemainingRefundableQuantity() {
         return quantity - refundedQuantity;
+    }
+
+    public boolean isCanceled() {
+        return this.status == OrderItemStatus.CANCELED;
+    }
+
+    public void cancel() {
+        if (this.status == OrderItemStatus.CANCELED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        this.product.restoreStock(this.quantity);
+        this.status = OrderItemStatus.CANCELED;
     }
 
     public void refund(int refundQuantity) {

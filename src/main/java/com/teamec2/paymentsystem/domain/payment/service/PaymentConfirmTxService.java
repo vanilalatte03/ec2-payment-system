@@ -170,6 +170,11 @@ public class PaymentConfirmTxService {
         List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
 
         for (OrderItem orderItem : orderItems) {
+            // 이미 취소된 주문 상품은 건너뛴다.
+            if (orderItem.isCanceled()) {
+                continue;
+            }
+
             orderItem.getProduct().restoreStock(orderItem.getQuantity());
         }
     }
@@ -220,7 +225,7 @@ public class PaymentConfirmTxService {
      * @param payment 확정 대상 결제
      */
     private void validateConfirmable(Order order, Payment payment) {
-        if (!order.isPaymentPending()) {
+        if (!order.isPaymentConfirmable()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 

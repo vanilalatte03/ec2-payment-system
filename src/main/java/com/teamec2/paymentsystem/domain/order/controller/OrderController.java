@@ -1,7 +1,9 @@
 package com.teamec2.paymentsystem.domain.order.controller;
 
+import com.teamec2.paymentsystem.domain.order.dto.CancelOrderRequest;
 import com.teamec2.paymentsystem.domain.order.dto.CreateOrderRequest;
 import com.teamec2.paymentsystem.domain.order.dto.CreateOrderResponse;
+import com.teamec2.paymentsystem.domain.order.dto.CancelOrderResponse;
 import com.teamec2.paymentsystem.domain.order.service.OrderService;
 import com.teamec2.paymentsystem.global.response.ApiResponse;
 import com.teamec2.paymentsystem.global.security.CustomUserDetails;
@@ -35,5 +37,21 @@ public class OrderController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{orderId}/cancel")
+    public ResponseEntity<ApiResponse<CancelOrderResponse>> cancelOrder(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody(required = false) CancelOrderRequest request
+    ) {
+        CancelOrderResponse response = orderService.cancelOrder(
+                userDetails.getUserId(),
+                orderId,
+                request == null ? null : request.orderItemIds()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 }

@@ -12,6 +12,9 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
+import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
 import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
@@ -29,7 +32,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,6 +43,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -77,14 +84,19 @@ class OrderControllerTest {
     @Autowired
     JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    TestPaymentGateway testPaymentGateway;
+
     @BeforeEach
     void setUp() {
         clearDatabase();
+        testPaymentGateway.reset();
     }
 
     @AfterEach
     void tearDown() {
         clearDatabase();
+        testPaymentGateway.reset();
     }
 
     private void clearDatabase() {
@@ -453,6 +465,221 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
+    @Test
+    void 주문취소_일부주문상품만취소하면_재고를복구하고_결제금액을재계산하고_부분취소상태가된다() throws Exception {
+        // given
+        User user = 회원_저장(15000L);
+        Product firstProduct = 상품_저장("남길 상품", 30000, 10, ProductStatus.ON_SALE);
+        Product cancelProduct = 상품_저장("취소 상품", 20000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, firstProduct, 1);
+        장바구니상품_저장(user, cancelProduct, 1);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "usePointAmount": 15000
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+        OrderItem cancelOrderItem = orderItemRepository.findAll().stream()
+                .filter(orderItem -> orderItem.getProductId().equals(cancelProduct.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        // when
+        // then
+        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderItemIds": [%d]
+                                }
+                                """.formatted(cancelOrderItem.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousOrderStatus").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.PARTIAL_CANCELED.name()))
+                .andExpect(jsonPath("$.data.canceledAmount").value(20000))
+                .andExpect(jsonPath("$.data.remainingTotalAmount").value(30000))
+                .andExpect(jsonPath("$.data.restoredPointAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingUsedPointAmount").value(15000))
+                .andExpect(jsonPath("$.data.remainingPgAmount").value(15000))
+                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.PENDING.name()))
+                .andExpect(jsonPath("$.data.restoredStockItems[0].orderItemId").value(cancelOrderItem.getId()))
+                .andExpect(jsonPath("$.data.restoredStockItems[0].productId").value(cancelProduct.getId()))
+                .andExpect(jsonPath("$.data.restoredStockItems[0].restoreQuantity").value(1));
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment updatedPayment = paymentRepository.findAll().get(0);
+
+        assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.PARTIAL_CANCELED);
+        assertThat(updatedOrder.getTotalAmount()).isEqualTo(30000L);
+        assertThat(updatedOrder.getUsedPoint()).isEqualTo(15000L);
+        assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(updatedPayment.getTotalAmount()).isEqualTo(30000L);
+        assertThat(updatedPayment.getUsedPointAmount()).isEqualTo(15000L);
+        assertThat(updatedPayment.getPgAmount()).isEqualTo(15000L);
+        assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
+        assertThat(productRepository.findById(cancelProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void 주문취소_부분취소상태이고_결제대기상태이면_남은상품을_다시취소할수있다() throws Exception {
+        // given
+        User user = 회원_저장(0L);
+        Product firstProduct = 상품_저장("먼저 취소할 상품", 10000, 10, ProductStatus.ON_SALE);
+        Product secondProduct = 상품_저장("나중에 취소할 상품", 20000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, firstProduct, 1);
+        장바구니상품_저장(user, secondProduct, 1);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "usePointAmount": 0
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+        OrderItem firstCancelOrderItem = orderItemRepository.findAll().stream()
+                .filter(orderItem -> orderItem.getProductId().equals(firstProduct.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderItemIds": [%d]
+                                }
+                                """.formatted(firstCancelOrderItem.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.PARTIAL_CANCELED.name()));
+
+        // when
+        // then
+        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousOrderStatus").value(OrderStatus.PARTIAL_CANCELED.name()))
+                .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.CANCELED.name()))
+                .andExpect(jsonPath("$.data.canceledAmount").value(20000))
+                .andExpect(jsonPath("$.data.remainingTotalAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingUsedPointAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingPgAmount").value(0))
+                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.FAILED.name()));
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment updatedPayment = paymentRepository.findAll().get(0);
+
+        assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void 주문취소_결제대기주문을취소하면_주문은취소되고_결제는실패상태가되며_재고가복구된다() throws Exception {
+        // given
+        User user = 회원_저장(0L);
+        Product product = 상품_저장("전체 취소 상품", 12000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, product, 2);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "usePointAmount": 0
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+
+        // when
+        // then
+        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousOrderStatus").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.CANCELED.name()))
+                .andExpect(jsonPath("$.data.canceledAmount").value(24000))
+                .andExpect(jsonPath("$.data.remainingTotalAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingUsedPointAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingPgAmount").value(0))
+                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.FAILED.name()));
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment updatedPayment = paymentRepository.findAll().get(0);
+
+        assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(updatedOrder.getTotalAmount()).isEqualTo(24000L);
+        assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(updatedPayment.getTotalAmount()).isEqualTo(24000L);
+        assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void 주문취소_선차감된포인트가줄어들면_회원잔액을복구하고_USE_CANCEL원장을생성한다() throws Exception {
+        // given
+        User user = 회원_저장(15000L);
+        Product product = 상품_저장("포인트 복구 상품", 12000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, product, 1);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "usePointAmount": 10000
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+
+        // when
+        // then
+        mockMvc.perform(patch("/api/orders/{orderId}/cancel", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.CANCELED.name()))
+                .andExpect(jsonPath("$.data.canceledAmount").value(12000))
+                .andExpect(jsonPath("$.data.remainingTotalAmount").value(0))
+                .andExpect(jsonPath("$.data.restoredPointAmount").value(10000))
+                .andExpect(jsonPath("$.data.remainingUsedPointAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingPgAmount").value(0))
+                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.FAILED.name()));
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment updatedPayment = paymentRepository.findAll().get(0);
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+        PointTransaction cancelTransaction = pointTransactions.stream()
+                .filter(pointTransaction -> pointTransaction.getType() == PointTransactionType.USE_CANCEL)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(updatedOrder.getTotalAmount()).isEqualTo(12000L);
+        assertThat(updatedOrder.getUsedPoint()).isEqualTo(10000L);
+        assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(updatedPayment.getTotalAmount()).isEqualTo(12000L);
+        assertThat(updatedPayment.getUsedPointAmount()).isEqualTo(10000L);
+        assertThat(updatedPayment.getPgAmount()).isEqualTo(2000L);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(15000L);
+        assertThat(pointTransactions).hasSize(2);
+        assertThat(cancelTransaction.getAmount()).isEqualTo(10000L);
+        assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(10);
+    }
+
     private CartItem 장바구니상품_저장(User user, Product product, int quantity) {
         Cart cart = cartRepository.findByUserId(user.getId())
                 .orElseThrow();
@@ -482,5 +709,43 @@ class OrderControllerTest {
 
     private String uniqueEmail() {
         return UUID.randomUUID() + "@example.com";
+    }
+
+    @TestConfiguration
+    static class OrderControllerTestConfig {
+
+        @Bean
+        @Primary
+        TestPaymentGateway testPaymentGateway() {
+            return new TestPaymentGateway();
+        }
+    }
+
+    static class TestPaymentGateway implements PaymentGateway {
+
+        private PaymentGatewayResponse response;
+
+        @Override
+        public PaymentGatewayResponse getPayment(String paymentId) {
+            if (response == null) {
+                return new PaymentGatewayResponse(paymentId, "READY", null, null);
+            }
+
+            return response;
+        }
+
+        @Override
+        public PaymentCancelResponse cancelPayment(
+                String paymentId,
+                Long cancelAmount,
+                String reason,
+                String idempotencyKey
+        ) {
+            return new PaymentCancelResponse("cancel_test", "SUCCEEDED");
+        }
+
+        void reset() {
+            response = null;
+        }
     }
 }

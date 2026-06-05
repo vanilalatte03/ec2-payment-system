@@ -119,6 +119,39 @@ class PaymentConfirmTxServiceTest {
     }
 
     @Test
+    void 보상취소성공후_이미취소된주문상품은_재고를다시복구하지않는다() {
+        // given
+        User user = 회원_저장();
+        Product canceledProduct = 상품_저장("이미 취소한 상품", 55000, 8);
+        Product remainingProduct = 상품_저장("남아있는 상품", 24000, 7);
+        Order order = 주문_저장(user, 158000L, 0L);
+        OrderItem canceledOrderItem = 주문상품_저장(order, canceledProduct, 2);
+        주문상품_저장(order, remainingProduct, 3);
+        Payment payment = 결제_저장(order, 158000L, 0L, 158000L);
+
+        canceledOrderItem.cancel();
+        orderItemRepository.saveAndFlush(canceledOrderItem);
+        productRepository.saveAndFlush(canceledProduct);
+
+        assertThat(productRepository.findById(canceledProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(productRepository.findById(remainingProduct.getId()).orElseThrow().getStock()).isEqualTo(7);
+
+        // when
+        paymentConfirmTxService.failAfterCompensation(payment.getId());
+
+        // then
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        Product foundCanceledProduct = productRepository.findById(canceledProduct.getId()).orElseThrow();
+        Product foundRemainingProduct = productRepository.findById(remainingProduct.getId()).orElseThrow();
+
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(foundCanceledProduct.getStock()).isEqualTo(10);
+        assertThat(foundRemainingProduct.getStock()).isEqualTo(10);
+    }
+
+    @Test
     void 보상취소성공후_예약차감한포인트를복구하고_취소원장을기록한다() {
         // given
         User user = 회원_저장(1000L);

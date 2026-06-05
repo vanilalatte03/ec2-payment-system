@@ -68,8 +68,8 @@ public class Order extends BaseEntity {
         return new Order(user, orderNumber, totalAmount, usedPoint);
     }
 
-    public boolean isPaymentPending() {
-        return status == OrderStatus.PAYMENT_PENDING;
+    public boolean isPaymentConfirmable() {
+        return status == OrderStatus.PAYMENT_PENDING || status == OrderStatus.PARTIAL_CANCELED;
     }
 
     public void complete() {
@@ -77,11 +77,36 @@ public class Order extends BaseEntity {
     }
 
     public void cancelPendingPayment() {
-        changeStatusFrom(OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+        if (this.status != OrderStatus.PAYMENT_PENDING && this.status != OrderStatus.PARTIAL_CANCELED) {
+            throw new BusinessException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+        }
+
+        changeStatus(OrderStatus.CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
     }
 
     public void cancelCompletedByRefund() {
         changeStatusFrom(OrderStatus.COMPLETED, OrderStatus.CANCELED, ErrorCode.REFUND_NOT_ALLOWED);
+    }
+
+    public void changeToPartialCanceled() {
+        if (this.status == OrderStatus.PARTIAL_CANCELED) {
+            return;
+        }
+
+        changeStatus(OrderStatus.PARTIAL_CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+    }
+
+    public void updateAmounts(Long totalAmount, Long usedPoint) {
+        if (totalAmount == null || totalAmount < 0) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_PRICE);
+        }
+
+        if (usedPoint == null || usedPoint < 0 || usedPoint > totalAmount) {
+            throw new BusinessException(ErrorCode.INVALID_USED_POINT);
+        }
+
+        this.totalAmount = totalAmount;
+        this.usedPoint = usedPoint;
     }
 
     private void changeStatus(OrderStatus targetStatus, ErrorCode errorCode) {
