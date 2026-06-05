@@ -72,6 +72,14 @@ public class Order extends BaseEntity {
         return status == OrderStatus.PAYMENT_PENDING || status == OrderStatus.PARTIAL_CANCELED;
     }
 
+    public boolean isOwnedBy(Long userId) {
+        return user.getId().equals(userId);
+    }
+
+    public boolean isPendingPaymentCancelable() {
+        return isPaymentConfirmable();
+    }
+
     public void complete() {
         changeStatus(OrderStatus.COMPLETED, ErrorCode.INVALID_ORDER_STATUS);
     }
