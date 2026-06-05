@@ -3,6 +3,7 @@ package com.teamec2.paymentsystem.domain.payment.controller;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
 import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
+import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
@@ -206,6 +207,16 @@ class PaymentControllerTest {
         public PaymentGatewayResponse getPayment(String paymentId) {
             callCount++;
             return response;
+        }
+
+        @Override
+        public PaymentCancelResponse cancelPayment(
+                String paymentId,
+                Long cancelAmount,
+                String reason,
+                String idempotencyKey
+        ) {
+            return new PaymentCancelResponse("cancel_test", "SUCCEEDED");
         }
 
         void success(String paymentId, Long paidAmount, LocalDateTime approvedAt) {
