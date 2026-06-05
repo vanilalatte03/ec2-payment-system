@@ -113,6 +113,42 @@ class OrderControllerTest {
     }
 
     @Test
+    void 주문서미리보기_cartItemIds가있으면_선택상품만_주문형태로반환한다() throws Exception {
+        // given
+        User user = 회원_저장(5000L);
+        Product selectedProduct = 상품_저장("오버핏 티셔츠", 39000, 10, ProductStatus.ON_SALE);
+        Product notSelectedProduct = 상품_저장("와이드 팬츠", 68000, 5, ProductStatus.ON_SALE);
+        CartItem selectedCartItem = 장바구니상품_저장(user, selectedProduct, 2);
+        장바구니상품_저장(user, notSelectedProduct, 1);
+
+        // when
+        // then
+        mockMvc.perform(get("/api/orders/preview")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .param("cartItemIds", selectedCartItem.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].cartItemId").value(selectedCartItem.getId()))
+                .andExpect(jsonPath("$.data.items[0].productId").value(selectedProduct.getId()))
+                .andExpect(jsonPath("$.data.items[0].productName").value("오버핏 티셔츠"))
+                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.data.items[0].unitPrice").value(39000))
+                .andExpect(jsonPath("$.data.items[0].lineAmount").value(78000))
+                .andExpect(jsonPath("$.data.items[0].stock").value(10))
+                .andExpect(jsonPath("$.data.items[0].status").value(ProductStatus.ON_SALE.name()))
+                .andExpect(jsonPath("$.data.totalQuantity").value(2))
+                .andExpect(jsonPath("$.data.totalAmount").value(78000));
+
+        assertThat(orderRepository.count()).isZero();
+        assertThat(orderItemRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(productRepository.findById(selectedProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(productRepository.findById(notSelectedProduct.getId()).orElseThrow().getStock()).isEqualTo(5);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(5000L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
     void 내주문내역조회_본인주문목록을_최신순으로반환한다() throws Exception {
         // given
         User user = 회원_저장(0L);
@@ -254,42 +290,6 @@ class OrderControllerTest {
         assertThat(paymentRepository.count()).isZero();
         assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
         assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
-    }
-
-    @Test
-    void 주문서미리보기_cartItemIds가있으면_선택상품만_주문형태로반환한다() throws Exception {
-        // given
-        User user = 회원_저장(5000L);
-        Product selectedProduct = 상품_저장("오버핏 티셔츠", 39000, 10, ProductStatus.ON_SALE);
-        Product notSelectedProduct = 상품_저장("와이드 팬츠", 68000, 5, ProductStatus.ON_SALE);
-        CartItem selectedCartItem = 장바구니상품_저장(user, selectedProduct, 2);
-        장바구니상품_저장(user, notSelectedProduct, 1);
-
-        // when
-        // then
-        mockMvc.perform(get("/api/orders/preview")
-                        .header("Authorization", "Bearer " + accessToken(user))
-                        .param("cartItemIds", selectedCartItem.getId().toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items.length()").value(1))
-                .andExpect(jsonPath("$.data.items[0].cartItemId").value(selectedCartItem.getId()))
-                .andExpect(jsonPath("$.data.items[0].productId").value(selectedProduct.getId()))
-                .andExpect(jsonPath("$.data.items[0].productName").value("오버핏 티셔츠"))
-                .andExpect(jsonPath("$.data.items[0].quantity").value(2))
-                .andExpect(jsonPath("$.data.items[0].unitPrice").value(39000))
-                .andExpect(jsonPath("$.data.items[0].lineAmount").value(78000))
-                .andExpect(jsonPath("$.data.items[0].stock").value(10))
-                .andExpect(jsonPath("$.data.items[0].status").value(ProductStatus.ON_SALE.name()))
-                .andExpect(jsonPath("$.data.totalQuantity").value(2))
-                .andExpect(jsonPath("$.data.totalAmount").value(78000));
-
-        assertThat(orderRepository.count()).isZero();
-        assertThat(orderItemRepository.count()).isZero();
-        assertThat(paymentRepository.count()).isZero();
-        assertThat(productRepository.findById(selectedProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
-        assertThat(productRepository.findById(notSelectedProduct.getId()).orElseThrow().getStock()).isEqualTo(5);
-        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(5000L);
-        assertThat(pointTransactionRepository.count()).isZero();
     }
 
     @Test
