@@ -113,8 +113,14 @@ public class PaymentConfirmTxService {
 
         validateConfirmable(order, payment);
 
+        // 주문 생성 시 예약 차감한 USE_RESERVE 원장을 최종 사용 원장인 USE로 확정합니다.
+        pointService.confirmReservedPoints(payment);
+
         payment.complete(approvedAt);
         order.complete();
+
+        // 결제 완료 후 적립금이 추가됩니다.
+        pointService.earnPoints(payment);
 
         return ConfirmPaymentResponse.from(order, payment, CART_CLEARED);
     }
