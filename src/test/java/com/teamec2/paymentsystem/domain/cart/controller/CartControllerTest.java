@@ -20,6 +20,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,6 +110,49 @@ class CartControllerTest {
         // then
         Long afterVersion = 장바구니버전(user);
         assertThat(afterVersion).isGreaterThan(beforeVersion);
+    }
+
+    @Test
+    void 장바구니상품담기_새상품이면_장바구니상품생성수정시각을저장한다() throws Exception {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("시간 테스트 상품", 10000, 10, ProductStatus.ON_SALE);
+
+        // when
+        장바구니상품_담기(accessToken(user), product.getId(), 1);
+
+        // then
+        Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
+        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
+
+        assertThat(cartItem.getCreatedAt()).isNotNull();
+        assertThat(cartItem.getUpdatedAt()).isNotNull();
+    }
+
+    @Test
+    void 장바구니상품담기_같은상품이면_생성시각은유지하고수정시각만갱신한다() throws Exception {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("같은 상품 시간 테스트", 10000, 10, ProductStatus.ON_SALE);
+        String accessToken = accessToken(user);
+
+        장바구니상품_담기(accessToken, product.getId(), 1);
+
+        Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
+        CartItem firstCartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
+        LocalDateTime firstCreatedAt = firstCartItem.getCreatedAt();
+        LocalDateTime firstUpdatedAt = firstCartItem.getUpdatedAt();
+
+        Thread.sleep(10);
+
+        // when
+        장바구니상품_담기(accessToken, product.getId(), 2);
+
+        // then
+        CartItem changedCartItem = cartItemRepository.findById(firstCartItem.getId()).orElseThrow();
+
+        assertThat(changedCartItem.getCreatedAt()).isEqualTo(firstCreatedAt);
+        assertThat(changedCartItem.getUpdatedAt()).isAfter(firstUpdatedAt);
     }
 
     @Test
@@ -390,7 +434,7 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.deletedCount").value(2));
 
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        assertThat(cartItemRepository.findAllByCartId(cart.getId())).isEmpty();
+        assertThat(cartItemRepository.findWithProductByCartId(cart.getId())).isEmpty();
     }
 
     @Test
