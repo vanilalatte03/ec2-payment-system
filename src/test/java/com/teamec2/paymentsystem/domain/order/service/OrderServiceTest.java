@@ -15,9 +15,6 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
-import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
 import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
@@ -35,16 +32,22 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class OrderServiceTest {
@@ -55,7 +58,7 @@ class OrderServiceTest {
     @Autowired
     UserRepository userRepository;
 
-    @Autowired
+    @MockitoSpyBean
     ProductRepository productRepository;
 
     @Autowired
@@ -76,19 +79,14 @@ class OrderServiceTest {
     @Autowired
     PointTransactionRepository pointTransactionRepository;
 
-    @Autowired
-    TestPaymentGateway testPaymentGateway;
-
     @BeforeEach
     void setUp() {
         clearDatabase();
-        testPaymentGateway.reset();
     }
 
     @AfterEach
     void tearDown() {
         clearDatabase();
-        testPaymentGateway.reset();
     }
 
     private void clearDatabase() {
@@ -184,6 +182,83 @@ class OrderServiceTest {
     }
 
     @Test
+    void 주문생성_선택상품ID가중복되면_한번만주문한다() {
+        // given
+        User user = 회원_저장(0L);
+        Product product = 상품_저장("중복 선택 상품", 15000, 10);
+        CartItem cartItem = 장바구니상품_저장(user, product, 2);
+
+        // when
+        CreateOrderResponse response = orderService.createOrder(
+                user.getId(),
+                List.of(cartItem.getId(), cartItem.getId()),
+                0L
+        );
+
+        // then
+        Order order = orderRepository.findAll().get(0);
+        Payment payment = paymentRepository.findAll().get(0);
+        OrderItem orderItem = orderItemRepository.findAll().get(0);
+
+        assertThat(response.order().orderId()).isEqualTo(order.getId());
+        assertThat(orderRepository.count()).isEqualTo(1);
+        assertThat(orderItemRepository.count()).isEqualTo(1);
+        assertThat(paymentRepository.count()).isEqualTo(1);
+
+        assertThat(order.getTotalAmount()).isEqualTo(30000L);
+        assertThat(orderItem.getSourceCartItemId()).isEqualTo(cartItem.getId());
+        assertThat(orderItem.getQuantity()).isEqualTo(2);
+        assertThat(payment.getTotalAmount()).isEqualTo(30000L);
+        assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(8);
+    }
+
+    @Test
+    void 주문생성_재고1개상품을_두회원이동시에주문하면_한건만성공한다() throws Exception {
+        // given
+        User firstUser = 회원_저장(0L);
+        User secondUser = 회원_저장(0L);
+        Product product = 상품_저장("동시 주문 상품", 10000, 1);
+        CartItem firstCartItem = 장바구니상품_저장(firstUser, product, 1);
+        CartItem secondCartItem = 장바구니상품_저장(secondUser, product, 1);
+
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+
+        // 두 주문 요청이 최대한 같은 타이밍에 createOrder에 진입하도록 맞춥니다.
+        // readyLatch는 두 스레드가 준비될 때까지 기다리고, startLatch는 두 스레드를 동시에 출발시킵니다.
+        CountDownLatch readyLatch = new CountDownLatch(2);
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        try {
+            Future<BusinessException> firstResult = executorService.submit(() ->
+                    주문생성_동시실행(firstUser.getId(), firstCartItem.getId(), readyLatch, startLatch)
+            );
+            Future<BusinessException> secondResult = executorService.submit(() ->
+                    주문생성_동시실행(secondUser.getId(), secondCartItem.getId(), readyLatch, startLatch)
+            );
+
+            assertThat(readyLatch.await(3, TimeUnit.SECONDS)).isTrue();
+            startLatch.countDown();
+
+            List<BusinessException> exceptions = new ArrayList<>();
+            exceptions.add(firstResult.get());
+            exceptions.add(secondResult.get());
+
+            // then
+            // 재고가 1개뿐이므로 두 주문이 동시에 들어와도 성공은 정확히 1건이어야 합니다.
+            assertThat(exceptions).filteredOn(exception -> exception == null).hasSize(1);
+            assertThat(exceptions)
+                    .filteredOn(exception -> exception != null)
+                    .hasSize(1);
+            assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isZero();
+            assertThat(orderRepository.count()).isEqualTo(1);
+            assertThat(orderItemRepository.count()).isEqualTo(1);
+            assertThat(paymentRepository.count()).isEqualTo(1);
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+
+    @Test
     void 주문취소_일부상품취소로_사용포인트가줄어들면_금액을재계산하고_포인트와재고를복구한다() {
         // given
         User user = 회원_저장(40000L);
@@ -242,6 +317,105 @@ class OrderServiceTest {
     }
 
     @Test
+    void 주문취소_재고복구전에_취소대상상품을ID오름차순으로비관락조회한다() {
+        // given
+        User user = 회원_저장(0L);
+        Product firstProduct = 상품_저장("먼저 잠글 상품", 10000, 10);
+        Product secondProduct = 상품_저장("나중에 잠글 상품", 20000, 10);
+        장바구니상품_저장(user, firstProduct, 1);
+        장바구니상품_저장(user, secondProduct, 1);
+
+        orderService.createOrder(user.getId(), null, 0L);
+
+        Order order = orderRepository.findAll().get(0);
+        List<OrderItem> orderItems = orderItemRepository.findAll();
+        OrderItem firstOrderItem = orderItems.stream()
+                .filter(orderItem -> orderItem.getProductId().equals(firstProduct.getId()))
+                .findFirst()
+                .orElseThrow();
+        OrderItem secondOrderItem = orderItems.stream()
+                .filter(orderItem -> orderItem.getProductId().equals(secondProduct.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        // 주문 생성 과정에서도 상품 비관락 조회가 호출되므로, 취소 흐름만 검증하려고 이전 호출 기록을 비웁니다.
+        clearInvocations(productRepository);
+
+        // when
+        orderService.cancelOrder(
+                user.getId(),
+                order.getId(),
+                List.of(secondOrderItem.getId(), firstOrderItem.getId())
+        );
+
+        // then
+        verify(productRepository, times(1)).findAllByIdInForUpdate(List.of(
+                firstProduct.getId(),
+                secondProduct.getId()
+        ));
+        assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void 주문생성과주문취소가_같은상품에동시에발생해도_재고가일관되게남는다() throws Exception {
+        // given
+        User cancelUser = 회원_저장(0L);
+        User orderUser = 회원_저장(0L);
+        Product product = 상품_저장("주문 취소와 생성이 겹치는 상품", 10000, 1);
+        장바구니상품_저장(cancelUser, product, 1);
+
+        orderService.createOrder(cancelUser.getId(), null, 0L);
+
+        Order cancelTargetOrder = orderRepository.findAll().get(0);
+        CartItem newOrderCartItem = 장바구니상품_저장(orderUser, product, 1);
+
+        assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isZero();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        CountDownLatch readyLatch = new CountDownLatch(2);
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        try {
+            Future<BusinessException> cancelResult = executorService.submit(() ->
+                    주문취소_동시실행(cancelUser.getId(), cancelTargetOrder.getId(), readyLatch, startLatch)
+            );
+            Future<BusinessException> createResult = executorService.submit(() ->
+                    주문생성_동시실행(orderUser.getId(), newOrderCartItem.getId(), readyLatch, startLatch)
+            );
+
+            assertThat(readyLatch.await(3, TimeUnit.SECONDS)).isTrue();
+            startLatch.countDown();
+
+            BusinessException cancelException = cancelResult.get();
+            BusinessException createException = createResult.get();
+
+            // then
+            assertThat(cancelException).isNull();
+
+            Product foundProduct = productRepository.findById(product.getId()).orElseThrow();
+            long pendingOrderCount = orderRepository.findAll().stream()
+                    .filter(order -> order.getStatus() == OrderStatus.PAYMENT_PENDING)
+                    .count();
+
+            if (createException == null) {
+                // 취소 복구가 먼저 반영되면 새 주문이 그 재고를 다시 차감합니다.
+                assertThat(foundProduct.getStock()).isZero();
+                assertThat(pendingOrderCount).isEqualTo(1L);
+            } else {
+                // 새 주문이 먼저 재고 0 상태를 확인하면 실패하고, 이후 취소 복구 재고 1개가 남습니다.
+                assertThat(foundProduct.getStock()).isEqualTo(1);
+                assertThat(pendingOrderCount).isZero();
+            }
+
+            assertThat(orderRepository.findById(cancelTargetOrder.getId()).orElseThrow().getStatus())
+                    .isEqualTo(OrderStatus.CANCELED);
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+
+    @Test
     void 주문취소_다른회원주문이면_ORDER_ACCESS_DENIED가발생하고_상태를바꾸지않는다() {
         // given
         User owner = 회원_저장(0L);
@@ -268,78 +442,6 @@ class OrderServiceTest {
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(foundOrderItem.getStatus()).isEqualTo(OrderItemStatus.ORDERED);
         assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(9);
-    }
-
-    @Test
-    void 주문취소_PG결제가이미성공했으면_PG취소후_내부주문을취소한다() {
-        // given
-        User user = 회원_저장(0L);
-        Product product = 상품_저장("PG 취소 상품", 10000, 10);
-        장바구니상품_저장(user, product, 1);
-
-        orderService.createOrder(user.getId(), null, 0L);
-
-        Order order = orderRepository.findAll().get(0);
-        Payment payment = paymentRepository.findAll().get(0);
-        testPaymentGateway.paid(payment.getPortonePaymentId(), payment.getPgAmount());
-
-        // when
-        CancelOrderResponse response = orderService.cancelOrder(user.getId(), order.getId(), null);
-
-        // then
-        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
-        Payment updatedPayment = paymentRepository.findById(payment.getId()).orElseThrow();
-
-        assertThat(response.currentOrderStatus()).isEqualTo(OrderStatus.CANCELED);
-        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
-        assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
-        assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-        assertThat(productRepository.findById(product.getId()).orElseThrow().getStock()).isEqualTo(10);
-        assertThat(testPaymentGateway.getPaymentCallCount()).isEqualTo(1);
-        assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
-        assertThat(testPaymentGateway.getCancelPaymentId()).isEqualTo(payment.getPortonePaymentId());
-        assertThat(testPaymentGateway.getCancelAmount()).isEqualTo(payment.getPgAmount());
-        assertThat(testPaymentGateway.getCancelReason()).isEqualTo("ORDER_CANCEL_BEFORE_INTERNAL_CONFIRM");
-        assertThat(testPaymentGateway.getCancelIdempotencyKey()).isEqualTo("order-cancel-" + payment.getId());
-    }
-
-    @Test
-    void 주문취소_PG결제가이미성공했고_일부취소이면_직접취소하지않는다() {
-        // given
-        User user = 회원_저장(0L);
-        Product remainingProduct = 상품_저장("남길 상품", 30000, 10);
-        Product cancelProduct = 상품_저장("취소 상품", 20000, 10);
-        장바구니상품_저장(user, remainingProduct, 1);
-        장바구니상품_저장(user, cancelProduct, 1);
-
-        orderService.createOrder(user.getId(), null, 0L);
-
-        Order order = orderRepository.findAll().get(0);
-        Payment payment = paymentRepository.findAll().get(0);
-        OrderItem cancelOrderItem = orderItemRepository.findAll().stream()
-                .filter(orderItem -> orderItem.getProductId().equals(cancelProduct.getId()))
-                .findFirst()
-                .orElseThrow();
-        testPaymentGateway.paid(payment.getPortonePaymentId(), payment.getPgAmount());
-
-        // when
-        // then
-        assertThatThrownBy(() -> orderService.cancelOrder(user.getId(), order.getId(), List.of(cancelOrderItem.getId())))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.REFUND_NOT_ALLOWED);
-
-        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
-        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
-        OrderItem foundCancelOrderItem = orderItemRepository.findById(cancelOrderItem.getId()).orElseThrow();
-
-        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
-        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(foundCancelOrderItem.getStatus()).isEqualTo(OrderItemStatus.ORDERED);
-        assertThat(productRepository.findById(remainingProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
-        assertThat(productRepository.findById(cancelProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
-        assertThat(testPaymentGateway.getPaymentCallCount()).isEqualTo(1);
-        assertThat(testPaymentGateway.getCancelCallCount()).isZero();
     }
 
     private User 회원_저장(Long pointBalance) {
@@ -370,98 +472,47 @@ class OrderServiceTest {
         return cartItemRepository.save(new CartItem(cart, product, quantity));
     }
 
+    private BusinessException 주문생성_동시실행(
+            Long userId,
+            Long cartItemId,
+            CountDownLatch readyLatch,
+            CountDownLatch startLatch
+    ) throws InterruptedException {
+        // 현재 스레드가 출발 준비를 마쳤다고 테스트 본문에 알려줍니다.
+        readyLatch.countDown();
+
+        // 두 스레드가 모두 준비될 때까지 여기서 멈춰 있다가, 테스트 본문이 startLatch를 열면 주문을 시도합니다.
+        assertThat(startLatch.await(3, TimeUnit.SECONDS)).isTrue();
+
+        try {
+            orderService.createOrder(userId, List.of(cartItemId), 0L);
+            return null;
+        } catch (BusinessException exception) {
+            return exception;
+        }
+    }
+
+    private BusinessException 주문취소_동시실행(
+            Long userId,
+            Long orderId,
+            CountDownLatch readyLatch,
+            CountDownLatch startLatch
+    ) throws InterruptedException {
+        // 현재 스레드가 출발 준비를 마쳤다고 테스트 본문에 알려줍니다.
+        readyLatch.countDown();
+
+        // 두 스레드가 모두 준비될 때까지 여기서 멈춰 있다가, 테스트 본문이 startLatch를 열면 주문 취소를 시도합니다.
+        assertThat(startLatch.await(3, TimeUnit.SECONDS)).isTrue();
+
+        try {
+            orderService.cancelOrder(userId, orderId, null);
+            return null;
+        } catch (BusinessException exception) {
+            return exception;
+        }
+    }
+
     private String uniqueEmail() {
         return UUID.randomUUID() + "@example.com";
-    }
-
-    @TestConfiguration
-    static class OrderServiceTestConfig {
-
-        @Bean
-        @Primary
-        TestPaymentGateway testPaymentGateway() {
-            return new TestPaymentGateway();
-        }
-    }
-
-    static class TestPaymentGateway implements PaymentGateway {
-
-        private PaymentGatewayResponse response;
-        private int paymentCallCount;
-        private int cancelCallCount;
-        private String cancelPaymentId;
-        private Long cancelAmount;
-        private String cancelReason;
-        private String cancelIdempotencyKey;
-
-        @Override
-        public PaymentGatewayResponse getPayment(String paymentId) {
-            paymentCallCount++;
-
-            if (response == null) {
-                return new PaymentGatewayResponse(paymentId, "READY", null, null);
-            }
-
-            return response;
-        }
-
-        @Override
-        public PaymentCancelResponse cancelPayment(
-                String paymentId,
-                Long cancelAmount,
-                String reason,
-                String idempotencyKey
-        ) {
-            cancelCallCount++;
-            this.cancelPaymentId = paymentId;
-            this.cancelAmount = cancelAmount;
-            this.cancelReason = reason;
-            this.cancelIdempotencyKey = idempotencyKey;
-
-            return new PaymentCancelResponse("cancel_test", "SUCCEEDED");
-        }
-
-        void paid(String paymentId, Long paidAmount) {
-            response = new PaymentGatewayResponse(
-                    paymentId,
-                    "PAID",
-                    paidAmount,
-                    LocalDateTime.of(2026, 6, 5, 12, 0)
-            );
-        }
-
-        int getPaymentCallCount() {
-            return paymentCallCount;
-        }
-
-        int getCancelCallCount() {
-            return cancelCallCount;
-        }
-
-        String getCancelPaymentId() {
-            return cancelPaymentId;
-        }
-
-        Long getCancelAmount() {
-            return cancelAmount;
-        }
-
-        String getCancelReason() {
-            return cancelReason;
-        }
-
-        String getCancelIdempotencyKey() {
-            return cancelIdempotencyKey;
-        }
-
-        void reset() {
-            response = null;
-            paymentCallCount = 0;
-            cancelCallCount = 0;
-            cancelPaymentId = null;
-            cancelAmount = null;
-            cancelReason = null;
-            cancelIdempotencyKey = null;
-        }
     }
 }

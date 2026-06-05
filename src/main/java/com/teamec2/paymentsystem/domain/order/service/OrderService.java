@@ -15,9 +15,6 @@ import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
 import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
-import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointPolicy;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
@@ -33,22 +30,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class OrderService {
-    // PortOne에 결제 취소를 요청할 때 남기는 취소 사유입니다.
-    // "외부 결제는 성공했지만 우리 서버의 결제 확정 전 주문 취소가 들어온 상황"을 구분하기 위한 값입니다.
-    private static final String ORDER_CANCEL_REASON = "ORDER_CANCEL_BEFORE_INTERNAL_CONFIRM";
-
-    // 같은 결제 취소 요청이 여러 번 전달되어도 PortOne이 중복 취소로 처리하지 않도록 만드는 멱등 키 접두어입니다.
-    // 최종 키는 order-cancel-{paymentId} 형태가 됩니다.
-    private static final String ORDER_CANCEL_IDEMPOTENCY_KEY_PREFIX = "order-cancel-";
-
     private final UserRepository userRepository;
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -59,7 +52,6 @@ public class OrderService {
     private final PointPolicy pointPolicy;
     private final PointService pointService;
     private final ProductRepository productRepository;
-    private final PaymentGateway paymentGateway;
 
     // 주문 생성, 재고 선차감, 결제 대기 생성은 하나의 작업처럼 성공하거나 실패해야 합니다.
     // 그래서 중간에 재고 부족 같은 예외가 발생하면 전체 DB 변경이 롤백되도록 @Transactional을 사용합니다.
@@ -75,21 +67,24 @@ public class OrderService {
             throw new BusinessException(ErrorCode.INSUFFICIENT_POINT);
         }
 
-        List<CartItem> cartItems = findCartItemsWithLock(userId, cartItemIds);
+        // 주문 생성에서는 CartItem만 먼저 조회합니다.
+        // Product를 이 시점에 함께 가져오면, 뒤에서 상품 row 락을 기다린 뒤에도 이미 로딩된 오래된 Product 값을 볼 수 있습니다.
+        List<CartItem> cartItems = findCartItemsForOrderWithLock(userId, cartItemIds);
 
         // 같은 상품을 여러 회원이 동시에 주문하면 둘 다 같은 재고를 보고 차감할 수 있습니다.
         // 그래서 실제 금액 계산과 재고 차감 전에 주문 대상 상품 row를 먼저 잠급니다.
-        lockProducts(cartItems);
-        validateProducts(cartItems);
+        // lockProducts가 반환한 OrderTarget에는 락을 얻은 뒤 조회된 Product가 들어 있습니다.
+        List<OrderTarget> orderTargets = lockProducts(cartItems);
+        validateOrderTargets(orderTargets);
 
-        // 주문 총액은 주문 생성 순간의 상품 가격과 장바구니 수량으로 계산합니다.
-        Long totalAmount = sumCartItems(cartItems);
+        // 주문 총액은 락을 얻은 Product의 가격과 장바구니 수량으로 계산합니다.
+        Long totalAmount = sumOrderTargets(orderTargets);
 
         if (usedPointAmount > totalAmount) {
             throw new BusinessException(ErrorCode.INVALID_USED_POINT);
         }
 
-        decreaseStocks(cartItems);
+        decreaseStocks(orderTargets);
 
         // 실제 포인트 적립이 아닌 적립 예정 포인트 계산입니다.
         // pgAmount는 PG 결제창에서 실제 카드/간편결제로 결제해야 하는 금액입니다.
@@ -113,7 +108,7 @@ public class OrderService {
         // 주문 상품에는 현재 상품명과 가격이 스냅샷으로 저장됩니다.
         // 상품명이 나중에 바뀌어도 이 주문의 상품명은 주문 당시 값으로 남습니다.
         // sourceCartItemId도 함께 저장해 결제 완료 시 이번 주문에 포함된 장바구니 항목만 지울 수 있게 합니다.
-        List<OrderItem> orderItems = createOrderItems(savedOrder, cartItems);
+        List<OrderItem> orderItems = createOrderItems(savedOrder, orderTargets);
 
         List<OrderItem> savedOrderItems = orderItemRepository.saveAll(orderItems);
 
@@ -179,7 +174,7 @@ public class OrderService {
         Payment payment = findPaymentWithLock(orderId);
         validateCancelable(order, payment);
 
-        List<OrderItem> allOrderItems = findAllOrderItems(orderId);
+        List<OrderItem> allOrderItems = findAllOrderItemsForCancel(orderId);
         List<OrderItem> cancelOrderItems = selectCancelItems(allOrderItems, orderItemIds);
 
         if (cancelOrderItems.isEmpty()) {
@@ -195,8 +190,6 @@ public class OrderService {
         // remainingTotalAmount는 이번 취소 후 주문에 남는 상품 금액입니다.
         // 0이면 전체 취소, 0보다 크면 부분 취소입니다.
         Long remainingTotalAmount = sumRemainingAmount(allOrderItems, cancelOrderItems);
-
-        cancelPaidPgPayment(payment, remainingTotalAmount);
 
         // cancelOrderItemIds는 포인트 원장 멱등 키를 만들 때 사용합니다.
         // 어떤 주문상품 취소 때문에 포인트가 복구되었는지 구분하기 위한 목록입니다.
@@ -226,8 +219,14 @@ public class OrderService {
             order.updateAmounts(remainingTotalAmount, cancelAmounts.remainingUsedPointAmount());
         }
 
+        // 재고 복구 전에 취소 대상 상품 row를 쓰기 잠금으로 조회합니다.
+        // 주문 생성의 재고 차감과 동시에 실행되어도 최신 재고 값을 기준으로 복구하기 위해서입니다.
+        Map<Long, Product> lockedProducts = lockProductsForStockRestore(cancelOrderItems);
+
         // 주문상품 취소 처리는 상품 재고 복구와 주문상품 상태 변경을 함께 수행합니다.
-        cancelOrderItems.forEach(OrderItem::cancel);
+        for (OrderItem cancelOrderItem : cancelOrderItems) {
+            cancelOrderItem.cancel(lockedProducts.get(cancelOrderItem.getProductId()));
+        }
 
         if (remainingTotalAmount == 0L) {
             // 전체 취소이면 주문은 CANCELED, 결제는 FAILED로 정리합니다.
@@ -275,27 +274,27 @@ public class OrderService {
         }
     }
 
+    // 이미 결제가 끝난 주문은 주문 취소가 아니라 PG 환불 흐름으로 처리해야 합니다.
     private void validateCancelable(Order order, Payment payment) {
-        // 이미 결제가 끝난 주문은 주문 취소가 아니라 PG 환불 흐름으로 처리해야 합니다.
         if (!payment.isPending() || !order.isPendingPaymentCancelable()) {
             throw new BusinessException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
         }
     }
 
-    private Long sumCartItems(List<CartItem> cartItems) {
-        return cartItems.stream()
-                .mapToLong(cartItem -> (long) cartItem.getProduct().getPrice() * cartItem.getQuantity())
+    private Long sumOrderTargets(List<OrderTarget> orderTargets) {
+        return orderTargets.stream()
+                .mapToLong(orderTarget -> (long) orderTarget.product().getPrice() * orderTarget.cartItem().getQuantity())
                 .sum();
     }
 
-    private void decreaseStocks(List<CartItem> cartItems) {
+    private void decreaseStocks(List<OrderTarget> orderTargets) {
         // 결제 완료 시점이 아니라 주문 생성 시점에 재고를 먼저 차감합니다.
         // 이 반복문 중 하나라도 실패하면 @Transactional 때문에 앞선 차감도 함께 롤백됩니다.
-        for (CartItem cartItem : cartItems) {
-            Product product = cartItem.getProduct();
+        for (OrderTarget orderTarget : orderTargets) {
+            Product product = orderTarget.product();
 
             try {
-                product.decreaseStock(cartItem.getQuantity());
+                product.decreaseStock(orderTarget.cartItem().getQuantity());
             } catch (BusinessException exception) {
                 if (exception.getErrorCode() == ErrorCode.PRODUCT_OUT_OF_STOCK) {
                     throw new BusinessException(ErrorCode.ORDER_STOCK_SHORTAGE);
@@ -306,19 +305,19 @@ public class OrderService {
         }
     }
 
-    private List<OrderItem> createOrderItems(Order order, List<CartItem> cartItems) {
-        return cartItems.stream()
-                .map(cartItem -> new OrderItem(
+    private List<OrderItem> createOrderItems(Order order, List<OrderTarget> orderTargets) {
+        return orderTargets.stream()
+                .map(orderTarget -> new OrderItem(
                         order,
-                        cartItem.getProduct(),
-                        cartItem.getId(),
-                        cartItem.getQuantity()
+                        orderTarget.product(),
+                        orderTarget.cartItem().getId(),
+                        orderTarget.cartItem().getQuantity()
                 ))
                 .toList();
     }
 
-    private List<OrderItem> findAllOrderItems(Long orderId) {
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(orderId);
+    private List<OrderItem> findAllOrderItemsForCancel(Long orderId) {
+        List<OrderItem> orderItems = orderItemRepository.findAllByOrderId(orderId);
         if (orderItems.isEmpty()) {
             throw new BusinessException(ErrorCode.ORDER_ITEM_NOT_FOUND);
         }
@@ -399,9 +398,31 @@ public class OrderService {
                 .toList();
     }
 
+    private Map<Long, Product> lockProductsForStockRestore(List<OrderItem> orderItems) {
+        List<Long> productIds = orderItems.stream()
+                .map(OrderItem::getProductId)
+                .distinct()
+                // 여러 상품을 한 번에 복구할 때 항상 같은 순서로 잠그면 교착상태 위험을 줄일 수 있습니다.
+                .sorted()
+                .toList();
+
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        if (lockedProducts.size() != productIds.size()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        return lockedProducts;
+    }
+
     // 주문하려는 상품 row를 상품 ID 오름차순으로 잠급니다.
     // 여러 주문이 같은 상품 재고를 동시에 차감할 때 재고가 음수가 되는 문제를 막기 위한 메서드입니다.
-    private void lockProducts(List<CartItem> cartItems) {
+    private List<OrderTarget> lockProducts(List<CartItem> cartItems) {
         // productIds는 주문 대상 장바구니 상품들에서 뽑은 실제 상품 ID 목록입니다.
         List<Long> productIds = cartItems.stream()
                 .map(cartItem -> cartItem.getProduct().getId())
@@ -410,7 +431,24 @@ public class OrderService {
                 .sorted()
                 .toList();
 
-        productRepository.findAllByIdInForUpdate(productIds);
+        // 이 조회가 SELECT ... FOR UPDATE 역할을 합니다.
+        // 다른 트랜잭션이 먼저 같은 상품을 차감 중이면 여기서 기다렸다가, 커밋된 최신 값을 읽습니다.
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        List<OrderTarget> orderTargets = new ArrayList<>();
+        for (CartItem cartItem : cartItems) {
+            // CartItem의 product 필드는 상품 ID를 얻기 위해서만 사용합니다.
+            // 실제 검증과 차감에는 lockedProducts에서 꺼낸 Product를 사용해야 합니다.
+            Product product = lockedProducts.get(cartItem.getProduct().getId());
+            if (product == null) {
+                throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+            }
+
+            orderTargets.add(new OrderTarget(cartItem, product));
+        }
+
+        return orderTargets;
     }
 
     private List<CartItem> findCartItems(Long userId, List<Long> cartItemIds) {
@@ -420,11 +458,35 @@ public class OrderService {
         return findCartItems(cart, cartItemIds);
     }
 
-    private List<CartItem> findCartItemsWithLock(Long userId, List<Long> cartItemIds) {
+    private List<CartItem> findCartItemsForOrderWithLock(Long userId, List<Long> cartItemIds) {
         Cart cart = cartRepository.findByUserIdWithOptimisticLock(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_EMPTY));
 
-        return findCartItems(cart, cartItemIds);
+        return findCartItemsForOrder(cart, cartItemIds);
+    }
+
+    private List<CartItem> findCartItemsForOrder(Cart cart, List<Long> cartItemIds) {
+        List<Long> distinctCartItemIds = distinctIds(cartItemIds);
+
+        // 주문 생성에서는 Product를 먼저 join fetch하지 않습니다.
+        // Product는 바로 뒤에서 PESSIMISTIC_WRITE 락으로 조회한 최신 값을 기준으로 검증하고 차감합니다.
+        // 이렇게 해야 "락은 기다렸지만 검증은 예전 Product 객체로 하는" 상황을 피할 수 있습니다.
+        List<CartItem> cartItems;
+        if (distinctCartItemIds == null || distinctCartItemIds.isEmpty()) {
+            cartItems = cartItemRepository.findAllInCart(cart.getId());
+        } else {
+            cartItems = cartItemRepository.findAllInCart(cart.getId(), distinctCartItemIds);
+        }
+
+        if (cartItems.isEmpty()) {
+            throw new BusinessException(ErrorCode.CART_EMPTY);
+        }
+
+        if (distinctCartItemIds != null && !distinctCartItemIds.isEmpty() && cartItems.size() != distinctCartItemIds.size()) {
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        return cartItems;
     }
 
     private List<CartItem> findCartItems(Cart cart, List<Long> cartItemIds) {
@@ -433,9 +495,9 @@ public class OrderService {
         // cartItemIds가 있으면 선택 상품만, 없으면 장바구니 전체 상품을 주문 대상으로 가져옵니다.
         List<CartItem> cartItems;
         if (distinctCartItemIds == null || distinctCartItemIds.isEmpty()) {
-            cartItems = cartItemRepository.findWithProductByCartId(cart.getId());
+            cartItems = cartItemRepository.findAllWithProduct(cart.getId());
         } else {
-            cartItems = cartItemRepository.findOrderItemsByCartIdAndIdIn(cart.getId(), distinctCartItemIds);
+            cartItems = cartItemRepository.findAllWithProduct(cart.getId(), distinctCartItemIds);
         }
 
         if (cartItems.isEmpty()) {
@@ -472,58 +534,26 @@ public class OrderService {
         }
     }
 
-    // 우리 DB에는 결제가 아직 PENDING이어도, PortOne에서는 이미 PAID일 수 있습니다.
-    // 이 경우 내부 주문만 취소하면 외부 결제가 남기 때문에, 먼저 PortOne 취소를 성공시킨 뒤 내부 상태를 정리합니다.
-    private void cancelPaidPgPayment(Payment payment, Long remainingTotalAmount) {
-        // pgAmount가 0이면 포인트 전액 결제입니다.
-        // 외부 PG 결제가 없으므로 PortOne 조회/취소가 필요 없습니다.
-        if (payment.getPgAmount() == 0L) {
-            return;
-        }
+    private void validateOrderTargets(List<OrderTarget> orderTargets) {
+        for (OrderTarget orderTarget : orderTargets) {
+            // 여기서 보는 Product는 lockProducts에서 비관락으로 조회한 객체입니다.
+            // 그래서 동시에 다른 주문이 먼저 재고를 차감했다면, 그 결과가 반영된 상태로 검증됩니다.
+            Product product = orderTarget.product();
 
-        // gatewayResponse는 PortOne에서 조회한 실제 결제 상태입니다.
-        PaymentGatewayResponse gatewayResponse = paymentGateway.getPayment(payment.getPortonePaymentId());
-        validatePgPayment(payment, gatewayResponse);
+            if (product.getStatus() != ProductStatus.ON_SALE) {
+                throw new BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE);
+            }
 
-        // 아직 PortOne에서도 PAID가 아니면 외부 취소 없이 기존 예약 주문 취소만 진행합니다.
-        if (!gatewayResponse.isPaid()) {
-            return;
-        }
-
-        // 현재 부분 환불 서비스가 없기 때문에, 이미 PAID인 결제를 부분 취소하면 위험합니다.
-        // 그래서 전액 취소가 아닌 경우에는 PG 취소로 넘어가지 않고 막습니다.
-        if (remainingTotalAmount > 0L) {
-            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
-        }
-
-        // PortOne 결제가 이미 성공했다면 외부 결제부터 취소합니다.
-        // 이 취소가 성공해야만 아래 내부 주문/결제 상태 정리가 이어집니다.
-        PaymentCancelResponse cancelResponse = paymentGateway.cancelPayment(
-                payment.getPortonePaymentId(),
-                gatewayResponse.paidAmount(),
-                ORDER_CANCEL_REASON,
-                ORDER_CANCEL_IDEMPOTENCY_KEY_PREFIX + payment.getId()
-        );
-
-        if (!cancelResponse.isSucceeded()) {
-            throw new BusinessException(ErrorCode.REFUND_PG_CANCEL_FAILED);
+            if (product.getStock() < orderTarget.cartItem().getQuantity()) {
+                throw new BusinessException(ErrorCode.ORDER_STOCK_SHORTAGE);
+            }
         }
     }
 
-    // 주문 취소 전에 PortOne 조회 결과가 우리 결제 정보와 맞는지 검증합니다.
-    // 외부 결제 ID가 다르거나, PAID인데 결제 금액이 없으면 내부 취소를 진행하면 안 됩니다.
-    private void validatePgPayment(Payment payment, PaymentGatewayResponse gatewayResponse) {
-        if (gatewayResponse == null) {
-            throw new BusinessException(ErrorCode.EXTERNAL_API_FAILED);
-        }
-
-        if (!gatewayResponse.hasSamePaymentId(payment.getPortonePaymentId())) {
-            throw new BusinessException(ErrorCode.PAYMENT_PORTONE_ID_MISMATCH);
-        }
-
-        if (gatewayResponse.isPaid() && gatewayResponse.paidAmount() == null) {
-            throw new BusinessException(ErrorCode.EXTERNAL_API_FAILED);
-        }
+    private record OrderTarget(
+            CartItem cartItem,
+            Product product
+    ) {
     }
 
     private record CancelAmounts(

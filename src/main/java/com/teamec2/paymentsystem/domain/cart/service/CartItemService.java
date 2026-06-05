@@ -38,7 +38,7 @@ public class CartItemService {
         validateProductOnSale(product);
 
         CartItem cartItem = cartItemRepository
-                .findByCartIdAndProductId(cart.getId(), productId)
+                .findByProduct(cart.getId(), productId)
                 .orElse(null);
 
         int finalQuantity;
@@ -71,7 +71,7 @@ public class CartItemService {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        CartItem cartItem = cartItemRepository.findWithOwnerAndProductById(cartItemId)
+        CartItem cartItem = cartItemRepository.findDetailById(cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         if (!cartItem.getCart().getUser().getId().equals(userId)) {
@@ -81,7 +81,7 @@ public class CartItemService {
         Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
-        cartItem = cartItemRepository.findWithProductByCartIdAndId(cart.getId(), cartItemId)
+        cartItem = cartItemRepository.findInCart(cart.getId(), cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         Product product = cartItem.getProduct();
@@ -100,7 +100,7 @@ public class CartItemService {
 
     @Transactional
     public DeleteCartItemResponse deleteCartItem(Long userId, Long cartItemId) {
-        CartItem cartItem = cartItemRepository.findWithOwnerAndProductById(cartItemId)
+        CartItem cartItem = cartItemRepository.findDetailById(cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         if (!cartItem.getCart().getUser().getId().equals(userId)) {
@@ -110,7 +110,7 @@ public class CartItemService {
         Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
 
-        cartItem = cartItemRepository.findWithProductByCartIdAndId(cart.getId(), cartItemId)
+        cartItem = cartItemRepository.findInCart(cart.getId(), cartItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
 
         cartItemRepository.delete(cartItem);
@@ -142,6 +142,6 @@ public class CartItemService {
     }
 
     private Long calculateCartTotalAmount(Long cartId) {
-        return cartItemRepository.sumLineAmountByCartId(cartId);
+        return cartItemRepository.sumAmount(cartId);
     }
 }

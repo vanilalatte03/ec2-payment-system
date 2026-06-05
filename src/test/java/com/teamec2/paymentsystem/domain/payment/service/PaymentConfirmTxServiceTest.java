@@ -26,10 +26,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class PaymentConfirmTxServiceTest {
@@ -42,7 +47,7 @@ class PaymentConfirmTxServiceTest {
     @Autowired
     UserRepository userRepository;
 
-    @Autowired
+    @MockitoSpyBean
     ProductRepository productRepository;
 
     @Autowired
@@ -184,6 +189,31 @@ class PaymentConfirmTxServiceTest {
         assertThat(foundProduct.getStock()).isEqualTo(5);
         assertThat(cancelTransaction.getType()).isEqualTo(PointTransactionType.USE_CANCEL);
         assertThat(cancelTransaction.getAmount()).isEqualTo(200L);
+    }
+
+    @Test
+    void 보상취소성공후_재고복구전에_복구대상상품을ID오름차순으로비관락조회한다() {
+        // given
+        User user = 회원_저장();
+        Product firstProduct = 상품_저장("먼저 잠글 상품", 10000, 8);
+        Product secondProduct = 상품_저장("나중에 잠글 상품", 20000, 7);
+        Order order = 주문_저장(user, 30000L, 0L);
+        주문상품_저장(order, secondProduct, 1);
+        주문상품_저장(order, firstProduct, 1);
+        Payment payment = 결제_저장(order, 30000L, 0L, 30000L);
+
+        clearInvocations(productRepository);
+
+        // when
+        paymentConfirmTxService.failAfterCompensation(payment.getId());
+
+        // then
+        verify(productRepository, times(1)).findAllByIdInForUpdate(List.of(
+                firstProduct.getId(),
+                secondProduct.getId()
+        ));
+        assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
+        assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
     }
 
     private User 회원_저장() {

@@ -99,7 +99,7 @@ class CartServiceConcurrencyTest {
             Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
 
             assertThat(successCount).isGreaterThan(0);
-            assertThat(cartItemRepository.findWithProductByCartId(cart.getId())).isEmpty();
+            assertThat(cartItemRepository.findAllWithProduct(cart.getId())).isEmpty();
             assertThat(cart.getVersion()).isGreaterThan(beforeVersion);
         } finally {
             executorService.shutdown();

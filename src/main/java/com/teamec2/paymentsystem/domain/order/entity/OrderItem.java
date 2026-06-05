@@ -93,11 +93,19 @@ public class OrderItem extends BaseEntity {
     }
 
     public void cancel() {
+        cancel(this.product);
+    }
+
+    public void cancel(Product lockedProduct) {
         if (this.status == OrderItemStatus.CANCELED) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
-        this.product.restoreStock(this.quantity);
+        if (lockedProduct == null || !lockedProduct.getId().equals(getProductId())) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        lockedProduct.restoreStock(this.quantity);
         this.status = OrderItemStatus.CANCELED;
     }
 

@@ -92,7 +92,7 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.cartTotalAmount").value(78000));
 
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
+        CartItem cartItem = cartItemRepository.findByProduct(cart.getId(), product.getId()).orElseThrow();
 
         assertThat(cartItem.getQuantity()).isEqualTo(2);
     }
@@ -123,7 +123,7 @@ class CartControllerTest {
 
         // then
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
+        CartItem cartItem = cartItemRepository.findByProduct(cart.getId(), product.getId()).orElseThrow();
 
         assertThat(cartItem.getCreatedAt()).isNotNull();
         assertThat(cartItem.getUpdatedAt()).isNotNull();
@@ -139,7 +139,7 @@ class CartControllerTest {
         장바구니상품_담기(accessToken, product.getId(), 1);
 
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        CartItem firstCartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
+        CartItem firstCartItem = cartItemRepository.findByProduct(cart.getId(), product.getId()).orElseThrow();
         LocalDateTime firstCreatedAt = firstCartItem.getCreatedAt();
         LocalDateTime firstUpdatedAt = firstCartItem.getUpdatedAt();
 
@@ -169,7 +169,7 @@ class CartControllerTest {
 
         // then
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
+        CartItem cartItem = cartItemRepository.findByProduct(cart.getId(), product.getId()).orElseThrow();
 
         assertThat(cartItem.getQuantity()).isEqualTo(5);
     }
@@ -434,7 +434,7 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.deletedCount").value(2));
 
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        assertThat(cartItemRepository.findWithProductByCartId(cart.getId())).isEmpty();
+        assertThat(cartItemRepository.findAllWithProduct(cart.getId())).isEmpty();
     }
 
     @Test

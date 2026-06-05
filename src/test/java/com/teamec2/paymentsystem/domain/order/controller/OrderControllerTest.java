@@ -13,9 +13,6 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
-import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
 import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
@@ -33,10 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -86,19 +80,14 @@ class OrderControllerTest {
     @Autowired
     JwtTokenProvider jwtTokenProvider;
 
-    @Autowired
-    TestPaymentGateway testPaymentGateway;
-
     @BeforeEach
     void setUp() {
         clearDatabase();
-        testPaymentGateway.reset();
     }
 
     @AfterEach
     void tearDown() {
         clearDatabase();
-        testPaymentGateway.reset();
     }
 
     private void clearDatabase() {
@@ -891,43 +880,5 @@ class OrderControllerTest {
 
     private String uniqueEmail() {
         return UUID.randomUUID() + "@example.com";
-    }
-
-    @TestConfiguration
-    static class OrderControllerTestConfig {
-
-        @Bean
-        @Primary
-        TestPaymentGateway testPaymentGateway() {
-            return new TestPaymentGateway();
-        }
-    }
-
-    static class TestPaymentGateway implements PaymentGateway {
-
-        private PaymentGatewayResponse response;
-
-        @Override
-        public PaymentGatewayResponse getPayment(String paymentId) {
-            if (response == null) {
-                return new PaymentGatewayResponse(paymentId, "READY", null, null);
-            }
-
-            return response;
-        }
-
-        @Override
-        public PaymentCancelResponse cancelPayment(
-                String paymentId,
-                Long cancelAmount,
-                String reason,
-                String idempotencyKey
-        ) {
-            return new PaymentCancelResponse("cancel_test", "SUCCEEDED");
-        }
-
-        void reset() {
-            response = null;
-        }
     }
 }
