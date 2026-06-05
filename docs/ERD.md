@@ -184,11 +184,14 @@ erDiagram
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
 | 장바구니 상품 ID | id | BIGINT | NOT NULL | PK |
-| 상품 ID | product_id | BIGINT | NOT NULL | FK: products.id, UNIQUE |
-| 장바구니 ID | cart_id | BIGINT | NOT NULL | FK: carts.id, UNIQUE |
+| 상품 ID | product_id | BIGINT | NOT NULL | FK: products.id, UNIQUE(cart_id, product_id) |
+| 장바구니 ID | cart_id | BIGINT | NOT NULL | FK: carts.id, UNIQUE(cart_id, product_id) |
 | 수량 | quantity | INT | NOT NULL |  |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
+
+한 장바구니에는 같은 상품이 한 줄만 존재합니다. 같은 상품을 다시 담으면 새 row를 만들지 않고 기존 `cart_items.quantity`를 합산합니다.
+결제 완료 시에는 주문에 포함된 `cart_items`만 삭제되며, 같은 장바구니에 남아 있는 미주문 상품 row는 유지됩니다.
 
 ### products
 
