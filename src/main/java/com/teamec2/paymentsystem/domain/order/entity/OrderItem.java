@@ -39,8 +39,13 @@ public class OrderItem extends BaseEntity {
     @Column(nullable = false, columnDefinition = "int UNSIGNED")
     private int quantity;
 
+    // 환불 완료된 수량
     @Column(name = "refunded_quantity", nullable = false, columnDefinition = "int UNSIGNED DEFAULT 0")
     private int refundedQuantity = 0;
+
+    // 환불 요청되어 처리 중인 수량
+    @Column(name = "refund_reserved_quantity", nullable = false, columnDefinition = "int UNSIGNED DEFAULT 0")
+    private int refundReservedQuantity = 0;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -75,8 +80,12 @@ public class OrderItem extends BaseEntity {
         return (long) price * quantity;
     }
 
+    /**
+     * 아직 새 환불 요청에 사용할 수 있는 수량을 반환합니다.
+     * 주문 수량에서 이미 환불 완료된 수량과 현재 환불 처리 중으로 예약된 수량을 모두 제외합니다.
+     */
     public int getRemainingRefundableQuantity() {
-        return quantity - refundedQuantity;
+        return quantity - refundedQuantity - refundReservedQuantity;
     }
 
     public boolean isCanceled() {
@@ -92,20 +101,57 @@ public class OrderItem extends BaseEntity {
         this.status = OrderItemStatus.CANCELED;
     }
 
-    public void refund(int refundQuantity) {
-        if (refundQuantity < 1) {
-            throw new BusinessException(ErrorCode.INVALID_REFUND_QUANTITY);
-        }
+    /**
+     * 환불 요청 생성 시점에 환불 수량을 예약합니다.
+     * 아직 PG 환불이 완료된 것은 아니지만, 같은 주문 상품에 대해 중복 환불 요청이 들어와 환불 가능 수량을 초과하지 않도록 먼저 수량을 잡아둡니다.
+     */
+    public void reserveRefundQuantity(int refundQuantity) {
+        validateRefundQuantity(refundQuantity);
 
         if (refundQuantity > getRemainingRefundableQuantity()) {
             throw new BusinessException(ErrorCode.REFUND_QUANTITY_EXCEEDED);
         }
 
+        this.refundReservedQuantity += refundQuantity;
+    }
+
+    /**
+     * 환불이 최종 완료되었을 때 호출합니다.
+     * 예약해둔 환불 수량을 실제 환불 완료 수량으로 이동시키고,상품 재고를 복구합니다.
+     */
+    public void refund(int refundQuantity) {
+        validateRefundQuantity(refundQuantity);
+
+        if (refundQuantity > this.refundReservedQuantity) {
+            throw new BusinessException(ErrorCode.REFUND_QUANTITY_EXCEEDED);
+        }
+
+        this.refundReservedQuantity -= refundQuantity;
         this.refundedQuantity += refundQuantity;
         this.product.restoreStock(refundQuantity);
     }
 
+    /**
+     * 환불이 최종 실패했을 때 예약된 환불 수량을 해제합니다.
+     * PG 환불 실패, 재시도 초과, 환불 불가 확정 등으로 환불 처리를 더 이상 진행하지 않을 때 호출합니다.
+     */
+    public void releaseRefundQuantity(int refundQuantity) {
+        validateRefundQuantity(refundQuantity);
+
+        if (refundQuantity > this.refundReservedQuantity) {
+            throw new BusinessException(ErrorCode.REFUND_QUANTITY_EXCEEDED);
+        }
+
+        this.refundReservedQuantity -= refundQuantity;
+    }
+
     public Long getProductId() {
         return this.product.getId();
+    }
+
+    private static void validateRefundQuantity(int refundQuantity) {
+        if (refundQuantity < 1) {
+            throw new BusinessException(ErrorCode.INVALID_REFUND_QUANTITY);
+        }
     }
 }

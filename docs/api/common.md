@@ -144,6 +144,7 @@ Authorization: Bearer {accessToken}
 | `PROCESSING` | DB 환불 처리 완료, PG 취소 호출 전/진행 중 |
 | `COMPLETED` | 환불 완료 |
 | `FAILED` | PG 취소 실패 또는 환불 처리 실패 |
+| `PG_RESULT_UNKNOWN` | PortOne 취소 요청 결과를 확정하지 못한 상태. 타임아웃/네트워크 오류 후 재조회 대상 |
 
 ## 공통 에러 코드
 

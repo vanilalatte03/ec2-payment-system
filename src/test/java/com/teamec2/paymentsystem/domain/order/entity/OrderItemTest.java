@@ -159,10 +159,12 @@ class OrderItemTest {
         OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
 
         // when
+        orderItem.reserveRefundQuantity(2);
         orderItem.refund(2);
 
         // then
         assertThat(orderItem.getRefundedQuantity()).isEqualTo(2);
+        assertThat(orderItem.getRefundReservedQuantity()).isZero();
         assertThat(orderItem.getRemainingRefundableQuantity()).isEqualTo(1);
         assertThat(product.getStock()).isEqualTo(12);
     }
@@ -173,11 +175,12 @@ class OrderItemTest {
         Order order = 주문_생성();
         Product product = 상품_생성();
         OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
+        orderItem.reserveRefundQuantity(2);
         orderItem.refund(2);
 
         // when
         // then
-        assertThatThrownBy(() -> orderItem.refund(2))
+        assertThatThrownBy(() -> orderItem.reserveRefundQuantity(2))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.REFUND_QUANTITY_EXCEEDED);

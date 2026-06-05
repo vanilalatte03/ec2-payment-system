@@ -44,6 +44,13 @@ Spring Boot 시작 시 자동 실행되도록 연결하지 않았습니다. 현�
 | 포인트 | 음수 없는 잔액 스냅샷, 멱등 키가 포함된 확정 사용, 적립, 사용 복구, 적립 회수 거래 |
 | 환불 | 부분 환불 1건, 전체 환불 1건 |
 
+## 환불 수량 정책
+
+- 더미 데이터의 완료된 환불 상품은 `order_items.refunded_quantity`에 반영되어 있습니다.
+- 처리 중이거나 PG 결과 미확정인 환불은 `order_items.refund_reserved_quantity`로 환불 가능 수량을 먼저 예약해야 합니다.
+- 현재 기본 더미 데이터에는 진행 중 환불이 없으므로 `refund_reserved_quantity`는 모두 `0`입니다.
+- `refunds.idempotency_key`와 `refunds.portone_payment_id`는 환불 중복 생성 방지와 PortOne 취소 요청 추적을 위해 함께 저장합니다.
+
 ## 필수 기능별 테스트 데이터
 
 | 기능 | 테스트에 사용할 데이터 |

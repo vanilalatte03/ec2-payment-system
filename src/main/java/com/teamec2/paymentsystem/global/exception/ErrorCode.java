@@ -85,6 +85,7 @@ public enum ErrorCode {
     REFUND_QUANTITY_EXCEEDED(HttpStatus.BAD_REQUEST, "잔여 환불 가능 수량을 초과했습니다."),
     REFUND_NOT_ALLOWED(HttpStatus.CONFLICT, "환불 가능한 결제 상태가 아닙니다."),
     REFUND_PG_CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "PG 취소에 실패했습니다."),
+    REFUND_IN_PROGRESS(HttpStatus.CONFLICT, "같은 결제 건의 환불이 처리 중입니다."),
 
     // Webhook
     WEBHOOK_SIGNATURE_INVALID(HttpStatus.BAD_REQUEST, "웹훅 서명 검증에 실패했습니다."),
