@@ -327,7 +327,8 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 - 전체 취소하면 주문 상태는 `CANCELED`, 결제 상태는 `FAILED`로 변경됩니다.
 - 취소된 주문상품의 재고는 즉시 복구됩니다.
 - 예약 차감된 포인트 중 취소 금액에 해당하는 금액은 `USE_CANCEL` 원장으로 복구됩니다.
-- PG 결제가 필요한 주문에서 PortOne 결제가 이미 성공한 상태라면, 현재 구현에서는 전액 취소만 허용합니다. 이미 성공한 PG 결제의 부분 취소는 환불 흐름이 구현된 뒤 처리해야 하므로 `REFUND_NOT_ALLOWED`가 발생합니다.
+- 주문 취소 API는 결제 전 `PENDING` 주문을 내부 상태 기준으로 정리하는 API입니다.
+- 주문 도메인에서는 PortOne 결제 조회나 PG 취소를 호출하지 않습니다. 외부 결제가 완료된 주문은 결제 확정 또는 환불 흐름에서 처리합니다.
 
 ### Errors
 
@@ -341,7 +342,3 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 | `ORDER_ITEM_NOT_FOUND` | 404 | 주문상품 없음 또는 취소할 수 있는 주문상품 없음 |
 | `INVALID_ORDER_STATUS` | 400 | 이미 취소된 주문상품을 다시 취소하려는 경우 |
 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 직접 취소할 수 없는 주문/결제 상태 |
-| `PAYMENT_PORTONE_ID_MISMATCH` | 400 | PortOne 조회 결과의 결제 ID 불일치 |
-| `EXTERNAL_API_FAILED` | 502 | PortOne 결제 조회 실패 |
-| `REFUND_NOT_ALLOWED` | 409 | 이미 성공한 PG 결제를 부분 취소하려는 경우 |
-| `REFUND_PG_CANCEL_FAILED` | 502 | 이미 성공한 PG 결제 전액 취소 실패 |

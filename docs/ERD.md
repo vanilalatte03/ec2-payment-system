@@ -206,6 +206,7 @@ erDiagram
 | 수정일시 | updated_at | DATETIME | NULL |  |
 
 한 장바구니에는 같은 상품이 한 줄만 존재합니다. 같은 상품을 다시 담으면 새 row를 만들지 않고 기존 `cart_items.quantity`를 합산합니다.
+결제 완료 시에는 주문에 포함된 `cart_items`만 삭제되며, 같은 장바구니에 남아 있는 미주문 상품 row는 유지됩니다.
 
 ### products
 
