@@ -83,6 +83,8 @@ erDiagram
         VARCHAR product_name "상품명"
         INT price "가격"
         INT quantity "수량"
+        INT refunded_quantity "환불 완료 수량"
+        INT refund_reserved_quantity "환불 처리 중 예약 수량"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
     }
@@ -116,6 +118,8 @@ erDiagram
 
     refunds {
         BIGINT id PK "환불ID"
+        VARCHAR idempotency_key "멱등 키"
+        VARCHAR portone_payment_id "포트원 ID"
         BIGINT order_id FK "주문ID"
         BIGINT payment_id FK "결제ID"
         VARCHAR reason "환불사유"
@@ -125,6 +129,8 @@ erDiagram
         VARCHAR status "환불 상태"
         DATETIME created_at "생성일시"
         DATETIME refunded_at "환불완료일시"
+        VARCHAR failed_reason "실패 사유"
+        VARCHAR pg_result_unknown_reason "PG 결과 미확정 사유"
     }
 
     webhook_events {
@@ -230,7 +236,8 @@ erDiagram
 | 상품명 | product_name | VARCHAR(100) | NOT NULL |  |
 | 가격 | price        | INT | NOT NULL |  |
 | 수량 | quantity     | INT | NOT NULL |  |
-| 환불수량 | refunded_quantity | INT | NOT NULL | 기본값 0 |
+| 환불 완료 수량 | refunded_quantity | INT | NOT NULL | 기본값 0. 최종 환불 완료된 수량 |
+| 환불 예약 수량 | refund_reserved_quantity | INT | NOT NULL | 기본값 0. `PROCESSING`, `PG_RESULT_UNKNOWN` 환불로 선점된 수량 |
 | 생성일시 | created_at   | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at   | DATETIME | NULL |  |
 
@@ -272,15 +279,19 @@ erDiagram
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
 | 환불ID | id | BIGINT | NOT NULL | PK                            |
+| 멱등 키 | idempotency_key | VARCHAR(100) | NOT NULL | 같은 결제 안에서 중복 환불 생성을 막기 위해 `UNIQUE(payment_id, idempotency_key)` 적용 |
+| 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | 환불 생성 시점의 `payment.portone_payment_id` 스냅샷 |
 | 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id                 |
 | 결제ID | payment_id | BIGINT | NOT NULL | FK: payments.id               |
 | 환불사유 | reason | VARCHAR(255) | NOT NULL |                               |
 | 총 환불 금액 | refund_amount | BIGINT | NOT NULL | 포인트 + PG 포함 총 환불 금액           |
 | 포인트 환불 금액 | point_refund_amount | BIGINT | NOT NULL | 고객에게 복구되는 포인트 금액              |
 | PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL |                               |
-| 환불 상태 | status | VARCHAR(30) | NOT NULL | PROCESSING, COMPLETED, FAILED |
+| 환불 상태 | status | VARCHAR(30) | NOT NULL | PROCESSING, COMPLETED, FAILED, PG_RESULT_UNKNOWN |
 | 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각                 |
 | 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각              |
+| 실패 사유 | failed_reason | VARCHAR(500) | NULL | 실패 확정 시 저장 |
+| PG 결과 미확정 사유 | pg_result_unknown_reason | VARCHAR(500) | NULL | 타임아웃 등으로 PG 취소 성공 여부를 모를 때 저장 |
 
 ### webhook_events
 제약 조건:
