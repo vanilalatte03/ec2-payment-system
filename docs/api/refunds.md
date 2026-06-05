@@ -18,7 +18,7 @@
 | `refundId` | `Long` | 생성된 환불 ID                           |
 | `orderId` | `Long` | 환불 대상 주문 ID                         |
 | `paymentId` | `Long` | 환불 대상 결제 ID                         |
-| `refundStatus` | `RefundStatus` | `PROCESSING`, `COMPLETED`, `FAILED` |
+| `refundStatus` | `RefundStatus` | `PROCESSING`, `COMPLETED`, `FAILED`, `PG_RESULT_UNKNOWN` |
 | `refundAmount` | `Integer` | 총 환불 금액                             |
 | `pointRefundAmount` | `Integer` | 복구되는 포인트 금액                         |
 | `pgRefundAmount` | `Integer` | PG 환불 금액                            |
@@ -293,6 +293,15 @@ Idempotency-Key: "refund-cancel-request-{refundId}"
 - 재시도 시 새 환불을 생성하지 않고 동일한 멱등 키를 사용한다.
 
 `Idempotency-Key: refund-cancel-request-{refundId}`
+
+### 환불 수량 예약 정책
+
+- 환불 요청이 생성되면 서버는 먼저 `order_items.refund_reserved_quantity`를 증가시킵니다.
+- `getRemainingRefundableQuantity()`는 `refunded_quantity`와 `refund_reserved_quantity`를 모두 제외하고 계산합니다.
+- 환불이 완료되면 예약 수량을 `refunded_quantity`로 이동하고 상품 재고를 복구합니다.
+- 환불 실패가 확정되면 예약 수량을 해제합니다.
+- 타임아웃이나 네트워크 오류로 PortOne 취소 결과를 확정할 수 없으면 환불 상태를 `PG_RESULT_UNKNOWN`으로 변경하고, 재시도/대사 전까지 예약 수량은 유지합니다.
+- `PG_RESULT_UNKNOWN`은 이후 재조회 결과에 따라 `COMPLETED` 또는 `FAILED`로 확정합니다.
 
 ### Errors
 

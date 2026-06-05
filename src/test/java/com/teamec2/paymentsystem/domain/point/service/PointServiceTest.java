@@ -378,7 +378,7 @@ class PointServiceTest {
         User user = 회원_저장(0L);
         Order order = 주문_저장(user, 1000L, 200L);
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
-        Refund refund = 환불_저장();
+        Refund refund = 환불_저장(payment);
 
         // when
         pointService.restoreUsedPoints(payment, refund, 200L);
@@ -401,7 +401,7 @@ class PointServiceTest {
         User user = 회원_저장(100L);
         Order order = 주문_저장(user, 1000L, 0L);
         Payment payment = 결제_저장(order, 1000L, 0L, 1000L);
-        Refund refund = 환불_저장();
+        Refund refund = 환불_저장(payment);
 
         // when
         PointService.EarnCancelResult result = pointService.cancelEarnedPoints(payment, refund, 10L);
@@ -424,7 +424,7 @@ class PointServiceTest {
         User user = 회원_저장(3L);
         Order order = 주문_저장(user, 1000L, 0L);
         Payment payment = 결제_저장(order, 1000L, 0L, 1000L);
-        Refund refund = 환불_저장();
+        Refund refund = 환불_저장(payment);
 
         // when
         PointService.EarnCancelResult result = pointService.cancelEarnedPoints(payment, refund, 10L);
@@ -447,7 +447,7 @@ class PointServiceTest {
         User user = 회원_저장(0L);
         Order order = 주문_저장(user, 1000L, 0L);
         Payment payment = 결제_저장(order, 1000L, 0L, 1000L);
-        Refund refund = 환불_저장();
+        Refund refund = 환불_저장(payment);
 
         // when
         PointService.EarnCancelResult result = pointService.cancelEarnedPoints(payment, refund, 10L);
@@ -495,8 +495,16 @@ class PointServiceTest {
         return paymentRepository.save(Payment.createPending(order, totalAmount, usedPointAmount, pgAmount, pgAmount / 100));
     }
 
-    private Refund 환불_저장() {
-        return refundTestRepository.save(new Refund());
+    private Refund 환불_저장(Payment payment) {
+        return refundTestRepository.save(Refund.createRefund(
+                "REFUND-" + UUID.randomUUID(),
+                payment.getOrder(),
+                payment,
+                "테스트 환불",
+                payment.getTotalAmount(),
+                payment.getUsedPointAmount(),
+                payment.getPgAmount()
+        ));
     }
 
     private String uniqueEmail() {
