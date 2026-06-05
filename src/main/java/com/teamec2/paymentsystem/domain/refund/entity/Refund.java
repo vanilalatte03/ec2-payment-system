@@ -15,17 +15,17 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 /**
- * 환불 요청 1건의 상품별 상세 기록
- * 환불 생성 시점의 주문 상품 단가와 환불 금액을 스냅샷으로 저장합니다.
- * 이후 OrderItem 또는 상품 가격 정책이 변경되더라도
- * 이미 생성된 환불 내역의 금액은 변경되지 않습니다.
+ * 환불 요청 1건의 대표 기록입니다.
+ * 환불 생성 시점의 총 환불 금액, 포인트 환불 금액, PG 환불 금액,
+ * PortOne 결제 식별자를 스냅샷으로 저장합니다.
+ * 이후 주문/결제 정보가 변경되더라도 이미 생성된 환불 내역의 기준 정보는 변경되지 않습니다.
  */
 @Getter
 @Entity
 @Table(
         name = "refunds", uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_refunds_idempotency_key",
+                        name = "uk_refunds_payment_idempotency_key",
                         columnNames = {"payment_id", "idempotency_key"}
                 )
         }
@@ -40,6 +40,9 @@ public class Refund {
     // 같은 환불 요청이 중복 생성되지 않도록 막는 키
     @Column(name = "idempotency_key", nullable = false, length = 100)
     private String idempotencyKey;
+
+    @Column(name = "portone_payment_id", nullable = false, length = 100)
+    private String portonePaymentId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
@@ -96,9 +99,11 @@ public class Refund {
         validateIdempotencyKey(idempotencyKey);
         validateRequiredValues(order, payment, reason);
         validateOrderMatchesPayment(order, payment);
+        validatePortonePaymentId(payment.getPortonePaymentId());
         validateAmount(refundAmount, pointRefundAmount, pgRefundAmount);
 
         this.idempotencyKey = idempotencyKey;
+        this.portonePaymentId = payment.getPortonePaymentId();
         this.order = order;
         this.payment = payment;
         this.reason = reason;
@@ -117,7 +122,15 @@ public class Refund {
             Long pointRefundAmount,
             Long pgRefundAmount
     ) {
-        return new Refund(idempotencyKey, order, payment, reason, refundAmount, pointRefundAmount, pgRefundAmount);
+        return new Refund(
+                idempotencyKey,
+                order,
+                payment,
+                reason,
+                refundAmount,
+                pointRefundAmount,
+                pgRefundAmount
+        );
     }
 
     /**
@@ -138,12 +151,9 @@ public class Refund {
     }
 
     /**
-     * PG_RESULT_UNKNOWN -> COMPLETED 상황
-     * 1. PortOne 조회 결과 실제 취소가 안 된 것이 확인됨
-     * 2. 재시도 횟수를 초과함
-     * 3. 결제 상태상 더 이상 취소할 수 없음
-     * 4. 취소 가능 금액 초과 등 명확한 실패 응답을 받음
-
+     * 환불 실패가 확정되었을 때 호출합니다.
+     * 1. PROCESSING 상태에서 명확한 실패 응답을 받은 경우
+     * 2. PG_RESULT_UNKNOWN 상태에서 재조회 결과 실패가 확정된 경우
      */
     public void fail(String failedReason) {
 
@@ -167,10 +177,14 @@ public class Refund {
         return this.status == RefundStatus.COMPLETED;
     }
 
+    public boolean isPgResultUnknown() {
+        return this.status == RefundStatus.PG_RESULT_UNKNOWN;
+    }
+
     private static void validateIdempotencyKey(String idempotencyKey) {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-        throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
     }
 
@@ -199,6 +213,12 @@ public class Refund {
 
         if (!order.getId().equals(payment.getOrder().getId())) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    private static void validatePortonePaymentId(String portonePaymentId) {
+        if (portonePaymentId == null || portonePaymentId.isBlank()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
     }
 
@@ -236,11 +256,11 @@ public class Refund {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
 
-        if (reason == null || reason.isBlank()) {
+        if (pgResultUnknownReason == null || pgResultUnknownReason.isBlank()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 
         this.status = RefundStatus.PG_RESULT_UNKNOWN;
-        this.pgResultUnknownReason = reason;
+        this.pgResultUnknownReason = pgResultUnknownReason;
     }
 }
