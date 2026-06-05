@@ -13,6 +13,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OrderItemTest {
 
+    private static final Long SOURCE_CART_ITEM_ID = 1L;
+
     @Test
     void 주문상품생성_상품가격을주문상품가격으로저장한다() {
         // given
@@ -20,10 +22,23 @@ class OrderItemTest {
         Product product = 상품_생성(1500);
 
         // when
-        OrderItem orderItem = new OrderItem(order, product, 2);
+        OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 2);
 
         // then
         assertThat(orderItem.getPrice()).isEqualTo(1500);
+    }
+
+    @Test
+    void 주문상품생성_원본장바구니상품ID를저장한다() {
+        // given
+        Order order = 주문_생성();
+        Product product = 상품_생성();
+
+        // when
+        OrderItem orderItem = new OrderItem(order, product, 123L, 2);
+
+        // then
+        assertThat(orderItem.getSourceCartItemId()).isEqualTo(123L);
     }
 
     @Test
@@ -33,7 +48,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(null, product, 1))
+        assertThatThrownBy(() -> new OrderItem(null, product, SOURCE_CART_ITEM_ID, 1))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ORDER_NOT_FOUND);
@@ -46,10 +61,38 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(order, null, 1))
+        assertThatThrownBy(() -> new OrderItem(order, null, SOURCE_CART_ITEM_ID, 1))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    void 주문상품생성_원본장바구니상품ID가없으면_CART_ITEM_NOT_FOUND가발생한다() {
+        // given
+        Order order = 주문_생성();
+        Product product = 상품_생성();
+
+        // when
+        // then
+        assertThatThrownBy(() -> new OrderItem(order, product, null, 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CART_ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void 주문상품생성_원본장바구니상품ID가0이면_CART_ITEM_NOT_FOUND가발생한다() {
+        // given
+        Order order = 주문_생성();
+        Product product = 상품_생성();
+
+        // when
+        // then
+        assertThatThrownBy(() -> new OrderItem(order, product, 0L, 1))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CART_ITEM_NOT_FOUND);
     }
 
     @Test
@@ -60,7 +103,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(order, product, 0))
+        assertThatThrownBy(() -> new OrderItem(order, product, SOURCE_CART_ITEM_ID, 0))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_ORDER_QUANTITY);
@@ -74,7 +117,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> new OrderItem(order, product, -1))
+        assertThatThrownBy(() -> new OrderItem(order, product, SOURCE_CART_ITEM_ID, -1))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_ORDER_QUANTITY);
@@ -85,7 +128,7 @@ class OrderItemTest {
         // given
         Order order = 주문_생성();
         Product product = 상품_생성();
-        OrderItem orderItem = new OrderItem(order, product, 3);
+        OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
 
         // when
         long subtotal = orderItem.getSubtotal();
@@ -99,7 +142,7 @@ class OrderItemTest {
         // given
         Order order = 주문_생성();
         Product product = 상품_생성(1_500_000_000);
-        OrderItem orderItem = new OrderItem(order, product, 2);
+        OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 2);
 
         // when
         long subtotal = orderItem.getSubtotal();
@@ -113,7 +156,7 @@ class OrderItemTest {
         // given
         Order order = 주문_생성();
         Product product = 상품_생성();
-        OrderItem orderItem = new OrderItem(order, product, 3);
+        OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
 
         // when
         orderItem.refund(2);
@@ -129,7 +172,7 @@ class OrderItemTest {
         // given
         Order order = 주문_생성();
         Product product = 상품_생성();
-        OrderItem orderItem = new OrderItem(order, product, 3);
+        OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
         orderItem.refund(2);
 
         // when
@@ -145,7 +188,7 @@ class OrderItemTest {
         // given
         Order order = 주문_생성();
         Product product = 상품_생성();
-        OrderItem orderItem = new OrderItem(order, product, 3);
+        OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
 
         // when
         // then

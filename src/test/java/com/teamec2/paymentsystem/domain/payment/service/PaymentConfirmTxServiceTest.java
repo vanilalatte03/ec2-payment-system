@@ -34,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class PaymentConfirmTxServiceTest {
 
+    private long sourceCartItemId = 1L;
+
     @Autowired
     PaymentConfirmTxService paymentConfirmTxService;
 
@@ -181,7 +183,7 @@ class PaymentConfirmTxServiceTest {
     }
 
     private OrderItem 주문상품_저장(Order order, Product product, int quantity) {
-        return orderItemRepository.save(new OrderItem(order, product, quantity));
+        return orderItemRepository.save(new OrderItem(order, product, sourceCartItemId++, quantity));
     }
 
     private Payment 결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {

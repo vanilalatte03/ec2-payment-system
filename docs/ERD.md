@@ -80,6 +80,7 @@ erDiagram
         BIGINT id PK "주문상품ID"
         BIGINT order_id FK "주문 ID"
         BIGINT product_id FK "상품 ID"
+        BIGINT source_cart_item_id "원본 장바구니 상품 ID"
         VARCHAR product_name "상품명"
         INT price "가격"
         INT quantity "수량"
@@ -227,6 +228,7 @@ erDiagram
 | 주문상품ID | id           | BIGINT | NOT NULL | PK |
 | 주문 ID | order_id     | BIGINT | NOT NULL | FK: orders.id |
 | 상품 ID | product_id   | BIGINT | NOT NULL | FK: products.id |
+| 원본 장바구니 상품 ID | source_cart_item_id | BIGINT | NOT NULL | 결제 완료 시 이번 주문에 포함된 장바구니 상품만 삭제하기 위한 스냅샷 |
 | 상품명 | product_name | VARCHAR(100) | NOT NULL |  |
 | 가격 | price        | INT | NOT NULL |  |
 | 수량 | quantity     | INT | NOT NULL |  |

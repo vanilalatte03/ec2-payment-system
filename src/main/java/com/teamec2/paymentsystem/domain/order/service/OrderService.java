@@ -105,8 +105,14 @@ public class OrderService {
 
         // 주문 상품에는 현재 상품명과 가격이 스냅샷으로 저장됩니다.
         // 상품명이 나중에 바뀌어도 이 주문의 상품명은 주문 당시 값으로 남습니다.
+        // sourceCartItemId도 함께 저장해 결제 완료 시 이번 주문에 포함된 장바구니 항목만 지울 수 있게 합니다.
         List<OrderItem> orderItems = cartItems.stream()
-                .map(cartItem -> new OrderItem(savedOrder, cartItem.getProduct(), cartItem.getQuantity()))
+                .map(cartItem -> new OrderItem(
+                        savedOrder,
+                        cartItem.getProduct(),
+                        cartItem.getId(),
+                        cartItem.getQuantity()
+                ))
                 .toList();
 
         List<OrderItem> savedOrderItems = orderItemRepository.saveAll(orderItems);

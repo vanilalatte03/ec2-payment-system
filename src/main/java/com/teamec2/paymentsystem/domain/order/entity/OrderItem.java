@@ -27,6 +27,9 @@ public class OrderItem extends BaseEntity {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    @Column(name = "source_cart_item_id", nullable = false)
+    private Long sourceCartItemId;
+
     @Column(name = "product_name", nullable = false, length = 100)
     private String productName;
 
@@ -39,7 +42,7 @@ public class OrderItem extends BaseEntity {
     @Column(name = "refunded_quantity", nullable = false, columnDefinition = "int UNSIGNED DEFAULT 0")
     private int refundedQuantity = 0;
 
-    public OrderItem(Order order, Product product, int quantity) {
+    public OrderItem(Order order, Product product, Long sourceCartItemId, int quantity) {
         if (order == null) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
@@ -48,12 +51,17 @@ public class OrderItem extends BaseEntity {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
         }
 
+        if (sourceCartItemId == null || sourceCartItemId <= 0) {
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
         if (quantity <= 0) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
 
         this.order = order;
         this.product = product;
+        this.sourceCartItemId = sourceCartItemId;
         this.productName = product.getName();
         this.price = product.getPrice();
         this.quantity = quantity;

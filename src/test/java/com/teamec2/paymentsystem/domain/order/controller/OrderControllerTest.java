@@ -148,6 +148,7 @@ class OrderControllerTest {
         assertThat(orders).hasSize(1);
         assertThat(orderItems).hasSize(1);
         assertThat(payments).hasSize(1);
+        assertThat(orderItems.get(0).getSourceCartItemId()).isEqualTo(selectedCartItem.getId());
         assertThat(orders.get(0).getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
         assertThat(payments.get(0).getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(payments.get(0).getPaymentType()).isEqualTo(PaymentType.POINT_CARD);
@@ -169,8 +170,8 @@ class OrderControllerTest {
         User user = 회원_저장(0L);
         Product firstProduct = 상품_저장("후드 집업", 55000, 10, ProductStatus.ON_SALE);
         Product secondProduct = 상품_저장("볼캡", 24000, 10, ProductStatus.ON_SALE);
-        장바구니상품_저장(user, firstProduct, 1);
-        장바구니상품_저장(user, secondProduct, 2);
+        CartItem firstCartItem = 장바구니상품_저장(user, firstProduct, 1);
+        CartItem secondCartItem = 장바구니상품_저장(user, secondProduct, 2);
 
         // when
         // then
@@ -195,6 +196,9 @@ class OrderControllerTest {
 
         assertThat(orderRepository.count()).isEqualTo(1);
         assertThat(orderItemRepository.count()).isEqualTo(2);
+        assertThat(orderItemRepository.findAll())
+                .extracting(OrderItem::getSourceCartItemId)
+                .containsExactlyInAnyOrder(firstCartItem.getId(), secondCartItem.getId());
         assertThat(paymentRepository.count()).isEqualTo(1);
         assertThat(paymentRepository.findAll().get(0).getRewardPointAmount()).isEqualTo(1030L);
         assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
