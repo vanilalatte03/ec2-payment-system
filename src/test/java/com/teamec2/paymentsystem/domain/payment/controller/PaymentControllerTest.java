@@ -10,6 +10,8 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -53,6 +55,12 @@ class PaymentControllerTest {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
+    PointService pointService;
+
+    @Autowired
     JwtTokenProvider jwtTokenProvider;
 
     @Autowired
@@ -71,6 +79,7 @@ class PaymentControllerTest {
     }
 
     private void clearDatabase() {
+        pointTransactionRepository.deleteAll();
         paymentRepository.deleteAll();
         orderRepository.deleteAll();
         userRepository.deleteAll();
@@ -79,9 +88,9 @@ class PaymentControllerTest {
     @Test
     void 결제확정_성공하면_200과응답데이터를반환한다() throws Exception {
         // given
-        User user = 회원_저장();
+        User user = 회원_저장(200L);
         Order order = 주문_저장(user, 1000L, 200L);
-        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
 
@@ -115,10 +124,13 @@ class PaymentControllerTest {
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
 
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(foundPayment.getApprovedAt()).isEqualTo(approvedAt);
+        assertThat(foundUser.getPointBalance()).isEqualTo(8L);
+        assertThat(pointTransactionRepository.count()).isEqualTo(2);
         assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
     }
 
@@ -165,7 +177,18 @@ class PaymentControllerTest {
     }
 
     private User 회원_저장() {
-        return userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+        return 회원_저장(0L);
+    }
+
+    private User 회원_저장(Long pointBalance) {
+        User user = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
+
+        // 포인트를 사용하는 결제 fixture는 실제 주문 생성 정책처럼 충분한 잔액을 미리 준비합니다.
+        if (pointBalance > 0) {
+            user.increasePointBalance(pointBalance);
+        }
+
+        return userRepository.save(user);
     }
 
     private Order 주문_저장(User user, Long totalAmount, Long usedPoint) {
@@ -174,6 +197,12 @@ class PaymentControllerTest {
 
     private Payment 결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {
         return paymentRepository.save(Payment.createPending(order, totalAmount, usedPointAmount, pgAmount, pgAmount / 100));
+    }
+
+    private Payment 포인트_예약된_결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {
+        Payment payment = 결제_저장(order, totalAmount, usedPointAmount, pgAmount);
+        pointService.reserveUsedPoints(payment);
+        return payment;
     }
 
     private String accessToken(User user) {

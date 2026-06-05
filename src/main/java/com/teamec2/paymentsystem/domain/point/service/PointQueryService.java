@@ -32,8 +32,8 @@ public class PointQueryService {
      * users.point_balance 스냅샷과 원장 합계를 비교한 후 잔액을 반환합니다.
      */
     public PointBalanceResponse getPointBalance(Long userId) {
-        User user = userRepository.findById(userId).orElseThrow(
-                () -> new BusinessException(ErrorCode.POINT_ACCOUNT_NOT_FOUND));
+
+        User user = findPointAccount(userId);
 
         Long ledgerBalance = pointTransactionRepository.calculateLedgerBalance(
                         userId,
@@ -59,11 +59,14 @@ public class PointQueryService {
             int page,
             int size) {
 
+        findPointAccount(userId);
+
         // PointTransaction 엔티티의 거래 ID를 보조 정렬 기준으로 사용합니다.
         Sort latestSort = Sort.by(Sort.Direction.DESC, "createdAt")
                 .and(Sort.by(Sort.Direction.DESC, "id"));
 
         Pageable pageable = PageableFactory.create(page, size,latestSort);
+
         Page<PointTransaction> pointTransactionListPage;
 
         if (type == null) {
@@ -96,4 +99,10 @@ public class PointQueryService {
                     PointTransactionType.EARN_CANCEL,
                     PointTransactionType.USE_RESERVE
             );
+
+    private User findPointAccount(Long userId) {
+
+        return userRepository.findById(userId).orElseThrow(
+                () -> new BusinessException(ErrorCode.POINT_ACCOUNT_NOT_FOUND));
+    }
 }
