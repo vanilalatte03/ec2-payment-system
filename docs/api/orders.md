@@ -1,6 +1,67 @@
 # 주문 API
 
-주문은 결제와 주문 상태 변경의 기준 단위입니다. 현재 커밋된 컨트롤러 기준으로는 주문/결제 생성과 주문 상태 변경(취소) API가 구현되어 있습니다.
+주문은 결제와 주문 상태 변경의 기준 단위입니다. 현재 구현된 API는 주문서 미리보기, 내 주문 내역 조회, 주문 상세 조회, 주문/결제 생성, 결제대기 주문 취소를 제공합니다.
+
+## 주문서 미리보기
+
+결제 직전 단계에서 장바구니에 담긴 상품을 주문서 형태로 변환해 보여줍니다. 주문 스냅샷을 저장하기 전이므로 상품의 현재 이름, 현재가, 재고 상태를 실시간으로 반영합니다.
+
+- Method: `GET`
+- Path: `/api/orders/preview`
+- 인증: 필요
+- HTTP Status: `200 OK`
+
+### Query Parameters
+
+쿼리 파라미터는 생략할 수 있습니다.
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `cartItemIds` | Long[] | N | 미리보기할 장바구니 상품 ID 목록. `null` 또는 빈 배열이면 장바구니 전체 |
+
+```http
+GET /api/orders/preview?cartItemIds=100&cartItemIds=101
+```
+
+### Response Data
+
+```json
+{
+  "items": [
+    {
+      "cartItemId": 100,
+      "productId": 10,
+      "productName": "무선 키보드",
+      "quantity": 2,
+      "unitPrice": 39000,
+      "lineAmount": 78000,
+      "stock": 10,
+      "status": "ON_SALE"
+    }
+  ],
+  "totalQuantity": 2,
+  "totalAmount": 78000
+}
+```
+
+### 처리 규칙
+
+- 주문, 주문상품, 결제 레코드를 생성하지 않는 읽기 전용 API입니다.
+- `cartItemIds`가 없으면 장바구니 전체 상품을 주문서 미리보기 대상으로 봅니다.
+- `cartItemIds`가 있으면 선택된 장바구니 상품만 주문서 미리보기 대상으로 봅니다.
+- 같은 장바구니 상품 ID가 여러 번 들어와도 한 번만 미리보기 대상으로 처리합니다.
+- 상품명, 가격, 재고, 판매 상태는 장바구니에 담긴 시점이 아니라 현재 상품 정보를 기준으로 응답합니다.
+- 판매중이 아니거나 재고가 부족한 상품은 결제 화면으로 넘어갈 수 없도록 실패 응답을 반환합니다.
+
+### Errors
+
+| 코드 | HTTP | 발생 조건 |
+| --- | --- | --- |
+| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
+| `CART_EMPTY` | 400 | 미리보기 대상 장바구니 상품 없음 |
+| `CART_ITEM_NOT_FOUND` | 404 | 선택한 장바구니 상품 없음 |
+| `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
+| `ORDER_STOCK_SHORTAGE` | 409 | 현재 재고가 장바구니 수량보다 부족함 |
 
 ## 주문/결제 생성
 
@@ -82,12 +143,131 @@
 | `ORDER_STOCK_SHORTAGE` | 409 | 재고 검증/차감 중 재고 부족 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
 
+## 내 주문 내역 조회
+
+인증된 회원 본인의 주문 목록을 최신순으로 조회합니다. 각 주문의 주문번호, 주문 상태, 총액, 주문일 같은 목록 화면용 기본 정보를 반환합니다.
+
+- Method: `GET`
+- Path: `/api/orders`
+- 인증: 필요
+- HTTP Status: `200 OK`
+
+### Response Data
+
+```json
+{
+  "orders": [
+    {
+      "orderId": 200,
+      "orderNumber": "ORD-20260529-000001",
+      "status": "PAYMENT_PENDING",
+      "totalAmount": 78000,
+      "orderedAt": "2026-05-29T18:30:00"
+    }
+  ]
+}
+```
+
+주문 내역이 없으면 빈 배열을 반환합니다.
+
+```json
+{
+  "orders": []
+}
+```
+
+### 처리 규칙
+
+- 토큰의 회원 ID를 기준으로 본인 주문만 조회합니다.
+- `orderedAt`은 주문 생성 시각입니다.
+- 정렬은 `orderedAt` 최신순이며, 시간이 같으면 `orderId`가 큰 주문이 먼저 내려갑니다.
+
+### Errors
+
+| 코드 | HTTP | 발생 조건 |
+| --- | --- | --- |
+| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
+
+## 주문 상세 조회
+
+특정 주문의 상세 정보를 조회합니다. 주문 기본 정보, 주문 상품 목록의 스냅샷, 결제 상태, 포인트 사용/적립 요약을 함께 반환합니다.
+
+- Method: `GET`
+- Path: `/api/orders/{orderId}`
+- 인증: 필요
+- HTTP Status: `200 OK`
+
+### Path Variables
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `orderId` | Long | 조회할 주문 ID |
+
+### Response Data
+
+```json
+{
+  "order": {
+    "orderId": 200,
+    "orderNumber": "ORD-20260529-000001",
+    "status": "PAYMENT_PENDING",
+    "totalAmount": 78000,
+    "usedPointAmount": 5000,
+    "orderedAt": "2026-05-29T18:30:00"
+  },
+  "items": [
+    {
+      "orderItemId": 400,
+      "productId": 10,
+      "productName": "무선 키보드",
+      "quantity": 2,
+      "refundedQuantity": 0,
+      "status": "ORDERED",
+      "unitPrice": 39000,
+      "lineAmount": 78000
+    }
+  ],
+  "payment": {
+    "paymentId": 300,
+    "portonePaymentId": "pay_4eb1c6ef-1d3b-4ee0-b48a-3ed567f9a0e7",
+    "status": "PENDING",
+    "type": "POINT_CARD",
+    "totalAmount": 78000,
+    "usedPointAmount": 5000,
+    "pgAmount": 73000,
+    "rewardPointAmount": 730,
+    "approvedAt": null,
+    "failedAt": null
+  },
+  "pointSummary": {
+    "usedPointAmount": 5000,
+    "rewardPointAmount": 730
+  }
+}
+```
+
+### 처리 규칙
+
+- 토큰의 회원 ID를 기준으로 본인 주문만 조회할 수 있습니다.
+- 주문 상품의 `productName`, `unitPrice`는 주문 생성 시점에 저장된 스냅샷 값입니다.
+- `pointSummary.usedPointAmount`는 주문에 사용한 포인트 금액입니다.
+- `pointSummary.rewardPointAmount`는 결제 완료 후 적립될 예정 포인트입니다.
+
+### Errors
+
+| 코드 | HTTP | 발생 조건 |
+| --- | --- | --- |
+| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
+| `ORDER_NOT_FOUND` | 404 | 주문 없음 |
+| `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
+| `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 없음 |
+
 ## 주문 상태 변경
 
-회원이 결제대기 주문을 취소하거나, 결제대기 주문의 일부 주문상품을 취소합니다. 프로젝트 문서에서는 이 기능을 주문 상태 변경으로 부르며, 현재 구현된 실제 경로는 `/api/orders/{orderId}/cancel`입니다.
+회원이 결제대기 주문을 취소하거나, 결제대기 주문의 일부 주문상품을 취소합니다. 프로젝트 문서에서는 이 기능을 주문 상태 변경으로 부르며, 현재 구현된 실제 경로는 `/api/orders/{orderId}/status`입니다.
 
 - Method: `PATCH`
-- Path: `/api/orders/{orderId}/cancel`
+- Path: `/api/orders/{orderId}/status`
 - 인증: 필요
 - HTTP Status: `200 OK`
 
