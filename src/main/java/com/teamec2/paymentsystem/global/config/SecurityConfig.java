@@ -52,7 +52,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/*").permitAll()
-                         .requestMatchers("/", "/index.html", "/subscription.html", "/config.js").permitAll()
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/payment.html",
+                                "/subscription.html",
+                                "/config.js",
+                                "/styles.css",
+                                "/app.js",
+                                "/assets/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/portone").permitAll()
                         .requestMatchers("/error").permitAll()
 
