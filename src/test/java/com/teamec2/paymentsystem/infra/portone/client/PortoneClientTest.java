@@ -234,13 +234,14 @@ class PortoneClientTest {
         PaymentCancelResponse response = portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         );
 
         // then
         assertThat(response.cancellationId()).isEqualTo("cancel_123");
-        assertThat(response.status()).isEqualTo("SUCCEEDED");
+        assertThat(response.rawStatus()).isEqualTo("SUCCEEDED");
         server.verify();
     }
 
@@ -272,6 +273,7 @@ class PortoneClientTest {
         portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         );
@@ -281,7 +283,7 @@ class PortoneClientTest {
     }
 
     @Test
-    void 결제취소_PortOne서버오류면_PAYMENT_COMPENSATION_FAILED가발생한다() {
+    void 결제취소_PortOne서버오류면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -292,17 +294,18 @@ class PortoneClientTest {
         assertThatThrownBy(() -> portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         server.verify();
     }
 
     @Test
-    void 결제취소_응답본문이없으면_PAYMENT_COMPENSATION_FAILED가발생한다() {
+    void 결제취소_응답본문이없으면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -313,17 +316,18 @@ class PortoneClientTest {
         assertThatThrownBy(() -> portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         server.verify();
     }
 
     @Test
-    void 결제취소_취소상태가없으면_PAYMENT_COMPENSATION_FAILED가발생한다() {
+    void 결제취소_취소상태가없으면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -340,12 +344,13 @@ class PortoneClientTest {
         assertThatThrownBy(() -> portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         server.verify();
     }
 }

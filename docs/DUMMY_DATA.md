@@ -43,6 +43,7 @@ Spring Boot 시작 시 자동 실행되도록 연결하지 않았습니다. 현�
 | 결제 | `COMPLETED`, `PENDING`, `PARTIAL_REFUNDED`, `FULL_REFUNDED`, `FAILED` |
 | 포인트 | 음수 없는 잔액 스냅샷, 멱등 키가 포함된 확정 사용, 적립, 사용 복구, 적립 회수 거래 |
 | 환불 | 부분 환불 1건, 전체 환불 1건 |
+| 환불 Outbox | 기본 더미데이터에는 0건. 신규 환불 요청 시 `refund_outbox`가 생성됨 |
 
 ## 환불 수량 정책
 

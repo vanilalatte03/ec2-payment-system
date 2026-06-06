@@ -9,6 +9,7 @@ import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
@@ -451,6 +452,7 @@ class PaymentServiceTest {
         private String cancelIdempotencyKey;
         private boolean cancelFailure;
         private String cancelStatus = "SUCCEEDED";
+        private PaymentCancelStatus interpretedCancelStatus = PaymentCancelStatus.SUCCEEDED;
 
         @Override
         public PaymentGatewayResponse getPayment(String paymentId) {
@@ -462,6 +464,7 @@ class PaymentServiceTest {
         public PaymentCancelResponse cancelPayment(
                 String paymentId,
                 Long cancelAmount,
+                Long currentCancellableAmount,
                 String reason,
                 String idempotencyKey
         ) {
@@ -475,7 +478,7 @@ class PaymentServiceTest {
                 throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
             }
 
-            return new PaymentCancelResponse("cancel_test", cancelStatus);
+            return new PaymentCancelResponse("cancel_test", cancelStatus, interpretedCancelStatus);
         }
 
         void success(String paymentId, Long paidAmount, LocalDateTime approvedAt) {
@@ -516,6 +519,7 @@ class PaymentServiceTest {
 
         void cancelStatus(String cancelStatus) {
             this.cancelStatus = cancelStatus;
+            this.interpretedCancelStatus = PaymentCancelStatus.RESULT_UNKNOWN;
         }
 
         void reset() {
@@ -528,6 +532,7 @@ class PaymentServiceTest {
             cancelIdempotencyKey = null;
             cancelFailure = false;
             cancelStatus = "SUCCEEDED";
+            interpretedCancelStatus = PaymentCancelStatus.SUCCEEDED;
         }
     }
 }

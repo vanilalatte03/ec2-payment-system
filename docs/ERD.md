@@ -168,6 +168,17 @@ erDiagram
         DATETIME created_at "생성일시"
     }
 
+    refund_outbox {
+        BIGINT id PK "환불 Outbox ID"
+        BIGINT refund_id FK "환불ID"
+        VARCHAR status "Outbox 상태"
+        INT retry_count "재시도 횟수"
+        DATETIME next_attempt_at "다음 재시도 시각"
+        DATETIME processing_started_at "처리 시작 시각"
+        VARCHAR last_error_message "마지막 실패 사유"
+        DATETIME created_at "생성일시"
+        DATETIME updated_at "수정일시"
+    }
 ```
 
 ## 테이블 정의
@@ -345,6 +356,22 @@ erDiagram
 | PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL |  |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 
+### refund_outbox
+제약 조건:
+- `UNIQUE (refund_id)`
+
+| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
+| --- | --- | --- | --- | --- |
+| 환불 Outbox ID | id | BIGINT | NOT NULL | PK |
+| 환불ID | refund_id | BIGINT | NOT NULL | FK: refunds.id |
+| Outbox 상태 | status | VARCHAR(30) | NOT NULL | PENDING, PROCESSING, SUCCEEDED, FAILED |
+| 재시도 횟수 | retry_count | INT | NOT NULL | PG 취소 재시도 횟수 |
+| 다음 재시도 시각 | next_attempt_at | DATETIME | NOT NULL | 스케줄러가 다시 처리할 수 있는 시각 |
+| 처리 시작 시각 | processing_started_at | DATETIME | NULL | PROCESSING 상태 진입 시각 |
+| 마지막 실패 사유 | last_error_message | VARCHAR(500) | NULL | 마지막 실패 요약 메시지 |
+| 생성일시 | created_at | DATETIME | NOT NULL |  |
+| 수정일시 | updated_at | DATETIME | NOT NULL |  |
+
 ## 관계 요약
 
 | 관계 | 설명 |
@@ -363,5 +390,6 @@ erDiagram
 | payment - webhook_event | 결제는 여러 웹훅 수신 이벤트와 연결될 수 있다. |
 | refund - point_transaction | 환불은 사용 포인트 복구 및 적립 포인트 회수 거래 내역을 생성할 수 있다. |
 | refund - webhook_event | 환불은 여러 웹훅 수신 이벤트와 연결될 수 있다. |
+| refund - refund_outbox | 환불은 실제 PG 취소 처리를 위한 Outbox 작업을 1건 가질 수 있다. |
 | refund - refund_item | 환불은 여러 환불 상품을 가진다. |
 | order_item - refund_item | 주문 상품은 환불 상품으로 참조된다. |

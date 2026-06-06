@@ -206,6 +206,9 @@ Authorization: Bearer {accessToken}
 | `REFUND_QUANTITY_EXCEEDED` | 400 | 잔여 환불 가능 수량 초과 |
 | `REFUND_NOT_ALLOWED` | 409 | 환불 가능한 결제 상태가 아님 |
 | `REFUND_PG_CANCEL_FAILED` | 502 | PG 취소 실패 |
+| `INVALID_REFUND_STATUS` | 409 | 현재 환불 상태에서 수행할 수 없는 작업 |
+| `PAYMENT_CANCEL_REQUEST_FAILED` | 502 | 외부 결제 취소 요청 실패 |
+| `INVALID_REFUND_OUTBOX_STATUS` | 409 | 현재 환불 Outbox 상태에서 수행할 수 없는 작업 |
 | `WEBHOOK_SIGNATURE_INVALID` | 400 | 웹훅 서명 검증 실패 |
 | `WEBHOOK_PAYLOAD_INVALID` | 400 | 웹훅 본문 파싱 실패 |
 | `WEBHOOK_PAYMENT_ID_MISSING` | 400 | 웹훅에서 paymentId 추출 실패 |

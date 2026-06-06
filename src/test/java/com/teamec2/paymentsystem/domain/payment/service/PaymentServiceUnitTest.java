@@ -2,6 +2,7 @@ package com.teamec2.paymentsystem.domain.payment.service;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -46,9 +47,10 @@ class PaymentServiceUnitTest {
         when(paymentGateway.cancelPayment(
                 "pay_123",
                 800L,
+                800L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-20"
-        )).thenReturn(new PaymentCancelResponse("cancel_123", "SUCCEEDED"));
+        )).thenReturn(new PaymentCancelResponse("cancel_123", "SUCCEEDED", PaymentCancelStatus.SUCCEEDED));
 
         // when
         // then
@@ -57,6 +59,7 @@ class PaymentServiceUnitTest {
 
         verify(paymentGateway).cancelPayment(
                 "pay_123",
+                800L,
                 800L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-20"

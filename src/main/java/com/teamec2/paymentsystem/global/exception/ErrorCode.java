@@ -86,6 +86,11 @@ public enum ErrorCode {
     REFUND_NOT_ALLOWED(HttpStatus.CONFLICT, "환불 가능한 결제 상태가 아닙니다."),
     REFUND_PG_CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "PG 취소에 실패했습니다."),
     REFUND_IN_PROGRESS(HttpStatus.CONFLICT, "같은 결제 건의 환불이 처리 중입니다."),
+    INVALID_REFUND_STATUS(HttpStatus.CONFLICT, "현재 환불 상태에서는 수행할 수 없는 작업입니다."),
+    PAYMENT_CANCEL_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "외부 결제 취소 요청에 실패했습니다."),
+
+    // RefundOutbox
+    INVALID_REFUND_OUTBOX_STATUS(HttpStatus.CONFLICT, "현재 아웃박스 상태에서는 수행할 수 없는 작업입니다."),
 
     // Webhook
     WEBHOOK_SIGNATURE_INVALID(HttpStatus.BAD_REQUEST, "웹훅 서명 검증에 실패했습니다."),

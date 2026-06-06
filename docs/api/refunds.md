@@ -16,12 +16,10 @@
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `refundId` | `Long` | 생성된 환불 ID                           |
-| `orderId` | `Long` | 환불 대상 주문 ID                         |
-| `paymentId` | `Long` | 환불 대상 결제 ID                         |
 | `refundStatus` | `RefundStatus` | `PROCESSING`, `COMPLETED`, `FAILED`, `PG_RESULT_UNKNOWN` |
-| `refundAmount` | `Integer` | 총 환불 금액                             |
-| `pointRefundAmount` | `Integer` | 복구되는 포인트 금액                         |
-| `pgRefundAmount` | `Integer` | PG 환불 금액                            |
+| `refundAmount` | `Long` | 총 환불 금액                             |
+| `pointRefundAmount` | `Long` | 복구되는 포인트 금액                         |
+| `pgRefundAmount` | `Long` | PG 환불 금액                            |
 | `reason` | `String` | 환불 사유                               |
 | `items` | `List&lt;RefundItemResponse&gt;` | 환불 상품 목록                            |
 | `createdAt` | `LocalDateTime` | 환불 요청 생성 시각                         |
@@ -30,8 +28,6 @@
 ```json
 {
   "refundId": 5001,
-  "orderId": 1,
-  "paymentId": 3001,
   "refundStatus": "COMPLETED",
   "refundAmount": 10000,
   "pointRefundAmount": 2000,
@@ -71,6 +67,7 @@
 - Method: `POST`
 - Path: `/api/orders/{orderId}/refunds`
 - 인증: 필요
+- Header: `Idempotency-Key` 필수
 - HTTP Status: `201 Created`
 
 ### Path Variable
@@ -111,12 +108,10 @@
 | 필드 | 타입 | 설명                                         |
 |---|---|--------------------------------------------|
 | `refundId` | Long | 생성된 환불 ID                                  |
-| `orderId` | Long | 환불 대상 주문 ID                                |
-| `paymentId` | Long | 환불 대상 결제 ID                                |
-| `refundStatus` | RefundStatus | 환불 상태. `PROCESSING`, `COMPLETED`, `FAILED` |
-| `refundAmount` | Integer | 총 환불 금액                                    |
-| `pointRefundAmount` | Integer | 복구되는 포인트 금액                                |
-| `pgRefundAmount` | Integer | PG 환불 금액                                   |
+| `refundStatus` | RefundStatus | 환불 상태. `PROCESSING`, `COMPLETED`, `FAILED`, `PG_RESULT_UNKNOWN` |
+| `refundAmount` | Long | 총 환불 금액                                    |
+| `pointRefundAmount` | Long | 복구되는 포인트 금액                                |
+| `pgRefundAmount` | Long | PG 환불 금액                                   |
 | `reason` | String | 환불 사유                                      |
 | `items` | List<RefundItemResponse> | 환불 상품 목록                                   |
 | `createdAt` | LocalDateTime | 환불 요청 생성 시각                                |
@@ -125,8 +120,6 @@
 ```json
 {
   "refundId": 5001,
-  "orderId": 1,
-  "paymentId": 3001,
   "refundStatus": "COMPLETED",
   "refundAmount": 10000,
   "pointRefundAmount": 2000,
@@ -166,6 +159,7 @@
 - Method: `POST`
 - Path: `/api/payments/{paymentId}/refunds`
 - 인증: 필요
+- Header: `Idempotency-Key` 필수
 - HTTP Status: `201 Created`
 
 ### Path Variable
@@ -188,8 +182,6 @@
 ```json
 {
   "refundId": 5002,
-  "orderId": 1,
-  "paymentId": 3001,
   "refundStatus": "COMPLETED",
   "refundAmount": 25000,
   "pointRefundAmount": 5000,
@@ -283,7 +275,7 @@ Idempotency-Key: "refund-cancel-request-{refundId}"
 - 마지막 전체 환불에서는 포인트 배분의 누적 오차를 보정한다.
 - 동일 결제의 환불은 한 번에 하나만 처리한다.
 - 동시 환불을 방지하기 위해 우리 DB의 원본 결제 정보(`payment`)에 `PESSIMISTIC_WRITE` 잠금을 적용한다.
-- 기존 `PROCESSING` 환불이 있으면 `REFUND_IN_PROGRESS`를 반환한다.
+- 기존 `PROCESSING` 또는 `PG_RESULT_UNKNOWN` 환불이 있으면 `REFUND_IN_PROGRESS`를 반환한다.
 - 환불 요청을 `PROCESSING`으로 저장하고 트랜잭션을 종료한 후 PG 취소를 요청한다.
 - 포인트 전액 결제는 PG 호출을 생략한다.
 - PG 취소 성공 시 재고, 포인트, 주문·결제 상태를 반영한다.
