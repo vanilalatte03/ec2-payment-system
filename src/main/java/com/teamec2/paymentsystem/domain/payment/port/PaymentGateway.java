@@ -22,13 +22,18 @@ public interface PaymentGateway {
     PaymentGatewayResponse getPayment(String paymentId);
 
     /**
-     * 외부 결제 시스템에 결제 취소를 요청한다.
+     * 외부 결제 시스템에 결제 취소를 요청합니다.
      *
-     * <p>현재 사용 목적은 사용자 환불이 아니라 결제 확정 보상 취소다.
-     * 즉, PortOne 결제는 성공했지만 내부 DB 완료 처리가 실패했을 때 외부 결제를 되돌리기 위해 호출한다.
+     * 사용 목적:
+     * 1. 결제 확정 보상 취소
+     * 2. 사용자 환불 처리
+     *
+     * Idempotency-Key를 함께 전달해서 같은 취소 요청이 중복 전송되더라도
+     * 외부 결제 시스템에서 같은 요청으로 처리할 수 있게 합니다.
      *
      * @param paymentId PortOne 결제 ID
-     * @param cancelAmount 취소할 금액
+     * @param cancelAmount 이번에 취소할 금액
+     * @param currentCancellableAmount 현재 외부 결제 시스템 기준 취소 가능 금액
      * @param reason 취소 사유
      * @param idempotencyKey 같은 취소 요청이 중복 처리되지 않도록 사용하는 멱등 키
      * @return 외부 결제 취소 결과
@@ -36,6 +41,7 @@ public interface PaymentGateway {
     PaymentCancelResponse cancelPayment(
             String paymentId,
             Long cancelAmount,
+            Long currentCancellableAmount,
             String reason,
             String idempotencyKey
     );

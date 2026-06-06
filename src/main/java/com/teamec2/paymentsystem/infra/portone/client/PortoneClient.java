@@ -68,16 +68,18 @@ public class PortoneClient implements PaymentGateway {
     }
 
     /**
-     * PortOne 결제 취소 API를 호출한다.
+     * PortOne 결제 취소 API를 호출합니다.
      *
-     * <p>현재 이 메서드는 결제 확정 보상 흐름에서 사용한다.
-     * PortOne 결제는 성공했지만 내부 DB 완료 처리에 실패했을 때, 외부 결제를 되돌리기 위한 호출이다.
+     * 사용 목적:
+     * 1. 결제 확정 보상 취소
+     * 2. 사용자 환불 처리
      *
-     * <p>{@code Idempotency-Key}는 같은 보상 취소 요청이 네트워크 재시도 등으로 중복 전송되더라도
-     * PortOne에서 같은 요청으로 인식할 수 있게 하기 위한 값이다.
+     * Idempotency-Key는 같은 취소 요청이 네트워크 재시도 등으로 중복 전송되더라도
+     * PortOne에서 같은 요청으로 인식할 수 있게 하기 위한 값입니다.
      *
      * @param paymentId PortOne 결제 ID
-     * @param cancelAmount 취소할 금액
+     * @param cancelAmount 이번에 취소할 금액
+     * @param currentCancellableAmount 현재 취소 가능 금액
      * @param reason 취소 사유
      * @param idempotencyKey PortOne 취소 요청 멱등 키
      * @return 도메인 계층에서 사용하는 결제 취소 응답
@@ -86,9 +88,25 @@ public class PortoneClient implements PaymentGateway {
     public PaymentCancelResponse cancelPayment(
             String paymentId,
             Long cancelAmount,
+            Long currentCancellableAmount,
             String reason,
             String idempotencyKey
     ) {
+        validateCancelRequest(
+                paymentId,
+                cancelAmount,
+                currentCancellableAmount,
+                reason,
+                idempotencyKey
+        );
+
+        log.info(
+                "PortOne 결제 취소 요청. paymentId={}, cancelAmount={}, currentCancellableAmount={}",
+                paymentId,
+                cancelAmount,
+                currentCancellableAmount
+        );
+
         try {
             PortoneCancelPaymentResponse response = portoneRestClient.post()
                     .uri("/payments/{paymentId}/cancel", paymentId)
@@ -99,7 +117,7 @@ public class PortoneClient implements PaymentGateway {
                             reason,
                             "ADMIN",
                             // 보상 취소는 현재 승인된 PG 금액 전체를 되돌리는 용도라 취소 가능 금액도 같은 값으로 검증한다.
-                            cancelAmount
+                            currentCancellableAmount
                     ))
                     .retrieve()
                     .body(PortoneCancelPaymentResponse.class);
@@ -111,6 +129,14 @@ public class PortoneClient implements PaymentGateway {
                     response.cancellation().status()
             );
         } catch (RestClientException e) {
+            log.warn(
+                    "PortOne 결제 취소 요청 실패. paymentId={}, cancelAmount={}, currentCancellableAmount={}",
+                    paymentId,
+                    cancelAmount,
+                    currentCancellableAmount,
+                    e
+            );
+
             throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
         }
     }
@@ -150,4 +176,36 @@ public class PortoneClient implements PaymentGateway {
             throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
         }
     }
+
+    /**
+     * PortOne 결제 취소 요청의 필수값을 검증합니다.
+     */
+    private void validateCancelRequest(
+            String paymentId,
+            Long cancelAmount,
+            Long currentCancellableAmount,
+            String reason,
+            String idempotencyKey
+    ) {
+        if (paymentId == null || paymentId.isBlank()
+                || cancelAmount == null
+                || currentCancellableAmount == null
+                || idempotencyKey == null
+                || idempotencyKey.isBlank()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (cancelAmount <= 0 || currentCancellableAmount < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (cancelAmount > currentCancellableAmount) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+    }
+
 }

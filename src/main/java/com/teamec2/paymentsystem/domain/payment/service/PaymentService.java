@@ -140,6 +140,7 @@ public class PaymentService {
             PaymentCancelResponse cancelResponse = paymentGateway.cancelPayment(
                     target.portonePaymentId(),
                     cancelAmount,
+                    cancelAmount,
                     COMPENSATION_REASON,
                     COMPENSATION_IDEMPOTENCY_KEY_PREFIX + target.paymentId()
             );
