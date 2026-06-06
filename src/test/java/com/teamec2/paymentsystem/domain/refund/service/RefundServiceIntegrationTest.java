@@ -375,8 +375,8 @@ class RefundServiceIntegrationTest {
         ));
         Product firstProduct = productRepository.save(product("first-product", 3_000, 10));
         Product secondProduct = productRepository.save(product("second-product", 4_000, 10));
-        OrderItem firstItem = orderItemRepository.save(new OrderItem(order, firstProduct, 2));
-        OrderItem secondItem = orderItemRepository.save(new OrderItem(order, secondProduct, 1));
+        OrderItem firstItem = orderItemRepository.save(new OrderItem(order, firstProduct, 1L, 2));
+        OrderItem secondItem = orderItemRepository.save(new OrderItem(order, secondProduct, 2L, 1));
         Payment payment = paymentRepository.save(Payment.createPending(
                 order,
                 usedPointAmount + pgAmount,
