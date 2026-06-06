@@ -87,10 +87,10 @@ public class OrderController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody(required = false) CancelOrderRequest request
     ) {
-        CancelOrderResponse response = orderService.cancelOrder(
+        CancelOrderResponse response = orderService.cancelOrderByRequest(
                 userDetails.getUserId(),
                 orderId,
-                request == null ? null : request.orderItemIds()
+                request
         );
 
         return ResponseEntity.ok(ApiResponse.success(response));

@@ -4,6 +4,8 @@ import com.teamec2.paymentsystem.domain.cart.entity.Cart;
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
 import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
+import com.teamec2.paymentsystem.domain.order.dto.CancelOrderItemRequest;
+import com.teamec2.paymentsystem.domain.order.dto.CancelOrderRequest;
 import com.teamec2.paymentsystem.domain.order.dto.CancelOrderResponse;
 import com.teamec2.paymentsystem.domain.order.dto.CreateOrderResponse;
 import com.teamec2.paymentsystem.domain.order.dto.OrderDetailResponse;
@@ -165,8 +167,14 @@ public class OrderService {
 
     @Transactional
     public CancelOrderResponse cancelOrder(Long userId, Long orderId, List<Long> orderItemIds) {
-        // orderItemIds는 취소하려는 주문상품 ID 목록입니다.
-        // null 또는 빈 목록이면 "아직 취소되지 않은 모든 주문상품 취소", 값이 있으면 "선택한 주문상품만 취소"로 처리합니다.
+        return cancelOrderByRequest(userId, orderId, CancelOrderRequest.fromOrderItemIds(orderItemIds));
+    }
+
+    @Transactional
+    public CancelOrderResponse cancelOrderByRequest(Long userId, Long orderId, CancelOrderRequest request) {
+        // request.items는 취소하려는 주문상품 ID와 수량 목록입니다.
+        // 기존 orderItemIds 요청은 하위 호환을 위해 주문상품의 남은 수량 전체 취소로 처리합니다.
+        // 본문이 없으면 "아직 취소되지 않은 모든 주문상품의 남은 수량 전체 취소"로 처리합니다.
         User user = findUser(userId);
         Order order = findOrder(orderId);
         validateOrderOwner(order, user.getId());
@@ -175,28 +183,28 @@ public class OrderService {
         validateCancelable(order, payment);
 
         List<OrderItem> allOrderItems = findAllOrderItemsForCancel(orderId);
-        List<OrderItem> cancelOrderItems = selectCancelItems(allOrderItems, orderItemIds);
+        List<CancelTarget> cancelTargets = selectCancelTargets(allOrderItems, request);
 
-        if (cancelOrderItems.isEmpty()) {
+        if (cancelTargets.isEmpty()) {
             throw new BusinessException(ErrorCode.ORDER_ITEM_NOT_FOUND);
         }
 
         // previousOrderStatus는 응답에서 "취소 전 주문 상태"를 보여주기 위해 저장합니다.
         OrderStatus previousOrderStatus = order.getStatus();
 
-        // canceledAmount는 이번 요청으로 취소되는 주문상품들의 금액 합계입니다.
-        Long canceledAmount = sumSubtotal(cancelOrderItems);
+        // canceledAmount는 이번 요청으로 취소되는 주문상품 수량들의 금액 합계입니다.
+        Long canceledAmount = sumCancelAmount(cancelTargets);
 
         // remainingTotalAmount는 이번 취소 후 주문에 남는 상품 금액입니다.
         // 0이면 전체 취소, 0보다 크면 부분 취소입니다.
-        Long remainingTotalAmount = sumRemainingAmount(allOrderItems, cancelOrderItems);
+        Long remainingTotalAmount = sumRemainingAmount(allOrderItems, canceledAmount);
 
-        // cancelOrderItemIds는 포인트 원장 멱등 키를 만들 때 사용합니다.
-        // 어떤 주문상품 취소 때문에 포인트가 복구되었는지 구분하기 위한 목록입니다.
-        List<Long> cancelOrderItemIds = toOrderItemIds(cancelOrderItems);
+        // cancelPointKeys는 포인트 원장 멱등 키를 만들 때 사용합니다.
+        // 같은 주문상품을 수량 단위로 여러 번 취소할 수 있어 취소 전 수량과 취소 수량도 함께 반영합니다.
+        List<String> cancelPointKeys = toCancelPointKeys(cancelTargets);
 
         // restoredStockItems는 응답에 담을 "재고가 몇 개 복구됐는지" 정보입니다.
-        List<CancelOrderResponse.RestoredStockItem> restoredStockItems = toRestoredStocks(cancelOrderItems);
+        List<CancelOrderResponse.RestoredStockItem> restoredStockItems = toRestoredStocks(cancelTargets);
 
         CancelAmounts cancelAmounts = calculateCancelAmounts(payment, remainingTotalAmount);
 
@@ -208,7 +216,7 @@ public class OrderService {
             pointService.restoreReservedPointsForOrderCancel(
                     payment,
                     cancelAmounts.restoredPointAmount(),
-                    cancelOrderItemIds
+                    cancelPointKeys
             );
             payment.updatePendingAmounts(
                     remainingTotalAmount,
@@ -221,11 +229,15 @@ public class OrderService {
 
         // 재고 복구 전에 취소 대상 상품 row를 쓰기 잠금으로 조회합니다.
         // 주문 생성의 재고 차감과 동시에 실행되어도 최신 재고 값을 기준으로 복구하기 위해서입니다.
-        Map<Long, Product> lockedProducts = lockProductsForStockRestore(cancelOrderItems);
+        Map<Long, Product> lockedProducts = lockProductsForStockRestore(cancelTargets);
 
         // 주문상품 취소 처리는 상품 재고 복구와 주문상품 상태 변경을 함께 수행합니다.
-        for (OrderItem cancelOrderItem : cancelOrderItems) {
-            cancelOrderItem.cancel(lockedProducts.get(cancelOrderItem.getProductId()));
+        for (CancelTarget cancelTarget : cancelTargets) {
+            OrderItem cancelOrderItem = cancelTarget.orderItem();
+            cancelOrderItem.cancelQuantity(
+                    cancelTarget.quantity(),
+                    lockedProducts.get(cancelOrderItem.getProductId())
+            );
         }
 
         if (remainingTotalAmount == 0L) {
@@ -325,12 +337,56 @@ public class OrderService {
         return orderItems;
     }
 
-    private List<OrderItem> selectCancelItems(List<OrderItem> allOrderItems, List<Long> orderItemIds) {
+    private List<CancelTarget> selectCancelTargets(List<OrderItem> allOrderItems, CancelOrderRequest request) {
+        if (request != null && request.items() != null && !request.items().isEmpty()) {
+            return selectCancelTargetsByQuantities(allOrderItems, request.items());
+        }
+
+        List<Long> orderItemIds = request == null ? null : request.orderItemIds();
+        return selectCancelTargetsByOrderItemIds(allOrderItems, orderItemIds);
+    }
+
+    private List<CancelTarget> selectCancelTargetsByQuantities(
+            List<OrderItem> allOrderItems,
+            List<CancelOrderItemRequest> itemRequests
+    ) {
+        Map<Long, OrderItem> orderItemMap = allOrderItems.stream()
+                .collect(Collectors.toMap(OrderItem::getId, Function.identity()));
+
+        Set<Long> requestedOrderItemIds = new HashSet<>();
+        List<CancelTarget> cancelTargets = new ArrayList<>();
+
+        for (CancelOrderItemRequest itemRequest : itemRequests) {
+            if (itemRequest.orderItemId() == null || itemRequest.quantity() == null) {
+                throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+            }
+
+            if (!requestedOrderItemIds.add(itemRequest.orderItemId())) {
+                throw new BusinessException(ErrorCode.DUPLICATE_REQUEST);
+            }
+
+            OrderItem orderItem = orderItemMap.get(itemRequest.orderItemId());
+            if (orderItem == null) {
+                throw new BusinessException(ErrorCode.ORDER_ITEM_NOT_FOUND);
+            }
+
+            validateCancelTarget(orderItem, itemRequest.quantity());
+            cancelTargets.add(new CancelTarget(orderItem, itemRequest.quantity(), orderItem.getQuantity()));
+        }
+
+        return cancelTargets;
+    }
+
+    private List<CancelTarget> selectCancelTargetsByOrderItemIds(
+            List<OrderItem> allOrderItems,
+            List<Long> orderItemIds
+    ) {
         List<Long> distinctOrderItemIds = distinctIds(orderItemIds);
 
         if (distinctOrderItemIds == null || distinctOrderItemIds.isEmpty()) {
             return allOrderItems.stream()
                     .filter(orderItem -> !orderItem.isCanceled())
+                    .map(orderItem -> new CancelTarget(orderItem, orderItem.getQuantity(), orderItem.getQuantity()))
                     .toList();
         }
 
@@ -342,27 +398,39 @@ public class OrderService {
             throw new BusinessException(ErrorCode.ORDER_ITEM_NOT_FOUND);
         }
 
-        if (cancelOrderItems.stream().anyMatch(OrderItem::isCanceled)) {
+        return cancelOrderItems.stream()
+                .peek(orderItem -> validateCancelTarget(orderItem, orderItem.getQuantity()))
+                .map(orderItem -> new CancelTarget(orderItem, orderItem.getQuantity(), orderItem.getQuantity()))
+                .toList();
+    }
+
+    private void validateCancelTarget(OrderItem orderItem, int cancelQuantity) {
+        if (orderItem.isCanceled()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
-        return cancelOrderItems;
+        if (cancelQuantity < 1) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
+        }
+
+        if (cancelQuantity > orderItem.getQuantity()) {
+            throw new BusinessException(ErrorCode.ORDER_CANCEL_QUANTITY_EXCEEDED);
+        }
     }
 
-    private Long sumSubtotal(List<OrderItem> orderItems) {
-        return orderItems.stream()
-                .mapToLong(OrderItem::getSubtotal)
+    private Long sumCancelAmount(List<CancelTarget> cancelTargets) {
+        return cancelTargets.stream()
+                .mapToLong(cancelTarget -> (long) cancelTarget.orderItem().getPrice() * cancelTarget.quantity())
                 .sum();
     }
 
-    private Long sumRemainingAmount(List<OrderItem> allOrderItems, List<OrderItem> cancelOrderItems) {
-        Set<Long> cancelOrderItemIds = new HashSet<>(toOrderItemIds(cancelOrderItems));
-
-        return allOrderItems.stream()
+    private Long sumRemainingAmount(List<OrderItem> allOrderItems, Long canceledAmount) {
+        Long currentTotalAmount = allOrderItems.stream()
                 .filter(orderItem -> !orderItem.isCanceled())
-                .filter(orderItem -> !cancelOrderItemIds.contains(orderItem.getId()))
                 .mapToLong(OrderItem::getSubtotal)
                 .sum();
+
+        return currentTotalAmount - canceledAmount;
     }
 
     private CancelAmounts calculateCancelAmounts(Payment payment, Long remainingTotalAmount) {
@@ -382,25 +450,29 @@ public class OrderService {
         );
     }
 
-    private List<Long> toOrderItemIds(List<OrderItem> orderItems) {
-        return orderItems.stream()
-                .map(OrderItem::getId)
-                .toList();
-    }
-
-    private List<CancelOrderResponse.RestoredStockItem> toRestoredStocks(List<OrderItem> orderItems) {
-        return orderItems.stream()
-                .map(orderItem -> new CancelOrderResponse.RestoredStockItem(
-                        orderItem.getId(),
-                        orderItem.getProductId(),
-                        orderItem.getQuantity()
+    private List<String> toCancelPointKeys(List<CancelTarget> cancelTargets) {
+        return cancelTargets.stream()
+                .map(cancelTarget -> "%d:%d:%d".formatted(
+                        cancelTarget.orderItem().getId(),
+                        cancelTarget.quantityBeforeCancel(),
+                        cancelTarget.quantity()
                 ))
                 .toList();
     }
 
-    private Map<Long, Product> lockProductsForStockRestore(List<OrderItem> orderItems) {
-        List<Long> productIds = orderItems.stream()
-                .map(OrderItem::getProductId)
+    private List<CancelOrderResponse.RestoredStockItem> toRestoredStocks(List<CancelTarget> cancelTargets) {
+        return cancelTargets.stream()
+                .map(cancelTarget -> new CancelOrderResponse.RestoredStockItem(
+                        cancelTarget.orderItem().getId(),
+                        cancelTarget.orderItem().getProductId(),
+                        cancelTarget.quantity()
+                ))
+                .toList();
+    }
+
+    private Map<Long, Product> lockProductsForStockRestore(List<CancelTarget> cancelTargets) {
+        List<Long> productIds = cancelTargets.stream()
+                .map(cancelTarget -> cancelTarget.orderItem().getProductId())
                 .distinct()
                 // 여러 상품을 한 번에 복구할 때 항상 같은 순서로 잠그면 교착상태 위험을 줄일 수 있습니다.
                 .sorted()
@@ -553,6 +625,13 @@ public class OrderService {
     private record OrderTarget(
             CartItem cartItem,
             Product product
+    ) {
+    }
+
+    private record CancelTarget(
+            OrderItem orderItem,
+            int quantity,
+            int quantityBeforeCancel
     ) {
     }
 

@@ -283,7 +283,23 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `orderItemIds` | Long[] | N | 취소할 주문상품 ID 목록. `null` 또는 빈 배열이면 아직 취소되지 않은 모든 주문상품 취소 |
+| `items` | Object[] | N | 취소할 주문상품과 수량 목록. `null` 또는 빈 배열이면 아직 취소되지 않은 모든 주문상품의 남은 수량 전체 취소 |
+| `items[].orderItemId` | Long | Y | 취소할 주문상품 ID |
+| `items[].quantity` | Integer | Y | 취소할 수량. 1 이상, 주문상품의 남은 수량 이하 |
+| `orderItemIds` | Long[] | N | 기존 요청 호환용 필드. 값이 있으면 해당 주문상품의 남은 수량 전체를 취소 |
+
+```json
+{
+  "items": [
+    {
+      "orderItemId": 400,
+      "quantity": 1
+    }
+  ]
+}
+```
+
+기존 방식도 사용할 수 있지만, 수량 선택 없이 해당 주문상품의 남은 수량 전체가 취소됩니다.
 
 ```json
 {
@@ -322,8 +338,10 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 
 - 주문 소유자만 취소할 수 있습니다.
 - 내부 결제 상태가 `PENDING`이고 주문 상태가 `PAYMENT_PENDING` 또는 `PARTIAL_CANCELED`인 경우만 직접 취소할 수 있습니다.
-- `orderItemIds`가 없으면 아직 취소되지 않은 모든 주문상품을 취소합니다.
-- 선택한 주문상품만 취소하면 주문 상태는 `PARTIAL_CANCELED`가 되고 결제 금액은 남은 주문 금액 기준으로 다시 계산됩니다.
+- `items`가 있으면 주문상품별로 지정한 수량만 취소합니다.
+- `items`가 없고 `orderItemIds`가 있으면 선택한 주문상품의 남은 수량 전체를 취소합니다.
+- `items`와 `orderItemIds`가 모두 없으면 아직 취소되지 않은 모든 주문상품의 남은 수량 전체를 취소합니다.
+- 선택한 주문상품 또는 수량만 취소하면 주문 상태는 `PARTIAL_CANCELED`가 되고 결제 금액은 남은 주문 금액 기준으로 다시 계산됩니다.
 - 전체 취소하면 주문 상태는 `CANCELED`, 결제 상태는 `FAILED`로 변경됩니다.
 - 취소된 주문상품의 재고는 즉시 복구됩니다.
 - 예약 차감된 포인트 중 취소 금액에 해당하는 금액은 `USE_CANCEL` 원장으로 복구됩니다.
@@ -341,4 +359,6 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 | `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 없음 |
 | `ORDER_ITEM_NOT_FOUND` | 404 | 주문상품 없음 또는 취소할 수 있는 주문상품 없음 |
 | `INVALID_ORDER_STATUS` | 400 | 이미 취소된 주문상품을 다시 취소하려는 경우 |
+| `INVALID_ORDER_QUANTITY` | 400 | 취소 수량이 1보다 작은 경우 |
+| `ORDER_CANCEL_QUANTITY_EXCEEDED` | 400 | 취소 수량이 주문상품의 남은 수량보다 큰 경우 |
 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 직접 취소할 수 없는 주문/결제 상태 |

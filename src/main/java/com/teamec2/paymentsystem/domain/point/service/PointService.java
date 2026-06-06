@@ -295,9 +295,9 @@ public class PointService {
     public void restoreReservedPointsForOrderCancel(
             Payment payment,
             Long restorePointAmount,
-            List<Long> orderItemIds
+            List<String> orderCancelKeys
     ) {
-        validateOrderCancelPointRequest(payment, restorePointAmount, orderItemIds);
+        validateOrderCancelPointRequest(payment, restorePointAmount, orderCancelKeys);
 
         if (restorePointAmount == 0L) {
             return;
@@ -314,7 +314,7 @@ public class PointService {
         String cancelKey = PointTransaction.paymentOrderCancelIdempotencyKey(
                 payment,
                 PointTransactionType.USE_CANCEL,
-                orderItemIds
+                orderCancelKeys
         );
 
         if (pointTransactionRepository.existsByIdempotencyKey(cancelKey)) {
@@ -329,7 +329,7 @@ public class PointService {
                 payment,
                 PointTransactionType.USE_CANCEL,
                 restorePointAmount,
-                orderItemIds
+                orderCancelKeys
         );
 
         pointTransactionRepository.save(pointTransaction);
@@ -384,8 +384,8 @@ public class PointService {
         }
     }
 
-    private void validateOrderCancelPointRequest(Payment payment, Long amount, List<Long> orderItemIds) {
-        if (payment == null || amount == null || orderItemIds == null || orderItemIds.isEmpty()) {
+    private void validateOrderCancelPointRequest(Payment payment, Long amount, List<String> orderCancelKeys) {
+        if (payment == null || amount == null || orderCancelKeys == null || orderCancelKeys.isEmpty()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 

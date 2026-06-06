@@ -699,6 +699,73 @@ class OrderControllerTest {
     }
 
     @Test
+    void 주문취소_주문상품수량중_일부수량만취소할수있다() throws Exception {
+        // given
+        User user = 회원_저장(0L);
+        Product doenjang = 상품_저장("된장", 5000, 10, ProductStatus.ON_SALE);
+        Product tofu = 상품_저장("두부", 3000, 10, ProductStatus.ON_SALE);
+        장바구니상품_저장(user, doenjang, 1);
+        장바구니상품_저장(user, tofu, 2);
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "usedPointAmount": 0
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        Order order = orderRepository.findAll().get(0);
+        OrderItem tofuOrderItem = orderItemRepository.findAll().stream()
+                .filter(orderItem -> orderItem.getProductId().equals(tofu.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        // when
+        // then
+        mockMvc.perform(patch("/api/orders/{orderId}/status", order.getId())
+                        .header("Authorization", "Bearer " + accessToken(user))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "items": [
+                                    {
+                                      "orderItemId": %d,
+                                      "quantity": 1
+                                    }
+                                  ]
+                                }
+                                """.formatted(tofuOrderItem.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousOrderStatus").value(OrderStatus.PAYMENT_PENDING.name()))
+                .andExpect(jsonPath("$.data.currentOrderStatus").value(OrderStatus.PARTIAL_CANCELED.name()))
+                .andExpect(jsonPath("$.data.canceledAmount").value(3000))
+                .andExpect(jsonPath("$.data.remainingTotalAmount").value(8000))
+                .andExpect(jsonPath("$.data.remainingUsedPointAmount").value(0))
+                .andExpect(jsonPath("$.data.remainingPgAmount").value(8000))
+                .andExpect(jsonPath("$.data.paymentStatus").value(PaymentStatus.PENDING.name()))
+                .andExpect(jsonPath("$.data.restoredStockItems[0].orderItemId").value(tofuOrderItem.getId()))
+                .andExpect(jsonPath("$.data.restoredStockItems[0].productId").value(tofu.getId()))
+                .andExpect(jsonPath("$.data.restoredStockItems[0].restoreQuantity").value(1));
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment updatedPayment = paymentRepository.findAll().get(0);
+        OrderItem updatedTofuOrderItem = orderItemRepository.findById(tofuOrderItem.getId()).orElseThrow();
+
+        assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.PARTIAL_CANCELED);
+        assertThat(updatedOrder.getTotalAmount()).isEqualTo(8000L);
+        assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(updatedPayment.getTotalAmount()).isEqualTo(8000L);
+        assertThat(updatedPayment.getPgAmount()).isEqualTo(8000L);
+        assertThat(updatedTofuOrderItem.getStatus()).isEqualTo(OrderItemStatus.ORDERED);
+        assertThat(updatedTofuOrderItem.getQuantity()).isEqualTo(1);
+        assertThat(productRepository.findById(doenjang.getId()).orElseThrow().getStock()).isEqualTo(9);
+        assertThat(productRepository.findById(tofu.getId()).orElseThrow().getStock()).isEqualTo(9);
+    }
+
+    @Test
     void 주문취소_부분취소상태이고_결제대기상태이면_남은상품을_다시취소할수있다() throws Exception {
         // given
         User user = 회원_저장(0L);

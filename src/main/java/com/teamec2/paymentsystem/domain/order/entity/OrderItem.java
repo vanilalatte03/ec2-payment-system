@@ -97,6 +97,10 @@ public class OrderItem extends BaseEntity {
     }
 
     public void cancel(Product lockedProduct) {
+        cancelQuantity(this.quantity, lockedProduct);
+    }
+
+    public void cancelQuantity(int cancelQuantity, Product lockedProduct) {
         if (this.status == OrderItemStatus.CANCELED) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
@@ -105,8 +109,22 @@ public class OrderItem extends BaseEntity {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
         }
 
-        lockedProduct.restoreStock(this.quantity);
-        this.status = OrderItemStatus.CANCELED;
+        if (cancelQuantity < 1) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
+        }
+
+        if (cancelQuantity > this.quantity) {
+            throw new BusinessException(ErrorCode.ORDER_CANCEL_QUANTITY_EXCEEDED);
+        }
+
+        lockedProduct.restoreStock(cancelQuantity);
+
+        if (cancelQuantity == this.quantity) {
+            this.status = OrderItemStatus.CANCELED;
+            return;
+        }
+
+        this.quantity -= cancelQuantity;
     }
 
     /**

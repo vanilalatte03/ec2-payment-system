@@ -116,19 +116,18 @@ public class PointTransaction {
 
     /**
      * 결제 전 주문 부분 취소로 포인트를 일부 돌려줄 때, 포인트 원장을 정확히 남기기 위해 추가한 메서드
-     * 어떤 주문 상품 취소 때문에 발생한 포인트 복구인지까지 멱등 키에 포함해야 한다.
-     * 같은 부분 취소 요청이 재시도되면 중복 복구를 막고, 다른 상품을 취소하는 요청은 별도 포인트 복구로 정상 처리할 수 있다.
+     * 같은 주문상품을 수량 단위로 여러 번 취소할 수 있으므로 주문상품 ID, 취소 전 수량, 취소 수량을 멱등 키에 포함한다.
      */
     public static PointTransaction createForPaymentOrderCancel(
             User user,
             Payment payment,
             PointTransactionType type,
             Long amount,
-            List<Long> orderItemIds
+            List<String> orderCancelKeys
     ) {
         validatePaymentType(type);
 
-        String idempotencyKey = paymentOrderCancelIdempotencyKey(payment, type, orderItemIds);
+        String idempotencyKey = paymentOrderCancelIdempotencyKey(payment, type, orderCancelKeys);
 
         return new PointTransaction(
                 user,
@@ -194,15 +193,14 @@ public class PointTransaction {
     public static String paymentOrderCancelIdempotencyKey(
             Payment payment,
             PointTransactionType type,
-            List<Long> orderItemIds
+            List<String> orderCancelKeys
     ) {
-        if (payment == null || payment.getId() == null || type == null || orderItemIds == null || orderItemIds.isEmpty()) {
+        if (payment == null || payment.getId() == null || type == null || orderCancelKeys == null || orderCancelKeys.isEmpty()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 
-        String orderItemKey = orderItemIds.stream()
+        String orderItemKey = orderCancelKeys.stream()
                 .sorted()
-                .map(String::valueOf)
                 .collect(Collectors.joining(","));
 
         return "%s:%d:%s:%s".formatted(
