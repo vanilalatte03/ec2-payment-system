@@ -22,7 +22,8 @@ import java.time.LocalDateTime;
 @Getter
 @Entity
 @Table(
-        name = "refunds", uniqueConstraints = {
+        name = "refunds",
+        uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_refunds_payment_idempotency_key",
                         columnNames = {"payment_id", "idempotency_key"}
@@ -86,6 +87,8 @@ public class Refund {
     @Column(name = "pg_result_unknown_reason", length = 500)
     private String pgResultUnknownReason;
 
+    private static final int MAX_REASON_LENGTH = 500;
+
     private Refund(
             String idempotencyKey,
             Order order,
@@ -142,7 +145,7 @@ public class Refund {
         }
 
         if (this.status != RefundStatus.PROCESSING && this.status != RefundStatus.PG_RESULT_UNKNOWN) {
-            throw new BusinessException(ErrorCode.CONFLICT);
+            throw new BusinessException(ErrorCode.INVALID_REFUND_STATUS);
         }
 
         this.status = RefundStatus.COMPLETED;
@@ -153,11 +156,15 @@ public class Refund {
      * 환불 실패가 확정되었을 때 호출합니다.
      * 1. PROCESSING 상태에서 명확한 실패 응답을 받은 경우
      * 2. PG_RESULT_UNKNOWN 상태에서 재조회 결과 실패가 확정된 경우
+     * 이미 FAILED인 경우에는 멱등성을 위해 그대로 return 합니다.
      */
     public void fail(String failedReason) {
+        if (this.status == RefundStatus.FAILED) {
+            return;
+        }
 
         if (this.status != RefundStatus.PROCESSING && this.status != RefundStatus.PG_RESULT_UNKNOWN) {
-            throw new BusinessException(ErrorCode.CONFLICT);
+            throw new BusinessException(ErrorCode.INVALID_REFUND_STATUS);
         }
 
         if (failedReason == null || failedReason.isBlank()) {
@@ -165,7 +172,7 @@ public class Refund {
         }
 
         this.status = RefundStatus.FAILED;
-        this.failedReason = failedReason;
+        this.failedReason = normalizeReason(failedReason);
     }
 
     public boolean isProcessing() {
@@ -178,6 +185,10 @@ public class Refund {
 
     public boolean isPgResultUnknown() {
         return this.status == RefundStatus.PG_RESULT_UNKNOWN;
+    }
+
+    public boolean isFailed() {
+        return this.status == RefundStatus.FAILED;
     }
 
     private static void validateIdempotencyKey(String idempotencyKey) {
@@ -244,15 +255,17 @@ public class Refund {
     }
 
     /**
-     * PG 결과 미확정 처리
-     * PortOne 환불 API 호출
-     * → 타임아웃 발생
-     * → 실제 취소 성공 여부 모름
+     * PG 결과 미확정 처리입니다.
+     * 이미 PG_RESULT_UNKNOWN인 경우에는 멱등성을 위해 그대로 return 합니다.
      */
     public void markPgResultUnknown(String pgResultUnknownReason) {
 
+        if (this.status == RefundStatus.PG_RESULT_UNKNOWN) {
+            return;
+        }
+
         if (this.status != RefundStatus.PROCESSING) {
-            throw new BusinessException(ErrorCode.CONFLICT);
+            throw new BusinessException(ErrorCode.INVALID_REFUND_STATUS);
         }
 
         if (pgResultUnknownReason == null || pgResultUnknownReason.isBlank()) {
@@ -260,6 +273,18 @@ public class Refund {
         }
 
         this.status = RefundStatus.PG_RESULT_UNKNOWN;
-        this.pgResultUnknownReason = pgResultUnknownReason;
+        this.pgResultUnknownReason = normalizeReason(pgResultUnknownReason);
+    }
+
+    private static String normalizeReason(String reason) {
+        if (reason == null) {
+            return null;
+        }
+
+        if (reason.length() <= MAX_REASON_LENGTH) {
+            return reason;
+        }
+
+        return reason.substring(0, MAX_REASON_LENGTH);
     }
 }
