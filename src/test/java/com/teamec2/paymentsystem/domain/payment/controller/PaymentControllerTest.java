@@ -1,7 +1,13 @@
 package com.teamec2.paymentsystem.domain.payment.controller;
 
+import com.teamec2.paymentsystem.domain.cart.entity.Cart;
+import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
+import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
+import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
+import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
+import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
@@ -13,6 +19,10 @@ import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
+import com.teamec2.paymentsystem.domain.product.entity.Product;
+import com.teamec2.paymentsystem.domain.product.entity.ProductCategory;
+import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
+import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -53,6 +63,9 @@ class PaymentControllerTest {
     OrderRepository orderRepository;
 
     @Autowired
+    OrderItemRepository orderItemRepository;
+
+    @Autowired
     PaymentRepository paymentRepository;
 
     @Autowired
@@ -60,6 +73,15 @@ class PaymentControllerTest {
 
     @Autowired
     PointService pointService;
+
+    @Autowired
+    CartItemRepository cartItemRepository;
+
+    @Autowired
+    CartRepository cartRepository;
+
+    @Autowired
+    ProductRepository productRepository;
 
     @Autowired
     JwtTokenProvider jwtTokenProvider;
@@ -81,8 +103,12 @@ class PaymentControllerTest {
 
     private void clearDatabase() {
         pointTransactionRepository.deleteAll();
+        cartItemRepository.deleteAll();
+        cartRepository.deleteAll();
         paymentRepository.deleteAll();
+        orderItemRepository.deleteAll();
         orderRepository.deleteAll();
+        productRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -90,7 +116,9 @@ class PaymentControllerTest {
     void 결제확정_성공하면_200과응답데이터를반환한다() throws Exception {
         // given
         User user = 회원_저장(200L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
         Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, cartFixture.orderedItem());
         Payment payment = 포인트_예약된_결제_저장(order, 1000L, 200L, 800L);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
@@ -120,7 +148,7 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data.usedPointAmount").value(200))
                 .andExpect(jsonPath("$.data.pgAmount").value(800))
                 .andExpect(jsonPath("$.data.rewardPointAmount").value(8))
-                .andExpect(jsonPath("$.data.cartCleared").value(false))
+                .andExpect(jsonPath("$.data.cartCleared").value(true))
                 .andExpect(jsonPath("$.data.approvedAt").value("2026-06-01T12:30:00+09:00"));
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
@@ -133,6 +161,7 @@ class PaymentControllerTest {
         assertThat(foundUser.getPointBalance()).isEqualTo(8L);
         assertThat(pointTransactionRepository.count()).isEqualTo(2);
         assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+        assertThat(cartItemRepository.findAllInCart(cartFixture.cart().getId())).isEmpty();
     }
 
     @Test
@@ -206,6 +235,30 @@ class PaymentControllerTest {
         return payment;
     }
 
+    private CartFixture 장바구니상품_저장(User user) {
+        Product product = productRepository.save(new Product(
+                "후드 집업",
+                55000,
+                10,
+                "테스트 상품",
+                ProductStatus.ON_SALE,
+                ProductCategory.TOP
+        ));
+        Cart cart = cartRepository.save(new Cart(user));
+        CartItem orderedItem = cartItemRepository.save(new CartItem(cart, product, 1));
+
+        return new CartFixture(cart, orderedItem);
+    }
+
+    private OrderItem 주문상품_저장(Order order, CartItem cartItem) {
+        return orderItemRepository.save(new OrderItem(
+                order,
+                cartItem.getProduct(),
+                cartItem.getId(),
+                cartItem.getQuantity()
+        ));
+    }
+
     private String accessToken(User user) {
         return jwtTokenProvider.createAccessToken(user.getId());
     }
@@ -216,6 +269,12 @@ class PaymentControllerTest {
 
     private String uniqueOrderNumber() {
         return "ORDER-" + UUID.randomUUID();
+    }
+
+    private record CartFixture(
+            Cart cart,
+            CartItem orderedItem
+    ) {
     }
 
     @TestConfiguration

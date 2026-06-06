@@ -55,6 +55,9 @@ public class Payment extends BaseEntity {
     @Column(nullable = false)
     private Long rewardPointAmount;
 
+    @Column(name = "cart_cleared", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean cartCleared = false;
+
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
@@ -136,6 +139,15 @@ public class Payment extends BaseEntity {
 
         changeStatus(PaymentStatus.COMPLETED);
         this.approvedAt = approvedAt;
+    }
+
+    /**
+     * 결제 완료 시점에 장바구니 상품 삭제가 실제로 일어났는지 기록한다.
+     *
+     * @param cartCleared 주문에 포함된 장바구니 상품이 1건 이상 삭제됐는지 여부
+     */
+    public void recordCartCleared(boolean cartCleared) {
+        this.cartCleared = cartCleared;
     }
 
     /**

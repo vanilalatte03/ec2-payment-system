@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -84,6 +85,66 @@ class CartServiceTest {
                 );
         assertThat(cartItemRepository.findById(firstCartItem.getId())).isEmpty();
         assertThat(cartItemRepository.findById(thirdCartItem.getId())).isEmpty();
+    }
+
+    @Test
+    void 구매완료상품ID정리_null과중복ID를제외하고_본인장바구니상품만삭제한다() {
+        // given
+        User user = 회원_저장();
+        User otherUser = 회원_저장();
+        Product firstProduct = 상품_저장("첫 번째 상품");
+        Product secondProduct = 상품_저장("두 번째 상품");
+        Product otherProduct = 상품_저장("다른 회원 상품");
+
+        CartItem firstCartItem = 장바구니상품_저장(user, firstProduct);
+        CartItem secondCartItem = 장바구니상품_저장(user, secondProduct);
+        CartItem otherCartItem = 장바구니상품_저장(otherUser, otherProduct);
+
+        // when
+        ClearCartResponse response = cartService.clearPurchasedItemIds(
+                user.getId(),
+                Arrays.asList(firstCartItem.getId(), firstCartItem.getId(), null, otherCartItem.getId(), -1L)
+        );
+
+        // then
+        Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
+        List<Long> remainingCartItemIds = cartItemRepository.findAllWithProduct(cart.getId()).stream()
+                .map(CartItem::getId)
+                .toList();
+
+        assertThat(response.deletedCount()).isEqualTo(1);
+        assertThat(remainingCartItemIds).containsExactly(secondCartItem.getId());
+        assertThat(cartItemRepository.findById(firstCartItem.getId())).isEmpty();
+        assertThat(cartItemRepository.findById(otherCartItem.getId())).isPresent();
+    }
+
+    @Test
+    void 구매완료상품ID정리_ID목록이없으면_삭제하지않고0을반환한다() {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("유지할 상품");
+        CartItem cartItem = 장바구니상품_저장(user, product);
+
+        // when
+        ClearCartResponse nullResponse = cartService.clearPurchasedItemIds(user.getId(), null);
+        ClearCartResponse emptyResponse = cartService.clearPurchasedItemIds(user.getId(), List.of());
+
+        // then
+        assertThat(nullResponse.deletedCount()).isZero();
+        assertThat(emptyResponse.deletedCount()).isZero();
+        assertThat(cartItemRepository.findById(cartItem.getId())).isPresent();
+    }
+
+    @Test
+    void 구매완료상품ID정리_장바구니가없으면_삭제하지않고0을반환한다() {
+        // given
+        User user = userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
+
+        // when
+        ClearCartResponse response = cartService.clearPurchasedItemIds(user.getId(), List.of(1L));
+
+        // then
+        assertThat(response.deletedCount()).isZero();
     }
 
     private User 회원_저장() {

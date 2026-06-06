@@ -114,6 +114,31 @@ class PaymentRepositoryTest {
         assertThat(notFoundPayment).isEmpty();
     }
 
+    @Test
+    void PortOne결제ID로_주문과유저를함께조회한다() {
+        // given
+        Payment payment = 결제_저장("ORDER-001");
+        String portonePaymentId = payment.getPortonePaymentId();
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // when
+        Optional<Payment> foundPayment = paymentRepository.findByPortonePaymentIdForUpdate(portonePaymentId);
+        Optional<Payment> notFoundPayment = paymentRepository.findByPortonePaymentIdForUpdate("pay_unknown");
+
+        // then
+        assertThat(foundPayment).isPresent();
+        assertThat(foundPayment.get().getPortonePaymentId()).isEqualTo(portonePaymentId);
+        assertThat(entityManager.getEntityManagerFactory()
+                .getPersistenceUnitUtil()
+                .isLoaded(foundPayment.get(), "order")).isTrue();
+        assertThat(entityManager.getEntityManagerFactory()
+                .getPersistenceUnitUtil()
+                .isLoaded(foundPayment.get().getOrder(), "user")).isTrue();
+        assertThat(notFoundPayment).isEmpty();
+    }
+
     private Payment 결제_저장(String orderNumber) {
         Order order = 주문_저장(orderNumber);
         return paymentRepository.save(Payment.createPending(order, 1000L, 200L, 800L, 8L));

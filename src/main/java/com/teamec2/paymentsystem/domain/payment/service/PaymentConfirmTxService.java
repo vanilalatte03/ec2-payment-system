@@ -1,5 +1,7 @@
 package com.teamec2.paymentsystem.domain.payment.service;
 
+import com.teamec2.paymentsystem.domain.cart.dto.ClearCartResponse;
+import com.teamec2.paymentsystem.domain.cart.service.CartService;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
 import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
@@ -39,13 +41,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PaymentConfirmTxService {
 
-    private static final boolean CART_CLEARED = false;
-
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final OrderItemRepository orderItemRepository;
     private final PointService pointService;
     private final ProductRepository productRepository;
+    private final CartService cartService;
 
     /**
      * 결제 확정 대상 주문과 결제를 조회하고, 확정 가능한 상태인지 검증한다.
@@ -80,7 +81,46 @@ public class PaymentConfirmTxService {
                     payment.getPortonePaymentId(),
                     payment.getPgAmount(),
                     payment.isPointOnly(),
-                    ConfirmPaymentResponse.from(order, payment, CART_CLEARED)
+                    ConfirmPaymentResponse.from(order, payment, payment.isCartCleared())
+            );
+        }
+
+        validateConfirmable(order, payment);
+
+        return new ConfirmPaymentTarget(
+                payment.getId(),
+                payment.getPortonePaymentId(),
+                payment.getPgAmount(),
+                payment.isPointOnly(),
+                null
+        );
+    }
+
+    /**
+     * 웹훅으로 들어온 PortOne 결제 ID를 기준으로 결제 확정 대상을 준비한다.
+     *
+     * <p>클라이언트 확정 요청과 달리 사용자 ID나 주문 ID를 받지 않으므로 PortOne 결제 ID로
+     * 결제 레코드를 조회한다. 조회한 결제에는 쓰기 잠금을 걸어 웹훅 재전송이나 클라이언트 확정 요청과
+     * 동시에 같은 결제가 완료 처리되지 않도록 한다.
+     *
+     * <p>이미 완료된 결제라면 멱등 응답을 만들 수 있도록 완료 응답을 포함한 대상을 반환한다.
+     *
+     * @param portonePaymentId PortOne 결제 ID
+     * @return Facade가 웹훅 확정 처리에 사용할 최소 결제 정보
+     */
+    @Transactional
+    public ConfirmPaymentTarget prepareByPortonePaymentId(String portonePaymentId) {
+        Payment payment = paymentRepository.findByPortonePaymentIdForUpdate(portonePaymentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+        Order order = payment.getOrder();
+
+        if (payment.isCompleted()) {
+            return new ConfirmPaymentTarget(
+                    payment.getId(),
+                    payment.getPortonePaymentId(),
+                    payment.getPgAmount(),
+                    payment.isPointOnly(),
+                    ConfirmPaymentResponse.from(order, payment, payment.isCartCleared())
             );
         }
 
@@ -102,7 +142,7 @@ public class PaymentConfirmTxService {
      * 주문 상태와 결제 상태를 함께 변경한다. 둘 중 하나라도 실패하면 전체 변경이 롤백된다.
      *
      * <p>이미 완료된 결제라면 중복 호출로 보고 상태를 다시 변경하지 않고 현재 응답을 반환한다.
-     * 현재 PR 범위에서는 포인트 확정과 장바구니 초기화는 수행하지 않으므로 {@code cartCleared=false}를 유지한다.
+     * 신규 완료 처리에서는 결제 성공 후 장바구니를 초기화한다.
      *
      * @param paymentId 완료 처리할 내부 결제 ID
      * @param approvedAt PortOne 승인 시각 또는 포인트 전액 결제의 내부 확정 시각
@@ -114,7 +154,7 @@ public class PaymentConfirmTxService {
         Order order = payment.getOrder();
 
         if (payment.isCompleted()) {
-            return ConfirmPaymentResponse.from(order, payment, CART_CLEARED);
+            return ConfirmPaymentResponse.from(order, payment, payment.isCartCleared());
         }
 
         validateConfirmable(order, payment);
@@ -125,10 +165,23 @@ public class PaymentConfirmTxService {
         payment.complete(approvedAt);
         order.complete();
 
+        List<Long> sourceCartItemIds = orderItemRepository.findAllByOrderId(order.getId()).stream()
+                .map(OrderItem::getSourceCartItemId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
         // 결제 완료 후 적립금이 추가됩니다.
         pointService.earnPoints(payment);
 
-        return ConfirmPaymentResponse.from(order, payment, CART_CLEARED);
+        ClearCartResponse clearCartResponse = cartService.clearPurchasedItemIds(
+                order.getUser().getId(),
+                sourceCartItemIds
+        );
+
+        payment.recordCartCleared(clearCartResponse.deletedCount() > 0);
+
+        return ConfirmPaymentResponse.from(order, payment, payment.isCartCleared());
     }
 
     /**
