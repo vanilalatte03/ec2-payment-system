@@ -14,6 +14,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Getter
 @Entity
@@ -113,6 +115,32 @@ public class PointTransaction {
     }
 
     /**
+     * 결제 전 주문 부분 취소로 포인트를 일부 돌려줄 때, 포인트 원장을 정확히 남기기 위해 추가한 메서드
+     * 어떤 주문 상품 취소 때문에 발생한 포인트 복구인지까지 멱등 키에 포함해야 한다.
+     * 같은 부분 취소 요청이 재시도되면 중복 복구를 막고, 다른 상품을 취소하는 요청은 별도 포인트 복구로 정상 처리할 수 있다.
+     */
+    public static PointTransaction createForPaymentOrderCancel(
+            User user,
+            Payment payment,
+            PointTransactionType type,
+            Long amount,
+            List<Long> orderItemIds
+    ) {
+        validatePaymentType(type);
+
+        String idempotencyKey = paymentOrderCancelIdempotencyKey(payment, type, orderItemIds);
+
+        return new PointTransaction(
+                user,
+                payment,
+                null,
+                type,
+                amount,
+                idempotencyKey
+        );
+    }
+
+    /**
      * 환불 과정에서 발생하는 포인트 원장을 생성합니다.
      * USE_RESTORE, EARN_CANCEL처럼 refundId를 기준으로 중복 여부를 판단하는 거래에 사용합니다.
      */
@@ -161,6 +189,28 @@ public class PointTransaction {
         }
 
         return "%s:%d:%s".formatted(PAYMENT_KEY_PREFIX, payment.getId(), type.name());
+    }
+
+    public static String paymentOrderCancelIdempotencyKey(
+            Payment payment,
+            PointTransactionType type,
+            List<Long> orderItemIds
+    ) {
+        if (payment == null || payment.getId() == null || type == null || orderItemIds == null || orderItemIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        String orderItemKey = orderItemIds.stream()
+                .sorted()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+
+        return "%s:%d:%s:%s".formatted(
+                PAYMENT_KEY_PREFIX,
+                payment.getId(),
+                type.name(),
+                Integer.toHexString(orderItemKey.hashCode())
+        );
     }
 
     /**

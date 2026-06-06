@@ -71,7 +71,7 @@ class CartServiceTest {
 
         // then
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        List<Long> remainingCartItemIds = cartItemRepository.findAllByCartId(cart.getId()).stream()
+        List<Long> remainingCartItemIds = cartItemRepository.findAllWithProduct(cart.getId()).stream()
                 .map(CartItem::getId)
                 .toList();
 

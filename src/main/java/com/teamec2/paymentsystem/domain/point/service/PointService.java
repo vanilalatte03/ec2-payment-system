@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -287,6 +288,53 @@ public class PointService {
         pointTransactionRepository.save(pointTransaction);
     }
 
+    /**
+     * 결제 대기 주문을 부분 취소할 때, 예약 차감된 포인트 중 줄어든 금액만 복구합니다.
+     */
+    @Transactional
+    public void restoreReservedPointsForOrderCancel(
+            Payment payment,
+            Long restorePointAmount,
+            List<Long> orderItemIds
+    ) {
+        validateOrderCancelPointRequest(payment, restorePointAmount, orderItemIds);
+
+        if (restorePointAmount == 0L) {
+            return;
+        }
+
+        String reserveKey = PointTransaction.paymentIdempotencyKey(
+                payment,
+                PointTransactionType.USE_RESERVE
+        );
+
+        pointTransactionRepository.findByIdempotencyKey(reserveKey)
+                .orElseThrow(() -> new BusinessException(ErrorCode.POINT_ERROR_EXCEPTION));
+
+        String cancelKey = PointTransaction.paymentOrderCancelIdempotencyKey(
+                payment,
+                PointTransactionType.USE_CANCEL,
+                orderItemIds
+        );
+
+        if (pointTransactionRepository.existsByIdempotencyKey(cancelKey)) {
+            return;
+        }
+
+        User user = findUserForPointUpdate(payment);
+        user.increasePointBalance(restorePointAmount);
+
+        PointTransaction pointTransaction = PointTransaction.createForPaymentOrderCancel(
+                user,
+                payment,
+                PointTransactionType.USE_CANCEL,
+                restorePointAmount,
+                orderItemIds
+        );
+
+        pointTransactionRepository.save(pointTransaction);
+    }
+
     private void validateEarnPointRequest(Payment payment) {
 
         if (payment == null
@@ -331,6 +379,16 @@ public class PointService {
 
         // 포인트 정책 상, 포인트 금액은 음수가 될 수 없습니다.
         // 환불 시 복구할 포인트 = 0 도 정상 상황일 수 있으므로 amount < 0 으로 처리합니다.
+        if (amount < 0) {
+            throw new BusinessException(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
+        }
+    }
+
+    private void validateOrderCancelPointRequest(Payment payment, Long amount, List<Long> orderItemIds) {
+        if (payment == null || amount == null || orderItemIds == null || orderItemIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
         if (amount < 0) {
             throw new BusinessException(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
         }

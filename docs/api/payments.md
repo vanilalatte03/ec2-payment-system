@@ -30,7 +30,7 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 ```json
 {
   "orderId": 200,
-  "orderNumber": "ORD-20260529-550E8400E29B41D4A716446655440000",
+  "orderNumber": "ORD-20260529-000001",
   "orderStatus": "COMPLETED",
   "paymentId": 300,
   "portonePaymentId": "pay_20260529_000001",

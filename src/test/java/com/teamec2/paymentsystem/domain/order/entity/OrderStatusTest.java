@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OrderStatusTest {
 
     @Test
-    void 주문상태는_결제대기_결제완료_취소를_가진다() {
+    void 주문상태는_결제대기_결제완료_부분취소_취소를_가진다() {
         // when
         OrderStatus[] statuses = OrderStatus.values();
 
@@ -15,6 +15,7 @@ class OrderStatusTest {
         assertThat(statuses).containsExactly(
                 OrderStatus.PAYMENT_PENDING,
                 OrderStatus.COMPLETED,
+                OrderStatus.PARTIAL_CANCELED,
                 OrderStatus.CANCELED
         );
     }
@@ -84,5 +85,16 @@ class OrderStatusTest {
         assertThat(canTransitionToPaymentPending).isFalse();
         assertThat(canTransitionToCompleted).isFalse();
         assertThat(canTransitionToCanceled).isFalse();
+    }
+
+    @Test
+    void 부분취소상태는_결제완료와_취소가_가능하다() {
+        // when
+        boolean canTransitionToCompleted = OrderStatus.PARTIAL_CANCELED.canTransitionTo(OrderStatus.COMPLETED);
+        boolean canTransitionToCanceled = OrderStatus.PARTIAL_CANCELED.canTransitionTo(OrderStatus.CANCELED);
+
+        // then
+        assertThat(canTransitionToCompleted).isTrue();
+        assertThat(canTransitionToCanceled).isTrue();
     }
 }

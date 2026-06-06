@@ -231,7 +231,7 @@ INSERT INTO orders (
     user_id,
     order_number,
     total_amount,
-    used_point,
+    used_point_amount,
     status,
     created_at,
     updated_at
@@ -246,21 +246,23 @@ INSERT INTO order_items (
     id,
     order_id,
     product_id,
+    source_cart_item_id,
     product_name,
     price,
     quantity,
     refunded_quantity,
     refund_reserved_quantity,
+    status,
     created_at,
     updated_at
 ) VALUES
-    (10001, 10001, 10003, '오버핏 코튼 크루넥 티셔츠', 39000, 2, 0, 0, NOW(), NOW()),
-    (10002, 10002, 10006, '램스울 오버사이즈 니트', 89000, 1, 0, 0, NOW(), NOW()),
-    (10003, 10003, 10002, '베이직 스트라이프 삭스 3팩', 6900, 1, 0, 0, NOW(), NOW()),
-    (10004, 10003, 10011, '스트레치 슬림 치노팬츠', 48000, 1, 1, 0, NOW(), NOW()),
-    (10005, 10003, 10012, '코튼 와플 반팔티', 9900, 4, 0, 0, NOW(), NOW()),
-    (10006, 10004, 10008, '레더 미니멀 크로스백', 128000, 1, 1, 0, NOW(), NOW()),
-    (10007, 10005, 10004, '워시드 와이드 데님 팬츠', 68000, 1, 0, 0, NOW(), NOW());
+    (10001, 10001, 10003, 10001, '오버핏 코튼 크루넥 티셔츠', 39000, 2, 0, 0, 'ORDERED', NOW(), NOW()),
+    (10002, 10002, 10006, 10002, '램스울 오버사이즈 니트', 89000, 1, 0, 0, 'ORDERED', NOW(), NOW()),
+    (10003, 10003, 10002, 10003, '베이직 스트라이프 삭스 3팩', 6900, 1, 0, 0, 'ORDERED', NOW(), NOW()),
+    (10004, 10003, 10011, 10004, '스트레치 슬림 치노팬츠', 48000, 1, 1, 0, 'ORDERED', NOW(), NOW()),
+    (10005, 10003, 10012, 10005, '코튼 와플 반팔티', 9900, 4, 0, 0, 'ORDERED', NOW(), NOW()),
+    (10006, 10004, 10008, 10006, '레더 미니멀 크로스백', 128000, 1, 1, 0, 'ORDERED', NOW(), NOW()),
+    (10007, 10005, 10004, 10007, '워시드 와이드 데님 팬츠', 68000, 1, 0, 0, 'ORDERED', NOW(), NOW());
 
 -- 결제 데이터
 INSERT INTO payments (

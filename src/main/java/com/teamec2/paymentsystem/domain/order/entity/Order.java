@@ -29,14 +29,14 @@ public class Order extends BaseEntity {
     @Column(name = "total_amount", nullable = false, columnDefinition = "BIGINT UNSIGNED")
     private Long totalAmount;
 
-    @Column(name = "used_point", nullable = false, columnDefinition = "BIGINT UNSIGNED")
-    private Long usedPoint = 0L;
+    @Column(name = "used_point_amount", nullable = false, columnDefinition = "BIGINT UNSIGNED")
+    private Long usedPointAmount = 0L;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private OrderStatus status;
 
-    private Order(User user, String orderNumber, Long totalAmount, Long usedPoint) {
+    private Order(User user, String orderNumber, Long totalAmount, Long usedPointAmount) {
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
@@ -49,27 +49,35 @@ public class Order extends BaseEntity {
             throw new BusinessException(ErrorCode.INVALID_ORDER_PRICE);
         }
 
-        if (usedPoint == null || usedPoint < 0) {
+        if (usedPointAmount == null || usedPointAmount < 0) {
             throw new BusinessException(ErrorCode.INVALID_USED_POINT);
         }
 
-        if (usedPoint > totalAmount) {
+        if (usedPointAmount > totalAmount) {
             throw new BusinessException(ErrorCode.INVALID_USED_POINT);
         }
 
         this.user = user;
         this.orderNumber = orderNumber;
         this.totalAmount = totalAmount;
-        this.usedPoint = usedPoint;
+        this.usedPointAmount = usedPointAmount;
         this.status = OrderStatus.PAYMENT_PENDING;
     }
 
-    public static Order create(User user, String orderNumber, Long totalAmount, Long usedPoint) {
-        return new Order(user, orderNumber, totalAmount, usedPoint);
+    public static Order create(User user, String orderNumber, Long totalAmount, Long usedPointAmount) {
+        return new Order(user, orderNumber, totalAmount, usedPointAmount);
     }
 
-    public boolean isPaymentPending() {
-        return status == OrderStatus.PAYMENT_PENDING;
+    public boolean isPaymentConfirmable() {
+        return status == OrderStatus.PAYMENT_PENDING || status == OrderStatus.PARTIAL_CANCELED;
+    }
+
+    public boolean isOwnedBy(Long userId) {
+        return user.getId().equals(userId);
+    }
+
+    public boolean isPendingPaymentCancelable() {
+        return isPaymentConfirmable();
     }
 
     public void complete() {
@@ -77,11 +85,36 @@ public class Order extends BaseEntity {
     }
 
     public void cancelPendingPayment() {
-        changeStatusFrom(OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+        if (this.status != OrderStatus.PAYMENT_PENDING && this.status != OrderStatus.PARTIAL_CANCELED) {
+            throw new BusinessException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+        }
+
+        changeStatus(OrderStatus.CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
     }
 
     public void cancelCompletedByRefund() {
         changeStatusFrom(OrderStatus.COMPLETED, OrderStatus.CANCELED, ErrorCode.REFUND_NOT_ALLOWED);
+    }
+
+    public void changeToPartialCanceled() {
+        if (this.status == OrderStatus.PARTIAL_CANCELED) {
+            return;
+        }
+
+        changeStatus(OrderStatus.PARTIAL_CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
+    }
+
+    public void updateAmounts(Long totalAmount, Long usedPointAmount) {
+        if (totalAmount == null || totalAmount < 0) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_PRICE);
+        }
+
+        if (usedPointAmount == null || usedPointAmount < 0 || usedPointAmount > totalAmount) {
+            throw new BusinessException(ErrorCode.INVALID_USED_POINT);
+        }
+
+        this.totalAmount = totalAmount;
+        this.usedPointAmount = usedPointAmount;
     }
 
     private void changeStatus(OrderStatus targetStatus, ErrorCode errorCode) {

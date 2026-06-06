@@ -7,7 +7,7 @@ Request DTO에 기본 검증을 적용한다.
 ```java
 public record CreateOrderRequest(
     @NotEmpty List<OrderItemRequest> items,
-    @PositiveOrZero Integer usedPoint
+    @PositiveOrZero Integer usedPointAmount
 ) {
 }
 ```

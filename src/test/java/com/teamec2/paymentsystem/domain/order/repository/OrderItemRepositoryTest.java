@@ -20,6 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Transactional
 class OrderItemRepositoryTest {
 
+    private static final Long FIRST_SOURCE_CART_ITEM_ID = 1L;
+    private static final Long SECOND_SOURCE_CART_ITEM_ID = 2L;
+
     @Autowired
     OrderItemRepository orderItemRepository;
 
@@ -33,8 +36,8 @@ class OrderItemRepositoryTest {
         Product firstProduct = 상품_저장("후드 집업", 55000);
         Product secondProduct = 상품_저장("볼캡", 24000);
         Order order = 주문_저장(user, "ORDER-ITEM-001", 158000L, 0L);
-        orderItemRepository.save(new OrderItem(order, firstProduct, 2));
-        orderItemRepository.save(new OrderItem(order, secondProduct, 3));
+        orderItemRepository.save(new OrderItem(order, firstProduct, FIRST_SOURCE_CART_ITEM_ID, 2));
+        orderItemRepository.save(new OrderItem(order, secondProduct, SECOND_SOURCE_CART_ITEM_ID, 3));
 
         entityManager.flush();
         entityManager.clear();
@@ -76,8 +79,8 @@ class OrderItemRepositoryTest {
         return product;
     }
 
-    private Order 주문_저장(User user, String orderNumber, Long totalAmount, Long usedPoint) {
-        Order order = Order.create(user, orderNumber, totalAmount, usedPoint);
+    private Order 주문_저장(User user, String orderNumber, Long totalAmount, Long usedPointAmount) {
+        Order order = Order.create(user, orderNumber, totalAmount, usedPointAmount);
         entityManager.persist(order);
         return order;
     }

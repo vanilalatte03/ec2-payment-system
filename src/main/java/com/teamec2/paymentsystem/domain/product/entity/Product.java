@@ -60,7 +60,7 @@ public class Product extends BaseEntity {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        if (this.status == ProductStatus.DISCONTINUED) {
+        if (this.status != ProductStatus.ON_SALE) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE);
         }
 
