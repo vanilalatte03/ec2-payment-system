@@ -234,6 +234,7 @@ class PortoneClientTest {
         PaymentCancelResponse response = portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         );
@@ -272,6 +273,7 @@ class PortoneClientTest {
         portoneClient.cancelPayment(
                 "pay_123",
                 73000L,
+                73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
         );
@@ -291,6 +293,7 @@ class PortoneClientTest {
         // then
         assertThatThrownBy(() -> portoneClient.cancelPayment(
                 "pay_123",
+                73000L,
                 73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
@@ -312,6 +315,7 @@ class PortoneClientTest {
         // then
         assertThatThrownBy(() -> portoneClient.cancelPayment(
                 "pay_123",
+                73000L,
                 73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"
@@ -339,6 +343,7 @@ class PortoneClientTest {
         // then
         assertThatThrownBy(() -> portoneClient.cancelPayment(
                 "pay_123",
+                73000L,
                 73000L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-1"

@@ -462,6 +462,7 @@ class PaymentServiceTest {
         public PaymentCancelResponse cancelPayment(
                 String paymentId,
                 Long cancelAmount,
+                Long currentCancellableAmount,
                 String reason,
                 String idempotencyKey
         ) {

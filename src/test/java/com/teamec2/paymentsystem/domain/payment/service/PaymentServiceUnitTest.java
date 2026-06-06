@@ -46,6 +46,7 @@ class PaymentServiceUnitTest {
         when(paymentGateway.cancelPayment(
                 "pay_123",
                 800L,
+                800L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-20"
         )).thenReturn(new PaymentCancelResponse("cancel_123", "SUCCEEDED"));
@@ -57,6 +58,7 @@ class PaymentServiceUnitTest {
 
         verify(paymentGateway).cancelPayment(
                 "pay_123",
+                800L,
                 800L,
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-20"
