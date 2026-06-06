@@ -275,7 +275,7 @@ Idempotency-Key: "refund-cancel-request-{refundId}"
 - 마지막 전체 환불에서는 포인트 배분의 누적 오차를 보정한다.
 - 동일 결제의 환불은 한 번에 하나만 처리한다.
 - 동시 환불을 방지하기 위해 우리 DB의 원본 결제 정보(`payment`)에 `PESSIMISTIC_WRITE` 잠금을 적용한다.
-- 기존 `PROCESSING` 환불이 있으면 `REFUND_IN_PROGRESS`를 반환한다.
+- 기존 `PROCESSING` 또는 `PG_RESULT_UNKNOWN` 환불이 있으면 `REFUND_IN_PROGRESS`를 반환한다.
 - 환불 요청을 `PROCESSING`으로 저장하고 트랜잭션을 종료한 후 PG 취소를 요청한다.
 - 포인트 전액 결제는 PG 호출을 생략한다.
 - PG 취소 성공 시 재고, 포인트, 주문·결제 상태를 반영한다.
