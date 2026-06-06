@@ -249,7 +249,7 @@ public class PaymentConfirmTxService {
             return Map.of();
         }
 
-        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdsWithLock(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
 
         if (lockedProducts.size() != productIds.size()) {
