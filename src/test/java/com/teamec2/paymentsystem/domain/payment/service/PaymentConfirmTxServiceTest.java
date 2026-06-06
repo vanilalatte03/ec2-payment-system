@@ -1,5 +1,7 @@
 package com.teamec2.paymentsystem.domain.payment.service;
 
+import com.teamec2.paymentsystem.domain.cart.entity.Cart;
+import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
 import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
@@ -7,6 +9,7 @@ import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
 import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
+import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
@@ -28,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -94,6 +98,29 @@ class PaymentConfirmTxServiceTest {
         orderRepository.deleteAll();
         productRepository.deleteAll();
         userRepository.deleteAll();
+    }
+
+    @Test
+    void 결제완료_장바구니상품을삭제하면_DB에장바구니정리여부를저장한다() {
+        // given
+        User user = 회원_저장();
+        Product product = 상품_저장("후드 집업", 55000, 10);
+        Cart cart = cartRepository.save(new Cart(user));
+        CartItem cartItem = cartItemRepository.save(new CartItem(cart, product, 1));
+        Order order = 주문_저장(user, 55000L, 0L);
+        주문상품_저장(order, cartItem);
+        Payment payment = 결제_저장(order, 55000L, 0L, 55000L);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+
+        // when
+        ConfirmPaymentResponse response = paymentConfirmTxService.complete(payment.getId(), approvedAt);
+
+        // then
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(response.cartCleared()).isTrue();
+        assertThat(foundPayment.isCartCleared()).isTrue();
+        assertThat(cartItemRepository.findById(cartItem.getId())).isEmpty();
     }
 
     @Test
@@ -247,6 +274,15 @@ class PaymentConfirmTxServiceTest {
 
     private OrderItem 주문상품_저장(Order order, Product product, int quantity) {
         return orderItemRepository.save(new OrderItem(order, product, sourceCartItemId++, quantity));
+    }
+
+    private OrderItem 주문상품_저장(Order order, CartItem cartItem) {
+        return orderItemRepository.save(new OrderItem(
+                order,
+                cartItem.getProduct(),
+                cartItem.getId(),
+                cartItem.getQuantity()
+        ));
     }
 
     private Payment 결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {

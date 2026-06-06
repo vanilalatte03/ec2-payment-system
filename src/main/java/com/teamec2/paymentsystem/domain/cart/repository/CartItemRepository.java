@@ -100,7 +100,7 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
      * @param cartItemIds 삭제할 장바구니 상품 ID 목록
      * @return 실제 삭제된 장바구니 상품 수
      */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Modifying(flushAutomatically = true)
     @Query("""
         delete from CartItem ci
         where ci.cart.id = :cartId
