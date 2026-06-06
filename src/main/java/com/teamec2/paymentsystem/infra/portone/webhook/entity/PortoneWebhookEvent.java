@@ -104,4 +104,28 @@ public class PortoneWebhookEvent extends BaseEntity {
         return event;
     }
 
+    /**
+     * 웹훅 이벤트를 결제 확정 완료 상태로 변경한다.
+     *
+     * <p>성공적으로 완료된 내부 결제를 연결하고, 이전 실패 사유가 남아 있지 않도록 초기화한다.
+     *
+     * @param payment 웹훅으로 확정 처리된 내부 결제
+     */
+    public void markProcessed(Payment payment) {
+        this.payment = payment;
+        this.status = WebhookEventStatus.PROCESSED;
+        this.failureReason = null;
+        this.processedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 웹훅 이벤트를 처리 실패 상태로 변경한다.
+     *
+     * @param failureReason 실패 원인 코드 또는 예외 클래스명
+     */
+    public void markFailed(String failureReason) {
+        this.status = WebhookEventStatus.FAILED;
+        this.failureReason = failureReason;
+        this.processedAt = LocalDateTime.now();
+    }
 }

@@ -1,5 +1,14 @@
 package com.teamec2.paymentsystem.infra.portone.webhook.service;
 
+import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
+import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
+import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
+import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
+import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
+import com.teamec2.paymentsystem.global.exception.BusinessException;
+import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import com.teamec2.paymentsystem.infra.portone.webhook.dto.PortoneWebhookReceiveResponse;
 import com.teamec2.paymentsystem.infra.portone.webhook.entity.PortoneWebhookEvent;
 import com.teamec2.paymentsystem.infra.portone.webhook.entity.WebhookEventStatus;
@@ -18,9 +27,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -42,15 +55,25 @@ class PortoneWebhookEventServiceTest {
     @Mock
     PortoneWebhookEventRepository webhookEventRepository;
 
+    @Mock
+    PaymentRepository paymentRepository;
+
+    @Mock
+    PaymentService paymentService;
+
     @InjectMocks
     PortoneWebhookEventService portoneWebhookEventService;
 
     @Test
-    void 웹훅수신_TransactionPaid이면_RECEIVED상태로저장한다() {
+    void 웹훅수신_TransactionPaid이면_결제확정후_PROCESSED상태로저장한다() {
         // given
+        Payment payment = mock(Payment.class);
         when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentService.confirmPaidWebhook("pay_123"))
+                .thenReturn(결제확정응답("pay_123"));
+        when(paymentRepository.findById(300L)).thenReturn(Optional.of(payment));
 
         // when
         PortoneWebhookReceiveResponse response = portoneWebhookEventService.receive(
@@ -61,21 +84,79 @@ class PortoneWebhookEventServiceTest {
 
         // then
         ArgumentCaptor<PortoneWebhookEvent> eventCaptor = ArgumentCaptor.forClass(PortoneWebhookEvent.class);
-        verify(webhookEventRepository).saveAndFlush(eventCaptor.capture());
+        verify(webhookEventRepository, times(2)).saveAndFlush(eventCaptor.capture());
         PortoneWebhookEvent savedEvent = eventCaptor.getValue();
 
         assertThat(response.received()).isTrue();
-        assertThat(response.processed()).isFalse();
+        assertThat(response.processed()).isTrue();
         assertThat(response.portonePaymentId()).isEqualTo("pay_123");
-        assertThat(response.reason()).isEqualTo("RECEIVED");
+        assertThat(response.reason()).isEqualTo("PROCESSED");
 
         assertThat(savedEvent.getWebhookId()).isEqualTo(WEBHOOK_ID);
-        assertThat(savedEvent.getStatus()).isEqualTo(WebhookEventStatus.RECEIVED);
+        assertThat(savedEvent.getStatus()).isEqualTo(WebhookEventStatus.PROCESSED);
+        assertThat(savedEvent.getPayment()).isSameAs(payment);
         assertThat(savedEvent.getType()).isEqualTo("Transaction.Paid");
         assertThat(savedEvent.getPortonePaymentId()).isEqualTo("pay_123");
         assertThat(savedEvent.getRawPayload()).isEqualTo(RAW_PAYLOAD);
         assertThat(savedEvent.getFailureReason()).isNull();
-        assertThat(savedEvent.getProcessedAt()).isNull();
+        assertThat(savedEvent.getProcessedAt()).isNotNull();
+        verify(paymentService).confirmPaidWebhook("pay_123");
+        verify(paymentRepository).findById(300L);
+    }
+
+    @Test
+    void 웹훅수신_결제확정실패하면_FAILED상태와실패사유를저장하고예외를던진다() {
+        // given
+        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentService.confirmPaidWebhook("pay_123"))
+                .thenThrow(new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+
+        // when
+        // then
+        assertThatThrownBy(() -> portoneWebhookEventService.receive(
+                WEBHOOK_ID,
+                paidWebhook("pay_123"),
+                RAW_PAYLOAD
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_NOT_FOUND);
+
+        ArgumentCaptor<PortoneWebhookEvent> eventCaptor = ArgumentCaptor.forClass(PortoneWebhookEvent.class);
+        verify(webhookEventRepository, times(2)).saveAndFlush(eventCaptor.capture());
+        PortoneWebhookEvent savedEvent = eventCaptor.getValue();
+
+        assertThat(savedEvent.getWebhookId()).isEqualTo(WEBHOOK_ID);
+        assertThat(savedEvent.getStatus()).isEqualTo(WebhookEventStatus.FAILED);
+        assertThat(savedEvent.getType()).isEqualTo("Transaction.Paid");
+        assertThat(savedEvent.getPortonePaymentId()).isEqualTo("pay_123");
+        assertThat(savedEvent.getFailureReason()).isEqualTo("PAYMENT_NOT_FOUND");
+        assertThat(savedEvent.getProcessedAt()).isNotNull();
+        verify(paymentService).confirmPaidWebhook("pay_123");
+        verify(paymentRepository, never()).findById(any());
+    }
+
+    @Test
+    void 웹훅수신_TransactionPaid인데_paymentId가비어있으면_WEBHOOK_PAYMENT_ID_MISSING이발생한다() {
+        // given
+        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+
+        // when
+        // then
+        assertThatThrownBy(() -> portoneWebhookEventService.receive(
+                WEBHOOK_ID,
+                paidWebhook(" "),
+                RAW_PAYLOAD
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WEBHOOK_PAYMENT_ID_MISSING);
+
+        verify(webhookEventRepository).existsByWebhookId(WEBHOOK_ID);
+        verify(webhookEventRepository, never()).saveAndFlush(any(PortoneWebhookEvent.class));
+        verify(paymentService, never()).confirmPaidWebhook(any());
     }
 
     @Test
@@ -185,6 +266,24 @@ class PortoneWebhookEventServiceTest {
 
         verify(webhookEventRepository, times(2)).existsByWebhookId(WEBHOOK_ID);
         verify(webhookEventRepository).saveAndFlush(any(PortoneWebhookEvent.class));
+    }
+
+    private ConfirmPaymentResponse 결제확정응답(String portonePaymentId) {
+        return new ConfirmPaymentResponse(
+                200L,
+                "ORDER-20260529-000001",
+                OrderStatus.COMPLETED,
+                300L,
+                portonePaymentId,
+                PaymentStatus.COMPLETED,
+                PaymentType.CARD,
+                1000L,
+                0L,
+                1000L,
+                10L,
+                true,
+                OffsetDateTime.parse("2026-05-29T18:35:00+09:00")
+        );
     }
 
     private WebhookTransactionPaid paidWebhook(String paymentId) {
