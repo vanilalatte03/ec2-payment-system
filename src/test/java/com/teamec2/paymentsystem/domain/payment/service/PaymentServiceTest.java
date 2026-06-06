@@ -414,8 +414,8 @@ class PaymentServiceTest {
         return userRepository.save(user);
     }
 
-    private Order 주문_저장(User user, Long totalAmount, Long usedPoint) {
-        return orderRepository.save(Order.create(user, uniqueOrderNumber(), totalAmount, usedPoint));
+    private Order 주문_저장(User user, Long totalAmount, Long usedPointAmount) {
+        return orderRepository.save(Order.create(user, uniqueOrderNumber(), totalAmount, usedPointAmount));
     }
 
     private Payment 결제_저장(Order order, Long totalAmount, Long usedPointAmount, Long pgAmount) {

@@ -14,6 +14,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByPortonePaymentId(String portonePaymentId);
 
+    Optional<Payment> findByOrderId(Long orderId);
+
     /**
      * 결제 확정 중복 처리를 막기 위해 주문 ID로 결제를 조회하면서 쓰기 잠금을 획득한다.
      *

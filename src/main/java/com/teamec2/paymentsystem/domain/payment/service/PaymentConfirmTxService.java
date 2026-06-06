@@ -9,6 +9,8 @@ import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
+import com.teamec2.paymentsystem.domain.product.entity.Product;
+import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 결제 확정 과정에서 DB 상태 변경만 담당하는 트랜잭션 서비스.
@@ -40,6 +45,7 @@ public class PaymentConfirmTxService {
     private final PaymentRepository paymentRepository;
     private final OrderItemRepository orderItemRepository;
     private final PointService pointService;
+    private final ProductRepository productRepository;
 
     /**
      * 결제 확정 대상 주문과 결제를 조회하고, 확정 가능한 상태인지 검증한다.
@@ -167,11 +173,37 @@ public class PaymentConfirmTxService {
      * @param order 재고를 복구할 주문
      */
     private void restoreStock(Order order) {
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
+        List<OrderItem> orderItems = orderItemRepository.findAllByOrderId(order.getId());
+        List<OrderItem> restorableOrderItems = orderItems.stream()
+                .filter(orderItem -> !orderItem.isCanceled())
+                .toList();
+        Map<Long, Product> lockedProducts = lockProductsForStockRestore(restorableOrderItems);
 
-        for (OrderItem orderItem : orderItems) {
-            orderItem.getProduct().restoreStock(orderItem.getQuantity());
+        for (OrderItem orderItem : restorableOrderItems) {
+            Product product = lockedProducts.get(orderItem.getProductId());
+            product.restoreStock(orderItem.getQuantity());
         }
+    }
+
+    private Map<Long, Product> lockProductsForStockRestore(List<OrderItem> orderItems) {
+        List<Long> productIds = orderItems.stream()
+                .map(OrderItem::getProductId)
+                .distinct()
+                .sorted()
+                .toList();
+
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        if (lockedProducts.size() != productIds.size()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        return lockedProducts;
     }
 
     private Payment findPaymentByOrderIdForUpdate(Long orderId) {
@@ -220,7 +252,7 @@ public class PaymentConfirmTxService {
      * @param payment 확정 대상 결제
      */
     private void validateConfirmable(Order order, Payment payment) {
-        if (!order.isPaymentPending()) {
+        if (!order.isPaymentConfirmable()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 

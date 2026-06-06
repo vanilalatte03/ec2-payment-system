@@ -27,6 +27,9 @@ public class OrderItem extends BaseEntity {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    @Column(name = "source_cart_item_id", nullable = false)
+    private Long sourceCartItemId;
+
     @Column(name = "product_name", nullable = false, length = 100)
     private String productName;
 
@@ -44,8 +47,11 @@ public class OrderItem extends BaseEntity {
     @Column(name = "refund_reserved_quantity", nullable = false, columnDefinition = "int UNSIGNED DEFAULT 0")
     private int refundReservedQuantity = 0;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private OrderItemStatus status = OrderItemStatus.ORDERED;
 
-    public OrderItem(Order order, Product product, int quantity) {
+    public OrderItem(Order order, Product product, Long sourceCartItemId, int quantity) {
         if (order == null) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
@@ -54,12 +60,17 @@ public class OrderItem extends BaseEntity {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
         }
 
+        if (sourceCartItemId == null || sourceCartItemId <= 0) {
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
         if (quantity <= 0) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
 
         this.order = order;
         this.product = product;
+        this.sourceCartItemId = sourceCartItemId;
         this.productName = product.getName();
         this.price = product.getPrice();
         this.quantity = quantity;
@@ -77,6 +88,26 @@ public class OrderItem extends BaseEntity {
         return quantity - refundedQuantity - refundReservedQuantity;
     }
 
+    public boolean isCanceled() {
+        return this.status == OrderItemStatus.CANCELED;
+    }
+
+    public void cancel() {
+        cancel(this.product);
+    }
+
+    public void cancel(Product lockedProduct) {
+        if (this.status == OrderItemStatus.CANCELED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        if (lockedProduct == null || !lockedProduct.getId().equals(getProductId())) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        lockedProduct.restoreStock(this.quantity);
+        this.status = OrderItemStatus.CANCELED;
+    }
 
     /**
      * 환불 요청 생성 시점에 환불 수량을 예약합니다.

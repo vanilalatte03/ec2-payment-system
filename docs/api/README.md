@@ -12,7 +12,7 @@
 | [auth.md](./auth.md) | 회원가입, 로그인, 로그아웃 |
 | [products.md](./products.md) | 상품 목록 조회, 상품 단건 조회 |
 | [carts.md](./carts.md) | 상품 담기, 장바구니 조회, 수량 변경, 상품 개별 삭제, 전체 비우기 |
-| [orders.md](./orders.md) | 주문서 미리보기, 주문/결제 생성, 주문 내역 조회, 주문 상세 조회, 주문 상태 변경 |
+| [orders.md](./orders.md) | 주문서 미리보기, 내 주문 내역 조회, 주문 상세 조회, 주문/결제 생성, 주문 상태 변경 |
 | [payments.md](./payments.md) | 결제 확정, 포인트 전액 결제 확정 |
 | [points.md](./points.md) | 포인트 잔액 조회, 포인트 거래 내역 조회 |
 | [refunds.md](./refunds.md) | 부분/전액 환불 요청 |
@@ -32,10 +32,10 @@
 | 장바구니 | 장바구니 수량 변경    | PATCH | `/api/carts/items/{cartItemId}` | 필요 |
 | 장바구니 | 장바구니 상품 개별 삭제 | DELETE | `/api/carts/items/{cartItemId}` | 필요 |
 | 장바구니 | 장바구니 전체 비우기   | DELETE | `/api/carts` | 필요 |
-| 주문 | 주문서 미리보기      | GET | `/api/orders/preview` | 필요 |
+| 주문 | 주문서 미리보기       | GET | `/api/orders/preview` | 필요 |
+| 주문 | 내 주문 내역 조회      | GET | `/api/orders` | 필요 |
+| 주문 | 주문 상세 조회       | GET | `/api/orders/{orderId}` | 필요 |
 | 주문 | 주문/결제 생성      | POST | `/api/orders` | 필요 |
-| 주문 | 주문 내역 조회      | GET | `/api/orders` | 필요 |
-| 주문 | 주문 상세 조회      | GET | `/api/orders/{orderId}` | 필요 |
 | 주문 | 주문 상태 변경      | PATCH | `/api/orders/{orderId}/status` | 필요 |
 | 결제 | 결제 확정         | POST | `/api/payments/confirm` | 필요 |
 | 포인트 | 포인트 잔액 조회     | GET | `/api/points/balance` | 필요 |
@@ -48,6 +48,6 @@
 
 - 장바구니 API는 인증 회원의 장바구니를 기준으로 동작합니다.
 - 주문 생성 시 주문과 결제를 동시에 만들고, 재고는 이 시점에 선차감합니다.
-- 장바구니는 주문 생성 시점에 삭제하지 않습니다. 결제 완료 시점에는 주문에 포함된 장바구니 상품만 삭제하고, 주문하지 않은 상품은 유지합니다.
+- 장바구니는 주문 생성 시점에 삭제하지 않습니다. 현재 커밋 기준 결제 확정 응답의 `cartCleared`는 `false`이며, 결제 완료 시 장바구니 자동 정리는 아직 구현되지 않았습니다.
 - 결제 확정 API와 웹훅은 같은 도메인 서비스를 호출해야 하며, `portonePaymentId` 기준으로 멱등하게 처리합니다.
 - 포인트 잔액은 `users.point_balance`와 `point_transactions` 원장을 함께 관리합니다. 환불로 적립분을 회수할 때 현재 잔액이 부족하더라도 음수 잔액은 허용하지 않고, 회수하지 못한 포인트는 PG 환불 예정 금액에서 차감합니다.
