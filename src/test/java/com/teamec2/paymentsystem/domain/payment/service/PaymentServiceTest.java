@@ -248,6 +248,7 @@ class PaymentServiceTest {
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
         payment.complete(approvedAt);
+        payment.recordCartCleared(true);
         paymentRepository.saveAndFlush(payment);
 
         // when

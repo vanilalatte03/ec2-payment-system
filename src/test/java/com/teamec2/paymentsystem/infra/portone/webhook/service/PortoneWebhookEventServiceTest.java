@@ -68,7 +68,7 @@ class PortoneWebhookEventServiceTest {
     void 웹훅수신_TransactionPaid이면_결제확정후_PROCESSED상태로저장한다() {
         // given
         Payment payment = mock(Payment.class);
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentService.confirmPaidWebhook("pay_123"))
@@ -107,7 +107,7 @@ class PortoneWebhookEventServiceTest {
     @Test
     void 웹훅수신_결제확정실패하면_FAILED상태와실패사유를저장하고예외를던진다() {
         // given
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentService.confirmPaidWebhook("pay_123"))
@@ -141,7 +141,7 @@ class PortoneWebhookEventServiceTest {
     @Test
     void 웹훅수신_TransactionPaid인데_paymentId가비어있으면_WEBHOOK_PAYMENT_ID_MISSING이발생한다() {
         // given
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
 
         // when
         // then
@@ -154,7 +154,7 @@ class PortoneWebhookEventServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.WEBHOOK_PAYMENT_ID_MISSING);
 
-        verify(webhookEventRepository).existsByWebhookId(WEBHOOK_ID);
+        verify(webhookEventRepository).findByWebhookId(WEBHOOK_ID);
         verify(webhookEventRepository, never()).saveAndFlush(any(PortoneWebhookEvent.class));
         verify(paymentService, never()).confirmPaidWebhook(any());
     }
@@ -162,7 +162,14 @@ class PortoneWebhookEventServiceTest {
     @Test
     void 웹훅수신_이미저장된WebhookId이면_중복응답하고저장하지않는다() {
         // given
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(true);
+        PortoneWebhookEvent ignoredEvent = PortoneWebhookEvent.ignored(
+                WEBHOOK_ID,
+                "UnsupportedWebhook",
+                null,
+                RAW_PAYLOAD,
+                "UNSUPPORTED_EVENT_TYPE"
+        );
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.of(ignoredEvent));
 
         // when
         PortoneWebhookReceiveResponse response = portoneWebhookEventService.receive(
@@ -183,7 +190,7 @@ class PortoneWebhookEventServiceTest {
     @Test
     void 웹훅수신_지원하지않는이벤트이면_IGNORE상태로저장한다() {
         // given
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -216,7 +223,7 @@ class PortoneWebhookEventServiceTest {
     @Test
     void 웹훅수신_TransactionFailed이면_PortOne이벤트명으로_IGNORE상태저장한다() {
         // given
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -247,7 +254,8 @@ class PortoneWebhookEventServiceTest {
     @Test
     void 웹훅수신_저장중Unique충돌이고이미존재하면_중복응답한다() {
         // given
-        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(false, true);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
+        when(webhookEventRepository.existsByWebhookId(WEBHOOK_ID)).thenReturn(true);
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate webhook id"));
 
@@ -264,7 +272,8 @@ class PortoneWebhookEventServiceTest {
         assertThat(response.portonePaymentId()).isNull();
         assertThat(response.reason()).isEqualTo("DUPLICATE_WEBHOOK_ID");
 
-        verify(webhookEventRepository, times(2)).existsByWebhookId(WEBHOOK_ID);
+        verify(webhookEventRepository).existsByWebhookId(WEBHOOK_ID);
+        verify(webhookEventRepository, times(2)).findByWebhookId(WEBHOOK_ID);
         verify(webhookEventRepository).saveAndFlush(any(PortoneWebhookEvent.class));
     }
 
