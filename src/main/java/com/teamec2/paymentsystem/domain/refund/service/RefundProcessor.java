@@ -40,30 +40,75 @@ public class RefundProcessor {
             return;
         }
 
+        PaymentCancelResponse response;
+
         try {
-            PaymentCancelResponse response = paymentGateway.cancelPayment(
+            response = paymentGateway.cancelPayment(
                     command.portonePaymentId(),
                     command.pgRefundAmount(),
                     command.currentCancellableAmount(),
                     command.reason(),
                     command.portoneIdempotencyKey()
             );
-
-            if (response.isSucceeded()) {
-                refundProcessingTxService.complete(outboxId);
-                return;
-            }
-
-            refundProcessingTxService.fail(
-                    outboxId,
-                    "PortOne 취소 실패 상태: " + response.status()
-            );
         } catch (RuntimeException e) {
+            /**
+             * 외부 PG 호출 중 예외가 발생한 경우입니다.
+             * 이 경우 실제로 PortOne에서 취소가 성공했는지 실패했는지 알 수 없으므로
+             * 실패로 확정하지 않고 PG_RESULT_UNKNOWN + 재시도 대상으로 처리합니다.
+             */
             refundProcessingTxService.retryAsPgResultUnknown(
                     outboxId,
                     e.getMessage()
             );
+
+            return;
         }
+
+        handleCancelResponse(outboxId, response);
+    }
+
+    /**
+     * 외부 결제 취소 응답(rawStatus)을 우리 서비스 기준 상태(cancelStatus)에 따라 처리합니다.
+     * SUCCEEDED:
+     * - PG 취소 성공이므로 내부 DB 환불 완료 처리
+     * RESULT_UNKNOWN:
+     * - PortOne 원본 상태가 REQUESTED이거나 알 수 없는 상태인 경우
+     * - 실패로 확정하지 않고 PG_RESULT_UNKNOWN + 재시도 대상으로 처리
+     * FAILED:
+     * - 명확한 실패 상태이므로 환불 실패 처리
+     */
+    private void handleCancelResponse(Long outboxId, PaymentCancelResponse response) {
+        if (response.isSucceeded()) {
+            refundProcessingTxService.complete(outboxId);
+            return;
+        }
+
+        if (response.isResultUnknown()) {
+            refundProcessingTxService.retryAsPgResultUnknown(
+                    outboxId,
+                    "PortOne 취소 결과 미확정 상태: " + response.rawStatus()
+            );
+
+            return;
+        }
+
+        if (response.isFailed()) {
+            refundProcessingTxService.fail(
+                    outboxId,
+                    "PortOne 취소 실패 상태: " + response.rawStatus()
+            );
+
+            return;
+        }
+
+        /**
+         * 결제/환불 도메인에서는 알 수 없는 상태를 실패로 확정하지 않고
+         * 결과 미확정으로 보냅니다.
+         */
+        refundProcessingTxService.retryAsPgResultUnknown(
+                outboxId,
+                "PortOne 취소 응답 상태를 해석할 수 없습니다. status=" + response.rawStatus()
+        );
     }
 
     /**

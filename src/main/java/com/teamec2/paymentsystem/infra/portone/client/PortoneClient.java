@@ -1,6 +1,7 @@
 package com.teamec2.paymentsystem.infra.portone.client;
 
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -16,6 +17,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.time.ZoneId;
+import java.util.Locale;
 
 /**
  * PortOne REST API와 통신하는 결제 게이트웨이 구현체.
@@ -124,9 +126,12 @@ public class PortoneClient implements PaymentGateway {
 
             validateCancelResponse(response);
 
+            String rawStatus = response.cancellation().status();
+
             return new PaymentCancelResponse(
                     response.cancellation().id(),
-                    response.cancellation().status()
+                    rawStatus,
+                    mapCancelStatus(rawStatus)
             );
         } catch (RestClientException e) {
             log.warn(
@@ -137,7 +142,7 @@ public class PortoneClient implements PaymentGateway {
                     e
             );
 
-            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+            throw new BusinessException(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         }
     }
 
@@ -165,6 +170,8 @@ public class PortoneClient implements PaymentGateway {
      * <p>취소 ID나 상태가 없으면 실제 취소 성공 여부를 판단할 수 없으므로
      * 보상 취소 실패로 처리한다.
      *
+     * cancelPayment()는 보상 취소와 환불 취소 모두에서 쓰이므로, 외부 결제 취소 요청 실패 에러 코드로 사용합니다.
+     *
      * @param response PortOne 결제 취소 응답
      */
     private void validateCancelResponse(PortoneCancelPaymentResponse response) {
@@ -173,7 +180,7 @@ public class PortoneClient implements PaymentGateway {
                 || response.cancellation().id() == null
                 || response.cancellation().status() == null) {
             log.warn("PortOne 결제 취소 응답 형식 오류");
-            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+            throw new BusinessException(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         }
     }
 
@@ -208,4 +215,39 @@ public class PortoneClient implements PaymentGateway {
         }
     }
 
+    /**
+     * PortOne 원본 상태값(rawStatus) 해석은 infra 계층인 PortoneClient에서 담당합니다.
+     * RefundProcessor는 PortOne의 REQUESTED, FAILED 같은 문자열을 직접 알 필요가 없습니다.
+     */
+    private PaymentCancelStatus mapCancelStatus(String rawStatus) {
+        String status = normalizeStatus(rawStatus);
+
+        if ("SUCCEEDED".equals(status)) {
+            return PaymentCancelStatus.SUCCEEDED;
+        }
+
+        if ("FAILED".equals(status)) {
+            return PaymentCancelStatus.FAILED;
+        }
+
+        /*
+         * REQUESTED는 취소 요청이 접수되었지만 최종 성공/실패가 확정되지 않은 상태입니다.
+         *
+         * 그 외 알 수 없는 상태도 환불 도메인에서는 실패로 단정하지 않고
+         * RESULT_UNKNOWN으로 처리하는 것이 안전합니다.
+         */
+        return PaymentCancelStatus.RESULT_UNKNOWN;
+    }
+
+    /**
+     * 외부에서 받은 상태 문자열을 정리하는 메서드입니다.
+     */
+    private String normalizeStatus(String status) {
+        if (status == null) {
+            return "";
+        }
+
+        return status.trim().toUpperCase(Locale.ROOT);
+    }
 }
+

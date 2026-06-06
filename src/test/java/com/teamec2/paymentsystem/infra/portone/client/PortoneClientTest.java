@@ -241,7 +241,7 @@ class PortoneClientTest {
 
         // then
         assertThat(response.cancellationId()).isEqualTo("cancel_123");
-        assertThat(response.status()).isEqualTo("SUCCEEDED");
+        assertThat(response.rawStatus()).isEqualTo("SUCCEEDED");
         server.verify();
     }
 
