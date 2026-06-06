@@ -7,6 +7,7 @@ import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
@@ -246,7 +247,7 @@ class PaymentControllerTest {
                 String reason,
                 String idempotencyKey
         ) {
-            return new PaymentCancelResponse("cancel_test", "SUCCEEDED");
+            return new PaymentCancelResponse("cancel_test", "SUCCEEDED", PaymentCancelStatus.SUCCEEDED);
         }
 
         void success(String paymentId, Long paidAmount, LocalDateTime approvedAt) {

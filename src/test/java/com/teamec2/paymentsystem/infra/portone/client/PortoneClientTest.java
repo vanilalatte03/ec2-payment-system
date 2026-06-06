@@ -283,7 +283,7 @@ class PortoneClientTest {
     }
 
     @Test
-    void 결제취소_PortOne서버오류면_PAYMENT_COMPENSATION_FAILED가발생한다() {
+    void 결제취소_PortOne서버오류면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -300,12 +300,12 @@ class PortoneClientTest {
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         server.verify();
     }
 
     @Test
-    void 결제취소_응답본문이없으면_PAYMENT_COMPENSATION_FAILED가발생한다() {
+    void 결제취소_응답본문이없으면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -322,12 +322,12 @@ class PortoneClientTest {
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         server.verify();
     }
 
     @Test
-    void 결제취소_취소상태가없으면_PAYMENT_COMPENSATION_FAILED가발생한다() {
+    void 결제취소_취소상태가없으면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -350,7 +350,7 @@ class PortoneClientTest {
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         server.verify();
     }
 }
