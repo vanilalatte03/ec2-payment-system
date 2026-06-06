@@ -147,6 +147,33 @@ class CartItemRepositoryTest {
         assertThat(cartItemRepository.findAllInCart(cart.getId())).isEmpty();
     }
 
+    @Test
+    void 장바구니ID와상품ID목록으로삭제하면_해당장바구니상품만삭제한다() {
+        // given
+        User user = 회원_저장();
+        User otherUser = 회원_저장();
+        Cart cart = 장바구니_저장(user);
+        Cart otherCart = 장바구니_저장(otherUser);
+        CartItem selectedCartItem = 장바구니상품_저장(cart, 상품_저장("삭제 대상 상품", 10000), 1);
+        CartItem remainingCartItem = 장바구니상품_저장(cart, 상품_저장("유지 대상 상품", 20000), 1);
+        CartItem otherCartItem = 장바구니상품_저장(otherCart, 상품_저장("다른 회원 상품", 30000), 1);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // when
+        int deletedCount = cartItemRepository.deleteAllByCartIdAndIdIn(
+                cart.getId(),
+                List.of(selectedCartItem.getId(), otherCartItem.getId())
+        );
+
+        // then
+        assertThat(deletedCount).isEqualTo(1);
+        assertThat(cartItemRepository.findById(selectedCartItem.getId())).isEmpty();
+        assertThat(cartItemRepository.findById(remainingCartItem.getId())).isPresent();
+        assertThat(cartItemRepository.findById(otherCartItem.getId())).isPresent();
+    }
+
     private User 회원_저장() {
         User user = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
         entityManager.persist(user);

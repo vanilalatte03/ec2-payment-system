@@ -29,6 +29,29 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByOrderIdForUpdate(Long orderId);
 
     /**
+     * PortOne 결제 ID로 결제를 조회하면서 쓰기 잠금을 획득한다.
+     *
+     * <p>웹훅 기반 결제 확정은 내부 주문 ID를 받지 않고 PortOne 결제 ID만 받는다.
+     * 같은 결제가 클라이언트 확정 요청과 웹훅으로 동시에 처리될 수 있으므로 비관적 쓰기 잠금으로
+     * 중복 완료 처리를 막는다.
+     *
+     * <p>완료 응답 생성과 장바구니 정리에 주문과 사용자가 필요하므로 {@code order}, {@code user}를
+     * 함께 fetch join 한다.
+     *
+     * @param portonePaymentId PortOne 결제 ID
+     * @return 잠금이 적용되고 주문/사용자가 함께 로딩된 결제 엔티티
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select p
+            from Payment p
+            join fetch p.order o
+            join fetch o.user
+            where p.portonePaymentId = :portonePaymentId
+            """)
+    Optional<Payment> findByPortonePaymentIdForUpdate(String portonePaymentId);
+
+    /**
      * 결제 ID로 결제를 조회하면서 쓰기 잠금을 획득한다.
      *
      * <p>결제 완료 처리와 보상 취소 후 실패 처리 모두 같은 결제 상태를 변경한다.

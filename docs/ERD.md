@@ -107,6 +107,7 @@ erDiagram
         BIGINT used_point_amount "사용 포인트"
         BIGINT pg_amount "PG 결제 금액"
         BIGINT reward_point_amount "적립 포인트"
+        BOOLEAN cart_cleared "장바구니 정리 여부"
         DATETIME approved_at "결제 완료일시"
         DATETIME failed_at "결제 실패일시"
         DATETIME created_at "생성일시"
@@ -284,6 +285,7 @@ erDiagram
 | 사용 포인트 | used_point_amount | BIGINT | NOT NULL | used_point_amount >= 0 |
 | PG 결제 금액 | pg_amount | BIGINT | NOT NULL | pg_amount >= 0 |
 | 적립 포인트 | reward_point_amount | BIGINT | NULL | reward_point_amount >= 0 |
+| 장바구니 정리 여부 | cart_cleared | BOOLEAN | NOT NULL | 결제 완료 시 주문 상품에 해당하는 장바구니 상품이 1건 이상 삭제됐는지 여부 |
 | 결제 완료일시 | approved_at | DATETIME | NULL |  |
 | 결제 실패일시 | failed_at | DATETIME | NULL |  |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |

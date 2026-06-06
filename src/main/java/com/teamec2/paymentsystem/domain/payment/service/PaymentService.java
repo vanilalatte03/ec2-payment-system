@@ -77,6 +77,40 @@ public class PaymentService {
     }
 
     /**
+     * PortOne 결제 완료 웹훅을 기준으로 주문과 결제를 완료 상태로 변경한다.
+     *
+     * <p>웹훅에는 내부 주문 ID나 사용자 ID가 없으므로 PortOne 결제 ID로 내부 결제를 찾고,
+     * 기존 클라이언트 확정 흐름과 같은 검증, 완료, 보상 취소 로직을 사용한다.
+     *
+     * <p>이미 완료된 결제는 웹훅 재전송으로 보고 현재 확정 결과를 반환한다.
+     * PG 결제가 없는 포인트 전액 결제는 외부 결제 조회 없이 확정한다.
+     *
+     * @param portonePaymentId PortOne 결제 ID
+     * @return 결제 확정 결과
+     */
+    public ConfirmPaymentResponse confirmPaidWebhook(String portonePaymentId) {
+        ConfirmPaymentTarget target = paymentConfirmTxService.prepareByPortonePaymentId(portonePaymentId);
+
+        if (target.alreadyCompleted()) {
+            return target.completedResponse();
+        }
+
+        if (target.pointOnly()) {
+            return paymentConfirmTxService.complete(target.paymentId(), LocalDateTime.now());
+        }
+
+        PaymentGatewayResponse gatewayResponse = paymentGateway.getPayment(target.portonePaymentId());
+        validateGatewayPayment(target, gatewayResponse);
+
+        try {
+            return paymentConfirmTxService.complete(target.paymentId(), gatewayResponse.approvedAt());
+        } catch (RuntimeException e) {
+            compensateExternalSuccess(target, gatewayResponse.paidAmount());
+            throw e;
+        }
+    }
+
+    /**
      * PortOne 결제 단건 조회 결과가 우리 서버가 기대한 결제 정보와 같은지 검증한다.
      *
      * <p>PortOne 응답 상태가 {@code PAID}가 아니면 아직 외부 결제가 성공한 것이 아니므로

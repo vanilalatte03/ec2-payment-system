@@ -70,7 +70,7 @@ class PortoneWebhookControllerTest {
                 WEBHOOK_TIMESTAMP
         )).thenReturn(webhook);
         when(portoneWebhookEventService.receive(WEBHOOK_ID, webhook, RAW_BODY))
-                .thenReturn(PortoneWebhookReceiveResponse.received("pay_123"));
+                .thenReturn(PortoneWebhookReceiveResponse.processed("pay_123"));
 
         // when
         // then
@@ -79,9 +79,9 @@ class PortoneWebhookControllerTest {
                 .andExpect(jsonPath("$.status").value(BODY_STATUS))
                 .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
                 .andExpect(jsonPath("$.data.received").value(true))
-                .andExpect(jsonPath("$.data.processed").value(false))
+                .andExpect(jsonPath("$.data.processed").value(true))
                 .andExpect(jsonPath("$.data.portonePaymentId").value("pay_123"))
-                .andExpect(jsonPath("$.data.reason").value("RECEIVED"));
+                .andExpect(jsonPath("$.data.reason").value("PROCESSED"));
 
         verify(portoneWebhookVerifier).verify(RAW_BODY, WEBHOOK_ID, WEBHOOK_SIGNATURE, WEBHOOK_TIMESTAMP);
         verify(portoneWebhookEventService).receive(WEBHOOK_ID, webhook, RAW_BODY);

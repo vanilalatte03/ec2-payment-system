@@ -1,7 +1,13 @@
 package com.teamec2.paymentsystem.domain.payment.service;
 
+import com.teamec2.paymentsystem.domain.cart.entity.Cart;
+import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
+import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
+import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
+import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.entity.OrderStatus;
+import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
@@ -15,6 +21,10 @@ import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
+import com.teamec2.paymentsystem.domain.product.entity.Product;
+import com.teamec2.paymentsystem.domain.product.entity.ProductCategory;
+import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
+import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -48,6 +58,9 @@ class PaymentServiceTest {
     OrderRepository orderRepository;
 
     @Autowired
+    OrderItemRepository orderItemRepository;
+
+    @Autowired
     PaymentRepository paymentRepository;
 
     @Autowired
@@ -55,6 +68,15 @@ class PaymentServiceTest {
 
     @Autowired
     PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
+    CartItemRepository cartItemRepository;
+
+    @Autowired
+    CartRepository cartRepository;
+
+    @Autowired
+    ProductRepository productRepository;
 
     @Autowired
     TestPaymentGateway testPaymentGateway;
@@ -73,8 +95,12 @@ class PaymentServiceTest {
 
     private void clearDatabase() {
         pointTransactionRepository.deleteAll();
+        cartItemRepository.deleteAll();
+        cartRepository.deleteAll();
         paymentRepository.deleteAll();
+        orderItemRepository.deleteAll();
         orderRepository.deleteAll();
+        productRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -82,7 +108,9 @@ class PaymentServiceTest {
     void 결제확정_PG결제성공이면_주문과결제를완료한다() {
         // given
         User user = 회원_저장(10000L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
         Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, cartFixture.orderedItem());
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
         pointService.reserveUsedPoints(payment);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
@@ -109,14 +137,18 @@ class PaymentServiceTest {
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(response.paymentType()).isEqualTo(PaymentType.POINT_CARD);
         assertThat(response.pgAmount()).isEqualTo(800L);
+        assertThat(response.cartCleared()).isTrue();
         assertThat(response.approvedAt()).isEqualTo(approvedAt.atOffset(ZoneOffset.ofHours(9)));
+        assertThat(cartItemRepository.findAllInCart(cartFixture.cart().getId())).isEmpty();
     }
 
     @Test
     void 결제확정_포인트전액결제이면_PortOne조회없이_완료한다() {
         // given
         User user = 회원_저장(1000L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
         Order order = 주문_저장(user, 1000L, 1000L);
+        주문상품_저장(order, cartFixture.orderedItem());
         Payment payment = 결제_저장(order, 1000L, 1000L, 0L);
         pointService.reserveUsedPoints(payment);
 
@@ -136,7 +168,8 @@ class PaymentServiceTest {
         assertThat(foundPayment.getApprovedAt()).isNotNull();
         assertThat(response.paymentType()).isEqualTo(PaymentType.POINT_ONLY);
         assertThat(response.pgAmount()).isZero();
-        assertThat(response.cartCleared()).isFalse();
+        assertThat(response.cartCleared()).isTrue();
+        assertThat(cartItemRepository.findAllInCart(cartFixture.cart().getId())).isEmpty();
     }
 
     @Test
@@ -167,6 +200,103 @@ class PaymentServiceTest {
         assertThat(response.orderStatus()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(response.approvedAt()).isEqualTo(approvedAt.atOffset(ZoneOffset.ofHours(9)));
+    }
+
+    @Test
+    void 웹훅결제확정_PG결제성공이면_주문결제완료하고_장바구니를정리한다() {
+        // given
+        User user = 회원_저장(10000L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
+        Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, cartFixture.orderedItem());
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
+
+        // when
+        ConfirmPaymentResponse response = paymentService.confirmPaidWebhook(payment.getPortonePaymentId());
+
+        // then
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(foundPayment.getApprovedAt()).isEqualTo(approvedAt);
+        assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+
+        assertThat(response.orderId()).isEqualTo(order.getId());
+        assertThat(response.paymentId()).isEqualTo(payment.getId());
+        assertThat(response.orderStatus()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(response.paymentType()).isEqualTo(PaymentType.POINT_CARD);
+        assertThat(response.pgAmount()).isEqualTo(800L);
+        assertThat(response.cartCleared()).isTrue();
+        assertThat(response.approvedAt()).isEqualTo(approvedAt.atOffset(ZoneOffset.ofHours(9)));
+        assertThat(cartItemRepository.findAllInCart(cartFixture.cart().getId())).isEmpty();
+    }
+
+    @Test
+    void 웹훅결제확정_이미완료된결제이면_PortOne조회없이_멱등응답한다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        order.complete();
+        orderRepository.saveAndFlush(order);
+
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        payment.complete(approvedAt);
+        payment.recordCartCleared(true);
+        paymentRepository.saveAndFlush(payment);
+
+        // when
+        ConfirmPaymentResponse response = paymentService.confirmPaidWebhook(payment.getPortonePaymentId());
+
+        // then
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(testPaymentGateway.getCallCount()).isZero();
+        assertThat(testPaymentGateway.getCancelCallCount()).isZero();
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(foundPayment.getApprovedAt()).isEqualTo(approvedAt);
+        assertThat(response.orderStatus()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(response.cartCleared()).isTrue();
+        assertThat(response.approvedAt()).isEqualTo(approvedAt.atOffset(ZoneOffset.ofHours(9)));
+    }
+
+    @Test
+    void 웹훅결제확정_PortOne금액이다르면_보상취소후_PAYMENT_AMOUNT_MISMATCH가발생한다() {
+        // given
+        User user = 회원_저장(1000L);
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
+        testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentService.confirmPaidWebhook(payment.getPortonePaymentId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
+
+        assertThat(testPaymentGateway.getCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
+        assertThat(testPaymentGateway.getCancelPaymentId()).isEqualTo(payment.getPortonePaymentId());
+        assertThat(testPaymentGateway.getCancelAmount()).isEqualTo(700L);
+        assertThat(testPaymentGateway.getCancelReason()).isEqualTo("PAYMENT_CONFIRM_INTERNAL_FAILURE");
+        assertThat(testPaymentGateway.getCancelIdempotencyKey())
+                .isEqualTo("payment-confirm-compensation-" + payment.getId());
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(foundPayment.getFailedAt()).isNotNull();
     }
 
     @Test
@@ -423,12 +553,42 @@ class PaymentServiceTest {
         return paymentRepository.save(Payment.createPending(order, totalAmount, usedPointAmount, pgAmount, pgAmount / 100));
     }
 
+    private CartFixture 장바구니상품_저장(User user) {
+        Product product = productRepository.save(new Product(
+                "후드 집업",
+                55000,
+                10,
+                "테스트 상품",
+                ProductStatus.ON_SALE,
+                ProductCategory.TOP
+        ));
+        Cart cart = cartRepository.save(new Cart(user));
+        CartItem orderedItem = cartItemRepository.save(new CartItem(cart, product, 1));
+
+        return new CartFixture(cart, orderedItem);
+    }
+
+    private OrderItem 주문상품_저장(Order order, CartItem cartItem) {
+        return orderItemRepository.save(new OrderItem(
+                order,
+                cartItem.getProduct(),
+                cartItem.getId(),
+                cartItem.getQuantity()
+        ));
+    }
+
     private String uniqueEmail() {
         return UUID.randomUUID() + "@example.com";
     }
 
     private String uniqueOrderNumber() {
         return "ORDER-" + UUID.randomUUID();
+    }
+
+    private record CartFixture(
+            Cart cart,
+            CartItem orderedItem
+    ) {
     }
 
     @TestConfiguration

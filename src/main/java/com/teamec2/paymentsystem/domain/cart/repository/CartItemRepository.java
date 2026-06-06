@@ -2,6 +2,7 @@ package com.teamec2.paymentsystem.domain.cart.repository;
 
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -88,4 +89,22 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
           and ci.id in :cartItemIds
         """)
     List<CartItem> findAllWithProduct(Long cartId, List<Long> cartItemIds);
+
+    /**
+     * 결제 완료 후 주문에 포함된 장바구니 상품만 한 번에 삭제한다.
+     *
+     * <p>요청한 장바구니 ID와 상품 ID 목록을 함께 조건으로 사용해 다른 사용자의 장바구니 상품이
+     * 삭제되지 않도록 범위를 제한한다. 삭제된 행 수는 응답의 장바구니 정리 여부 판단에 사용한다.
+     *
+     * @param cartId 삭제 대상 장바구니 ID
+     * @param cartItemIds 삭제할 장바구니 상품 ID 목록
+     * @return 실제 삭제된 장바구니 상품 수
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        delete from CartItem ci
+        where ci.cart.id = :cartId
+          and ci.id in :cartItemIds
+        """)
+    int deleteAllByCartIdAndIdIn(Long cartId, List<Long> cartItemIds);
 }
