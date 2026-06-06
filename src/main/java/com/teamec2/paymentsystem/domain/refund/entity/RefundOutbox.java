@@ -153,7 +153,7 @@ public class RefundOutbox extends BaseEntity {
      * PG 호출 실패 또는 PG 결과 불명확 상황에서 재시도를 예약합니다.
      * PROCESSING -> PENDING
      */
-    public void markRetry(String reason, LocalDateTime now) {
+    public boolean markRetry(String reason, LocalDateTime now) {
         if (now == null) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
@@ -166,7 +166,7 @@ public class RefundOutbox extends BaseEntity {
 
         if (this.retryCount > MAX_RETRY_COUNT) {
             markFailed("최대 재시도 횟수를 초과했습니다. 마지막 오류: " + reason);
-            return;
+            return false;
         }
 
         this.status = RefundOutboxStatus.PENDING;
@@ -174,12 +174,15 @@ public class RefundOutbox extends BaseEntity {
 
         long delayMinutes = Math.min(
                 (long) (BASE_RETRY_DELAY_MINUTES * Math.pow(2, retryCount - 1)),
-                MAX_RETRY_DELAY_MINUTES);
+                MAX_RETRY_DELAY_MINUTES
+        );
 
         long jitterSeconds = ThreadLocalRandom.current().nextLong(0, MAX_JITTER_SECONDS + 1);
 
         this.nextAttemptAt = now.plusMinutes(delayMinutes).plusSeconds(jitterSeconds);
         this.processingStartedAt = null;
+
+        return true;
     }
 
     /**

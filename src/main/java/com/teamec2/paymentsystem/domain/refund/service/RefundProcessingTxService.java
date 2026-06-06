@@ -221,7 +221,43 @@ public class RefundProcessingTxService {
             refund.markPgResultUnknown(message);
         }
 
-        outbox.markRetry(reason, LocalDateTime.now());
+        boolean retryScheduled = outbox.markRetry(message, LocalDateTime.now());
+
+        /**
+         * 최대 재시도 횟수를 초과한 경우입니다.
+         *
+         * 이때 Outbox만 FAILED로 끝내면 Refund는 PG_RESULT_UNKNOWN으로 남고,
+         * 이후 새 환불 요청이 REFUND_IN_PROGRESS로 계속 막힙니다.
+         *
+         * 따라서 Refund도 FAILED로 전환하고,
+         * 환불 요청 생성 시 예약했던 OrderItem 수량을 해제해야 합니다.
+         */
+        if (!retryScheduled) {
+            failRefundAfterRetryExceeded(
+                    refund,
+                    "최대 재시도 횟수를 초과하여 환불 실패로 확정했습니다. 마지막 오류: " + message
+            );
+        }
+    }
+
+    /**
+     * 재시도 한도를 초과한 환불을 최종 실패로 정리합니다.
+     * PG_RESULT_UNKNOWN 상태가 계속 남으면 새 환불 요청이 계속 REFUND_IN_PROGRESS로 막히므로,
+     * 최종 실패 시 Refund 상태를 FAILED로 바꾸고 예약 수량을 해제합니다.
+     */
+    private void failRefundAfterRetryExceeded(Refund refund, String reason) {
+        if (refund.isFailed()) {
+            return;
+        }
+
+        List<RefundItem> refundItems =
+                refundItemRepository.findAllByRefundIdWithOrderItem(refund.getId());
+
+        for (RefundItem refundItem : refundItems) {
+            refundItem.getOrderItem().releaseRefundQuantity(refundItem.getRefundQuantity());
+        }
+
+        refund.fail(reason);
     }
 
     private RefundOutbox findOutboxForUpdate(Long outboxId) {
