@@ -56,8 +56,6 @@ public class SecurityConfig {
                                 "/",
                                 "/index.html",
                                 "/payment.html",
-                                "/subscription.html",
-                                "/config.js",
                                 "/styles.css",
                                 "/app.js",
                                 "/assets/**"
