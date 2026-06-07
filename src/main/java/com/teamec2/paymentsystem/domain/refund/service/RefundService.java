@@ -8,7 +8,6 @@ import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.refund.dto.FullRefundRequest;
 import com.teamec2.paymentsystem.domain.refund.dto.PartialRefundRequest;
-import com.teamec2.paymentsystem.domain.refund.dto.RefundItemRequest;
 import com.teamec2.paymentsystem.domain.refund.dto.RefundResponse;
 import com.teamec2.paymentsystem.domain.refund.entity.Refund;
 import com.teamec2.paymentsystem.domain.refund.entity.RefundItem;
@@ -37,6 +36,7 @@ public class RefundService {
     private final PointService pointService;
     private final RefundAmountCalculator refundAmountCalculator;
     private final RefundIdempotencyService refundIdempotencyService;
+    private final RefundTargetResolver refundTargetResolver;
 
 
     /**
@@ -95,31 +95,7 @@ public class RefundService {
          */
         List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
 
-        /**
-         * 요청으로 들어온 orderItemId와 quantity가 실제 환불 가능한지 검증하고, 환불 대상 OrderItem 목록을 만듭니다.
-         */
-        List<OrderItem> refundTargetItems = findPartialRefundItems(orderItems, request.items());
-
-        /**
-         * orderItemId -> 환불 수량 형태로 변환합니다.
-         * RefundItem 생성과 환불 금액 계산에서 사용합니다.
-         */
-        Map<Long, Integer> quantityMap = toQuantityMap(request.items());
-
-
-        /**
-         * 이번 요청에서 환불하려는 상품들의 총 금액입니다.
-         * ex)
-         * A 상품 10,000원 x 1개
-         * B 상품 5,000원 x 2개
-         * → requestedRefundAmount = 20,000원
-         */
-        long requestedRefundAmount = calculateRequestedRefundAmount(refundTargetItems, quantityMap);
-
-        /**
-         * 현재 주문에서 아직 환불 가능한 전체 잔여 금액입니다.
-         */
-        long totalRemainingRefundableAmount = calculateTotalRemainingRefundableAmount(orderItems);
+        RefundTarget refundTarget = refundTargetResolver.resolvePartial(orderItems, request.items());
 
         /**
          * 이번 환불의 최종 환불 금액과 포인트 정산 스냅샷을 계산합니다.
@@ -128,8 +104,8 @@ public class RefundService {
 
         RefundAmount refundAmount = refundAmountCalculator.calculate(
                 payment,
-                requestedRefundAmount,
-                totalRemainingRefundableAmount,
+                refundTarget.requestedRefundAmount(),
+                refundTarget.totalRemainingRefundableAmount(),
                 currentPointBalance
         );
 
@@ -142,8 +118,8 @@ public class RefundService {
                 order,
                 payment,
                 request.reason(),
-                refundTargetItems,
-                quantityMap,
+                refundTarget.refundTargetItems(),
+                refundTarget.quantityMap(),
                 refundAmount
         );
     }
@@ -192,30 +168,7 @@ public class RefundService {
 
         List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
 
-
-        /**
-         * 전체 환불에서는 남아 있는 환불 가능 수량이 1개 이상인 상품을 모두 환불 대상으로 잡습니다.
-         */
-        List<OrderItem> refundTargetItems = orderItems.stream()
-                .filter(orderItem -> orderItem.getRemainingRefundableQuantity() > 0)
-                .toList();
-
-        if (refundTargetItems.isEmpty()) {
-            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
-        }
-
-        /**
-         * 전체 환불이므로 각 주문 상품의 남은 환불 가능 수량 전체를 환불 수량으로 사용합니다.
-         */
-        Map<Long, Integer> quantityMap = new HashMap<>();
-        for (OrderItem orderItem : refundTargetItems) {
-            quantityMap.put(orderItem.getId(), orderItem.getRemainingRefundableQuantity());
-        }
-
-        /**
-         * 전체 환불에서는 현재 남은 환불 가능 금액 전체가 요청 환불 금액입니다.
-         */
-        long totalRemainingRefundableAmount = calculateTotalRemainingRefundableAmount(orderItems);
+        RefundTarget refundTarget = refundTargetResolver.resolveFull(orderItems);
 
         /**
          * 전체 환불은 항상 마지막 환불이므로
@@ -225,8 +178,8 @@ public class RefundService {
 
         RefundAmount refundAmount = refundAmountCalculator.calculate(
                 payment,
-                totalRemainingRefundableAmount,
-                totalRemainingRefundableAmount,
+                refundTarget.requestedRefundAmount(),
+                refundTarget.totalRemainingRefundableAmount(),
                 currentPointBalance
         );
 
@@ -236,8 +189,8 @@ public class RefundService {
                 order,
                 payment,
                 request.reason(),
-                refundTargetItems,
-                quantityMap,
+                refundTarget.refundTargetItems(),
+                refundTarget.quantityMap(),
                 refundAmount
         );
     }
@@ -426,105 +379,6 @@ public class RefundService {
         }
 
         return allocations;
-    }
-
-    /**
-     * 부분 환불 요청으로 들어온 상품 목록이 실제 환불 가능한지 검증하고,
-     * 환불 대상 OrderItem 목록을 반환합니다.
-     * 검증 내용:
-     * 1. 같은 orderItemId가 중복 요청되었는지
-     * 2. 요청한 orderItemId가 실제 주문에 포함되어 있는지
-     * 3. 환불 수량이 null이거나 0 이하인지
-     * 4. 요청 수량이 남은 환불 가능 수량을 초과하는지
-     */
-    private List<OrderItem> findPartialRefundItems(
-            List<OrderItem> orderItems,
-            List<RefundItemRequest> itemRequests
-    ) {
-        Map<Long, OrderItem> orderItemMap = new HashMap<>();
-
-        for (OrderItem orderItem : orderItems) {
-            orderItemMap.put(orderItem.getId(), orderItem);
-        }
-
-        Set<Long> requestedItemIds = new HashSet<>();
-        List<OrderItem> refundTargetItems = new ArrayList<>();
-
-        for (RefundItemRequest itemRequest : itemRequests) {
-            if (!requestedItemIds.add(itemRequest.orderItemId())) {
-                throw new BusinessException(ErrorCode.DUPLICATE_REQUEST);
-            }
-
-            OrderItem orderItem = orderItemMap.get(itemRequest.orderItemId());
-
-            if (orderItem == null) {
-                throw new BusinessException(ErrorCode.ORDER_ITEM_NOT_FOUND);
-            }
-
-            if (itemRequest.quantity() == null || itemRequest.quantity() <= 0) {
-                throw new BusinessException(ErrorCode.INVALID_REFUND_QUANTITY);
-            }
-
-            if (itemRequest.quantity() > orderItem.getRemainingRefundableQuantity()) {
-                throw new BusinessException(ErrorCode.REFUND_QUANTITY_EXCEEDED);
-            }
-
-            refundTargetItems.add(orderItem);
-        }
-
-        return refundTargetItems;
-    }
-
-    /**
-     * 부분 환불 요청의 item 목록을 orderItemId -> quantity 형태로 변환합니다.
-     */
-    private Map<Long, Integer> toQuantityMap(List<RefundItemRequest> itemRequests) {
-        Map<Long, Integer> quantityMap = new HashMap<>();
-
-        for (RefundItemRequest itemRequest : itemRequests) {
-            quantityMap.put(itemRequest.orderItemId(), itemRequest.quantity());
-        }
-
-        return quantityMap;
-    }
-
-    /**
-     * 이번 환불 요청의 상품 기준 총 환불 금액을 계산합니다.
-     */
-    private long calculateRequestedRefundAmount(
-            List<OrderItem> refundTargetItems,
-            Map<Long, Integer> quantityMap
-    ) {
-        long refundAmount = 0L;
-
-        for (OrderItem orderItem : refundTargetItems) {
-            refundAmount += (long) orderItem.getPrice() * quantityMap.get(orderItem.getId());
-        }
-
-        if (refundAmount <= 0) {
-            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
-        }
-
-        return refundAmount;
-    }
-
-    /**
-     * 현재 주문에서 아직 환불 가능한 전체 잔여 금액입니다.
-     * requestedRefundAmount == totalRemainingRefundableAmount 이면 이번 환불은 마지막 환불로 판단합니다.
-     * 마지막 환불에서는 부분 환불 비율 계산 중 생긴 버림 오차를 없애기 위해 남은 금액 전체를 기준으로 계산합니다.
-     */
-    private long calculateTotalRemainingRefundableAmount(List<OrderItem> orderItems) {
-        long totalRemainingAmount = 0L;
-
-        for (OrderItem orderItem : orderItems) {
-            totalRemainingAmount += (long) orderItem.getPrice() * orderItem.getRemainingRefundableQuantity();
-        }
-
-        if (totalRemainingAmount <= 0) {
-            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
-        }
-
-        return totalRemainingAmount;
     }
 
     /**
