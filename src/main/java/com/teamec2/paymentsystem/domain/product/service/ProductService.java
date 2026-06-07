@@ -10,9 +10,7 @@ import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import com.teamec2.paymentsystem.global.pagination.PageResponse;
 import com.teamec2.paymentsystem.global.pagination.PageableFactory;
-import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,9 +48,8 @@ public class ProductService {
         return toDetailResponse(product);
     }
 
-    // 다른 도메인에서도 상품 엔티티가 필요할 수 있어서 public으로 열어둔 조회 메서드입니다.
-    // 단순 findById가 아니라, 없을 때 도메인 예외로 바꿔주는 역할까지 포함합니다.
-    public Product getProductById(Long productId) {
+    // 상품 상세 조회에서 공통으로 쓰는 상품 로직
+    private Product getProductById(Long productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
     }
@@ -123,60 +120,23 @@ public class ProductService {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            addCategoryCondition(predicates, root, criteriaBuilder, condition);
-            addMinPriceCondition(predicates, root, criteriaBuilder, condition);
-            addMaxPriceCondition(predicates, root, criteriaBuilder, condition);
-            addStatusCondition(predicates, root, criteriaBuilder, condition);
+            if (condition.category() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("category"), condition.category()));
+            }
+
+            if (condition.minPrice() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("price"), condition.minPrice()));
+            }
+
+            if (condition.maxPrice() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("price"), condition.maxPrice()));
+            }
+
+            if (condition.status() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), condition.status()));
+            }
 
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
-    }
-
-    // 카테고리 조건이 있으면 category = ? 조건을 추가합니다.
-    private void addCategoryCondition(
-            List<Predicate> predicates,
-            Root<Product> root,
-            CriteriaBuilder criteriaBuilder,
-            ProductSearchCondition condition
-    ) {
-        if (condition.category() != null) {
-            predicates.add(criteriaBuilder.equal(root.get("category"), condition.category()));
-        }
-    }
-
-    // 최소 가격 조건이 있으면 price >= ? 조건을 추가합니다.
-    private void addMinPriceCondition(
-            List<Predicate> predicates,
-            Root<Product> root,
-            CriteriaBuilder criteriaBuilder,
-            ProductSearchCondition condition
-    ) {
-        if (condition.minPrice() != null) {
-            predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("price"), condition.minPrice()));
-        }
-    }
-
-    // 최대 가격 조건이 있으면 price <= ? 조건을 추가합니다.
-    private void addMaxPriceCondition(
-            List<Predicate> predicates,
-            Root<Product> root,
-            CriteriaBuilder criteriaBuilder,
-            ProductSearchCondition condition
-    ) {
-        if (condition.maxPrice() != null) {
-            predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("price"), condition.maxPrice()));
-        }
-    }
-
-    // 판매 상태 조건이 있으면 status = ? 조건을 추가합니다.
-    private void addStatusCondition(
-            List<Predicate> predicates,
-            Root<Product> root,
-            CriteriaBuilder criteriaBuilder,
-            ProductSearchCondition condition
-    ) {
-        if (condition.status() != null) {
-            predicates.add(criteriaBuilder.equal(root.get("status"), condition.status()));
-        }
     }
 }
