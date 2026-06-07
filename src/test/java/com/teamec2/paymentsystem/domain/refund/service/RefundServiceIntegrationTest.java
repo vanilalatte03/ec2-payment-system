@@ -401,6 +401,17 @@ class RefundServiceIntegrationTest {
         assertThat(refundItems)
                 .extracting(RefundItem::getRefundAmount)
                 .containsExactlyInAnyOrder(3_000L, 4_000L);
+        // 상품별 실제 반환액(point + pg)은 상품 기준 환불 금액을 넘으면 안 됩니다.
+        // 마지막 환불에서 버림 오차를 보정하더라도 RefundItem 검증 조건을 지켜야 합니다.
+        assertThat(refundItems)
+                .allSatisfy(refundItem ->
+                        assertThat(refundItem.getPointRefundAmount() + refundItem.getPgRefundAmount())
+                                .isLessThanOrEqualTo(refundItem.getRefundAmount())
+                );
+        assertThat(refundItems.stream().mapToLong(RefundItem::getPointRefundAmount).sum())
+                .isEqualTo(refund.getPointRefundAmount());
+        assertThat(refundItems.stream().mapToLong(RefundItem::getPgRefundAmount).sum())
+                .isEqualTo(refund.getPgRefundAmount());
         assertThat(refundOutboxRepository.count()).isEqualTo(2);
     }
 
