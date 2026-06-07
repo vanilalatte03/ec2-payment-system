@@ -49,7 +49,7 @@ class CartServiceTest {
     }
 
     @Test
-    void 구매완료상품정리_선택한장바구니상품만삭제하고_나머지는유지한다() {
+    void 선택상품정리_선택한장바구니상품만삭제하고_나머지는유지한다() {
         // given
         User user = 회원_저장();
         Product firstProduct = 상품_저장("첫 번째 상품");
@@ -65,14 +65,14 @@ class CartServiceTest {
         CartItem fifthCartItem = 장바구니상품_저장(user, fifthProduct);
 
         // when
-        ClearCartResponse response = cartService.clearPurchasedItems(
+        ClearCartResponse response = cartService.clearItems(
                 user.getId(),
-                List.of(firstCartItem, thirdCartItem)
+                List.of(firstCartItem.getId(), thirdCartItem.getId())
         );
 
         // then
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        List<Long> remainingCartItemIds = cartItemRepository.findAllWithProduct(cart.getId()).stream()
+        List<Long> remainingCartItemIds = cartItemRepository.findAllWithProductByCartId(cart.getId()).stream()
                 .map(CartItem::getId)
                 .toList();
 
@@ -88,7 +88,7 @@ class CartServiceTest {
     }
 
     @Test
-    void 구매완료상품ID정리_null과중복ID를제외하고_본인장바구니상품만삭제한다() {
+    void 선택상품정리_null과중복ID를제외하고_본인장바구니상품만삭제한다() {
         // given
         User user = 회원_저장();
         User otherUser = 회원_저장();
@@ -101,14 +101,14 @@ class CartServiceTest {
         CartItem otherCartItem = 장바구니상품_저장(otherUser, otherProduct);
 
         // when
-        ClearCartResponse response = cartService.clearPurchasedItemIds(
+        ClearCartResponse response = cartService.clearItems(
                 user.getId(),
                 Arrays.asList(firstCartItem.getId(), firstCartItem.getId(), null, otherCartItem.getId(), -1L)
         );
 
         // then
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        List<Long> remainingCartItemIds = cartItemRepository.findAllWithProduct(cart.getId()).stream()
+        List<Long> remainingCartItemIds = cartItemRepository.findAllWithProductByCartId(cart.getId()).stream()
                 .map(CartItem::getId)
                 .toList();
 
@@ -119,15 +119,37 @@ class CartServiceTest {
     }
 
     @Test
-    void 구매완료상품ID정리_ID목록이없으면_삭제하지않고0을반환한다() {
+    void 선택상품정리_존재하지않는ID는제외하고_존재하는상품만삭제한다() {
+        // given
+        User user = 회원_저장();
+        Product firstProduct = 상품_저장("삭제할 상품");
+        Product secondProduct = 상품_저장("유지할 상품");
+
+        CartItem firstCartItem = 장바구니상품_저장(user, firstProduct);
+        CartItem secondCartItem = 장바구니상품_저장(user, secondProduct);
+
+        // when
+        ClearCartResponse response = cartService.clearItems(
+                user.getId(),
+                List.of(firstCartItem.getId(), 999_999_999L)
+        );
+
+        // then
+        assertThat(response.deletedCount()).isEqualTo(1);
+        assertThat(cartItemRepository.findById(firstCartItem.getId())).isEmpty();
+        assertThat(cartItemRepository.findById(secondCartItem.getId())).isPresent();
+    }
+
+    @Test
+    void 선택상품정리_ID목록이없으면_삭제하지않고0을반환한다() {
         // given
         User user = 회원_저장();
         Product product = 상품_저장("유지할 상품");
         CartItem cartItem = 장바구니상품_저장(user, product);
 
         // when
-        ClearCartResponse nullResponse = cartService.clearPurchasedItemIds(user.getId(), null);
-        ClearCartResponse emptyResponse = cartService.clearPurchasedItemIds(user.getId(), List.of());
+        ClearCartResponse nullResponse = cartService.clearItems(user.getId(), null);
+        ClearCartResponse emptyResponse = cartService.clearItems(user.getId(), List.of());
 
         // then
         assertThat(nullResponse.deletedCount()).isZero();
@@ -136,12 +158,12 @@ class CartServiceTest {
     }
 
     @Test
-    void 구매완료상품ID정리_장바구니가없으면_삭제하지않고0을반환한다() {
+    void 선택상품정리_장바구니가없으면_삭제하지않고0을반환한다() {
         // given
         User user = userRepository.save(User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678"));
 
         // when
-        ClearCartResponse response = cartService.clearPurchasedItemIds(user.getId(), List.of(1L));
+        ClearCartResponse response = cartService.clearItems(user.getId(), List.of(1L));
 
         // then
         assertThat(response.deletedCount()).isZero();

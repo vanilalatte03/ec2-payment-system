@@ -2,31 +2,29 @@ package com.teamec2.paymentsystem.domain.cart.dto;
 
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
-import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
 
-public record CartItemResponse (
+public record UpdateQuantityResponse (
         Long cartItemId,
         Long productId,
         String productName,
         int quantity,
         int unitPrice,
         Long lineAmount,
-        int stock,
-        ProductStatus status
+        Long cartTotalAmount
 ) {
 
-    public static CartItemResponse from(CartItem cartItem) {
+    public static UpdateQuantityResponse from(CartItem cartItem, Long cartTotalAmount) {
         Product product = cartItem.getProduct();
+        long lineAmount = (long) product.getPrice() * cartItem.getQuantity();
 
-        return new CartItemResponse(
+        return new UpdateQuantityResponse(
                 cartItem.getId(),
                 product.getId(),
                 product.getName(),
                 cartItem.getQuantity(),
                 product.getPrice(),
-                (long) product.getPrice() * cartItem.getQuantity(),
-                product.getStock(),
-                product.getStatus()
+                lineAmount,
+                cartTotalAmount
         );
     }
 }

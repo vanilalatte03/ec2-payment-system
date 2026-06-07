@@ -40,8 +40,8 @@ class CartItemRepositoryTest {
         entityManager.clear();
 
         // when
-        Optional<CartItem> foundCartItem = cartItemRepository.findByProduct(cart.getId(), product.getId());
-        Optional<CartItem> notFoundCartItem = cartItemRepository.findByProduct(cart.getId(), -1L);
+        Optional<CartItem> foundCartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId());
+        Optional<CartItem> notFoundCartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), -1L);
 
         // then
         assertThat(foundCartItem).isPresent();
@@ -61,8 +61,8 @@ class CartItemRepositoryTest {
         entityManager.clear();
 
         // when
-        Optional<CartItem> foundCartItem = cartItemRepository.findDetailById(cartItem.getId());
-        Optional<CartItem> notFoundCartItem = cartItemRepository.findDetailById(-1L);
+        Optional<CartItem> foundCartItem = cartItemRepository.findWithOwnerAndProductById(cartItem.getId());
+        Optional<CartItem> notFoundCartItem = cartItemRepository.findWithOwnerAndProductById(-1L);
 
         // then
         assertThat(foundCartItem).isPresent();
@@ -91,8 +91,8 @@ class CartItemRepositoryTest {
         entityManager.clear();
 
         // when
-        List<CartItem> cartItems = cartItemRepository.findAllWithProduct(cart.getId());
-        Long totalAmount = cartItemRepository.sumAmount(cart.getId());
+        List<CartItem> cartItems = cartItemRepository.findAllWithProductByCartId(cart.getId());
+        Long totalAmount = cartItemRepository.sumAmountByCartId(cart.getId());
 
         // then
         assertThat(cartItems).hasSize(2);
@@ -118,7 +118,10 @@ class CartItemRepositoryTest {
         entityManager.clear();
 
         // when
-        List<CartItem> cartItems = cartItemRepository.findAllInCart(cart.getId(), List.of(selectedCartItem.getId()));
+        List<CartItem> cartItems = cartItemRepository.findAllByCartIdAndIdIn(
+                cart.getId(),
+                List.of(selectedCartItem.getId())
+        );
 
         // then
         assertThat(cartItems).hasSize(1);
@@ -144,7 +147,7 @@ class CartItemRepositoryTest {
 
         // then
         assertThat(deletedCount).isEqualTo(2);
-        assertThat(cartItemRepository.findAllInCart(cart.getId())).isEmpty();
+        assertThat(cartItemRepository.findAllByCartId(cart.getId())).isEmpty();
     }
 
     @Test
@@ -162,7 +165,7 @@ class CartItemRepositoryTest {
         entityManager.clear();
 
         // when
-        int deletedCount = cartItemRepository.deleteAllByCartIdAndIdIn(
+        int deletedCount = cartItemRepository.deleteByCartIdAndIdIn(
                 cart.getId(),
                 List.of(selectedCartItem.getId(), otherCartItem.getId())
         );
