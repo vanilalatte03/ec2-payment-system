@@ -1,7 +1,7 @@
 package com.teamec2.paymentsystem.infra.portone.client;
 
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
-import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;

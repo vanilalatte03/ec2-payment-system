@@ -1,4 +1,4 @@
-package com.teamec2.paymentsystem.domain.payment.enums;
+package com.teamec2.paymentsystem.domain.payment.port;
 /**
  * 외부 결제 취소 결과를 우리 서비스 기준으로 해석한 상태입니다.
  * PortOne의 원본 상태 문자열을 환불 도메인 서비스가 직접 해석하지 않도록 분리합니다.
