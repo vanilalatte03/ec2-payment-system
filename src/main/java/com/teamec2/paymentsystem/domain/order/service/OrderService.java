@@ -473,9 +473,9 @@ public class OrderService {
         // 이렇게 해야 "락은 기다렸지만 검증은 예전 Product 객체로 하는" 상황을 피할 수 있습니다.
         List<CartItem> cartItems;
         if (distinctCartItemIds == null || distinctCartItemIds.isEmpty()) {
-            cartItems = cartItemRepository.findAllInCart(cart.getId());
+            cartItems = cartItemRepository.findAllByCartId(cart.getId());
         } else {
-            cartItems = cartItemRepository.findAllInCart(cart.getId(), distinctCartItemIds);
+            cartItems = cartItemRepository.findAllByCartIdAndIdIn(cart.getId(), distinctCartItemIds);
         }
 
         if (cartItems.isEmpty()) {
@@ -495,9 +495,9 @@ public class OrderService {
         // cartItemIds가 있으면 선택 상품만, 없으면 장바구니 전체 상품을 주문 대상으로 가져옵니다.
         List<CartItem> cartItems;
         if (distinctCartItemIds == null || distinctCartItemIds.isEmpty()) {
-            cartItems = cartItemRepository.findAllWithProduct(cart.getId());
+            cartItems = cartItemRepository.findAllWithProductByCartId(cart.getId());
         } else {
-            cartItems = cartItemRepository.findAllWithProduct(cart.getId(), distinctCartItemIds);
+            cartItems = cartItemRepository.findAllWithProductByCartIdAndIdIn(cart.getId(), distinctCartItemIds);
         }
 
         if (cartItems.isEmpty()) {

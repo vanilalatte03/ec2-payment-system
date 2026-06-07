@@ -20,10 +20,10 @@ public class Cart extends BaseEntity {
     private Long id;
 
     /**
-     * 낙관락
+     * 낙관락 버전입니다.
      *
-     * 처음 읽었을 때의 장바구니 버전과 저장하려는 순간의 장바구니 버전이 같은가?
-     * 를 확인하기 위한 변수입니다.
+     * 같은 장바구니를 동시에 수정하면 먼저 커밋한 요청만 성공하고,
+     * 늦게 커밋하는 요청은 버전 충돌로 실패합니다.
      */
     @Version
     @Column(nullable = false)

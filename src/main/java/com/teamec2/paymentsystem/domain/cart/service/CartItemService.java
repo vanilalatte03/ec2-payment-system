@@ -1,14 +1,14 @@
 package com.teamec2.paymentsystem.domain.cart.service;
 
-import com.teamec2.paymentsystem.domain.cart.dto.CartItemCommandResponse;
-import com.teamec2.paymentsystem.domain.cart.dto.DeleteCartItemResponse;
+import com.teamec2.paymentsystem.domain.cart.dto.AddItemResponse;
+import com.teamec2.paymentsystem.domain.cart.dto.DeleteItemResponse;
+import com.teamec2.paymentsystem.domain.cart.dto.UpdateQuantityResponse;
 import com.teamec2.paymentsystem.domain.cart.entity.Cart;
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
+import com.teamec2.paymentsystem.domain.cart.facade.CartProductFacade;
 import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
-import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
-import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -21,127 +21,113 @@ public class CartItemService {
 
     private final CartItemRepository cartItemRepository;
     private final CartRepository cartRepository;
-    private final ProductRepository productRepository;
+    private final CartProductFacade cartProductFacade;
 
     @Transactional
-    public CartItemCommandResponse addCartItem(Long userId, Long productId, int quantity) {
-        if (quantity <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
-        }
+    public AddItemResponse addItem(Long userId, Long productId, int quantity) {
+        checkQuantity(quantity);
 
-        Cart cart = cartRepository.findByUserIdWithOptimisticLock(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
+        Cart cart = getCartForEdit(userId);
+        Product product = cartProductFacade.getProduct(productId);
+        cartProductFacade.checkSale(product);
 
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        CartItem cartItem = findItem(cart.getId(), productId);
+        int finalQuantity = getFinalQuantity(cartItem, quantity);
 
-        validateProductOnSale(product);
+        cartProductFacade.checkStock(product, finalQuantity);
 
-        CartItem cartItem = cartItemRepository
-                .findByProduct(cart.getId(), productId)
-                .orElse(null);
+        CartItem savedCartItem = saveItem(cartItem, cart, product, finalQuantity);
 
-        int finalQuantity;
-
-        if (cartItem == null) {
-            finalQuantity = quantity;
-        } else {
-            finalQuantity = cartItem.getQuantity() + quantity;
-        }
-
-        if (finalQuantity > product.getStock()) {
-            throw new BusinessException(ErrorCode.CART_STOCK_EXCEEDED);
-        }
-
-        if (cartItem == null) {
-            cartItem = new CartItem(cart, product, quantity);
-        } else {
-            cartItem.changeQuantity(finalQuantity);
-        }
-
-        CartItem savedCartItem = cartItemRepository.save(cartItem);
-        Long cartTotalAmount = calculateCartTotalAmount(cart.getId());
-
-        return toCommandResponse(savedCartItem, cartTotalAmount);
+        return AddItemResponse.from(savedCartItem, totalAmount(cart.getId()));
     }
 
     @Transactional
-    public CartItemCommandResponse updateCartItemQuantity(Long userId, Long cartItemId, int quantity) {
-        if (quantity <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
-        }
+    public UpdateQuantityResponse updateQuantity(Long userId, Long cartItemId, int quantity) {
+        checkQuantity(quantity);
 
-        CartItem cartItem = cartItemRepository.findDetailById(cartItemId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
-
-        if (!cartItem.getCart().getUser().getId().equals(userId)) {
-            throw new BusinessException(ErrorCode.CART_ITEM_ACCESS_DENIED);
-        }
-
-        Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
-
-        cartItem = cartItemRepository.findInCart(cart.getId(), cartItemId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
-
+        CartItemTarget target = getOwnedItem(userId, cartItemId);
+        Cart cart = target.cart();
+        CartItem cartItem = target.cartItem();
         Product product = cartItem.getProduct();
 
-        validateProductOnSale(product);
-
-        if (quantity > product.getStock()) {
-            throw new BusinessException(ErrorCode.CART_STOCK_EXCEEDED);
-        }
+        cartProductFacade.checkSale(product);
+        cartProductFacade.checkStock(product, quantity);
 
         cartItem.changeQuantity(quantity);
 
-        Long cartTotalAmount = calculateCartTotalAmount(cart.getId());
-        return toCommandResponse(cartItem, cartTotalAmount);
+        return UpdateQuantityResponse.from(cartItem, totalAmount(cart.getId()));
     }
 
     @Transactional
-    public DeleteCartItemResponse deleteCartItem(Long userId, Long cartItemId) {
-        CartItem cartItem = cartItemRepository.findDetailById(cartItemId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
-
-        if (!cartItem.getCart().getUser().getId().equals(userId)) {
-            throw new BusinessException(ErrorCode.CART_ITEM_ACCESS_DENIED);
-        }
-
-        Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
-
-        cartItem = cartItemRepository.findInCart(cart.getId(), cartItemId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
+    public DeleteItemResponse deleteItem(Long userId, Long cartItemId) {
+        CartItemTarget target = getOwnedItem(userId, cartItemId);
+        Cart cart = target.cart();
+        CartItem cartItem = target.cartItem();
 
         cartItemRepository.delete(cartItem);
         cartItemRepository.flush();
 
-        Long cartTotalAmount = calculateCartTotalAmount(cart.getId());
-        return new DeleteCartItemResponse(true, cartItemId, cartTotalAmount);
+        return new DeleteItemResponse(true, cartItemId, totalAmount(cart.getId()));
     }
 
-    private void validateProductOnSale(Product product) {
-        if (product.getStatus() != ProductStatus.ON_SALE) {
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE);
+    private CartItemTarget getOwnedItem(Long userId, Long cartItemId) {
+        CartItem cartItem = cartItemRepository.findWithOwnerAndProductById(cartItemId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        if (!cartItem.getCart().getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorCode.CART_ITEM_ACCESS_DENIED);
+        }
+
+        Cart cart = cartRepository.findByIdWithOptimisticLock(cartItem.getCart().getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
+
+        CartItem target = cartItemRepository.findWithProductByCartIdAndId(cart.getId(), cartItemId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND));
+
+        return new CartItemTarget(cart, target);
+    }
+
+    private void checkQuantity(int quantity) {
+        if (quantity <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_QUANTITY);
         }
     }
 
-    private CartItemCommandResponse toCommandResponse(CartItem cartItem, Long cartTotalAmount) {
-        Product product = cartItem.getProduct();
-        long lineAmount = (long) product.getPrice() * cartItem.getQuantity();
-
-        return new CartItemCommandResponse(
-                cartItem.getId(),
-                product.getId(),
-                product.getName(),
-                cartItem.getQuantity(),
-                product.getPrice(),
-                lineAmount,
-                cartTotalAmount
-        );
+    private Cart getCartForEdit(Long userId) {
+        return cartRepository.findByUserIdWithOptimisticLock(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CART_NOT_FOUND));
     }
 
-    private Long calculateCartTotalAmount(Long cartId) {
-        return cartItemRepository.sumAmount(cartId);
+    private CartItem findItem(Long cartId, Long productId) {
+        return cartItemRepository
+                .findByCartIdAndProductId(cartId, productId)
+                .orElse(null);
+    }
+
+    private int getFinalQuantity(CartItem cartItem, int quantity) {
+        if (cartItem == null) {
+            return quantity;
+        }
+
+        return cartItem.getQuantity() + quantity;
+    }
+
+    private CartItem saveItem(CartItem cartItem, Cart cart, Product product, int quantity) {
+        if (cartItem == null) {
+            return cartItemRepository.save(new CartItem(cart, product, quantity));
+        }
+
+        cartItem.changeQuantity(quantity);
+        return cartItemRepository.save(cartItem);
+    }
+
+    private Long totalAmount(Long cartId) {
+        return cartItemRepository.sumAmountByCartId(cartId);
+    }
+
+    private record CartItemTarget(
+            Cart cart,
+            CartItem cartItem
+    ) {
     }
 }
