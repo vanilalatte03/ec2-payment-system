@@ -29,26 +29,22 @@
 
 ```json
 {
-  "status": 200,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "content": [
-      {
-        "productId": 10,
-        "name": "무선 키보드",
-        "price": 39000,
-        "stock": 12,
-        "category": "ELECTRONIC",
-        "status": "ON_SALE",
-        "createdAt": "2026-05-29T18:30:00"
-      }
-    ],
-    "page": 0,
-    "size": 10,
-    "totalElements": 1,
-    "totalPages": 1,
-    "hasNext": false
-  }
+  "content": [
+    {
+      "productId": 10,
+      "name": "무선 키보드",
+      "price": 39000,
+      "stock": 12,
+      "category": "ELECTRONIC",
+      "status": "ON_SALE",
+      "createdAt": "2026-05-29T18:30:00"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 1,
+  "totalPages": 1,
+  "hasNext": false
 }
 ```
 
