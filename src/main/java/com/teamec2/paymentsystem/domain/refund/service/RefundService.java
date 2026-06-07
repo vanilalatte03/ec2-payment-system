@@ -22,13 +22,9 @@ import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class RefundService {
@@ -40,6 +36,7 @@ public class RefundService {
     private final RefundOutboxRepository refundOutboxRepository;
     private final PointService pointService;
     private final RefundAmountCalculator refundAmountCalculator;
+    private final RefundIdempotencyService refundIdempotencyService;
 
 
     /**
@@ -62,10 +59,10 @@ public class RefundService {
             String idempotencyKey,
             PartialRefundRequest request
     ) {
-        validateIdempotencyKey(idempotencyKey);
+        refundIdempotencyService.validateIdempotencyKey(idempotencyKey);
         validatePartialRequest(request);
 
-        String requestHash = createPartialRefundRequestHash(request);
+        String requestHash = refundIdempotencyService.createPartialRefundRequestHash(request);
 
         Payment payment = paymentRepository.findByOrderIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
@@ -84,7 +81,7 @@ public class RefundService {
                 refundRepository.findByPayment_IdAndIdempotencyKey(payment.getId(), idempotencyKey);
 
         if (existingRefund.isPresent()) {
-            validateSameIdempotentRequest(existingRefund.get(), requestHash);
+            refundIdempotencyService.validateSameIdempotentRequest(existingRefund.get(), requestHash);
 
             List<RefundItem> existingItems =
                     refundItemRepository.findAllByRefundIdWithOrderItem(existingRefund.get().getId());
@@ -162,13 +159,15 @@ public class RefundService {
             String idempotencyKey,
             FullRefundRequest request
     ) {
-        validateIdempotencyKey(idempotencyKey);
+        refundIdempotencyService.validateIdempotencyKey(idempotencyKey);
 
-        if (request == null || request.reason() == null || request.reason().isBlank()) {
+        if (request == null
+                || request.reason() == null
+                || request.reason().isBlank()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 
-        String requestHash = createFullRefundRequestHash(request);
+        String requestHash = refundIdempotencyService.createFullRefundRequestHash(request);
 
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
@@ -182,7 +181,7 @@ public class RefundService {
                 refundRepository.findByPayment_IdAndIdempotencyKey(payment.getId(), idempotencyKey);
 
         if (existingRefund.isPresent()) {
-            validateSameIdempotentRequest(existingRefund.get(), requestHash);
+            refundIdempotencyService.validateSameIdempotentRequest(existingRefund.get(), requestHash);
 
             List<RefundItem> existingItems =
                     refundItemRepository.findAllByRefundIdWithOrderItem(existingRefund.get().getId());
@@ -567,16 +566,6 @@ public class RefundService {
     }
 
     /**
-     * 멱등키가 비어 있는지 검증합니다.
-     * 멱등키는 같은 환불 요청이 중복 생성되지 않도록 막기 위한 키입니다.
-     */
-    private void validateIdempotencyKey(String idempotencyKey) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
-        }
-    }
-
-    /**
      * 부분 환불 요청값을 검증합니다.
      * 부분 환불에서는 환불 사유와 환불 대상 상품 목록이 필수입니다.
      */
@@ -587,45 +576,6 @@ public class RefundService {
 
         if (request.items() == null || request.items().isEmpty()) {
             throw new BusinessException(ErrorCode.REFUND_ITEM_REQUIRED);
-        }
-    }
-
-    private void validateSameIdempotentRequest(Refund existingRefund, String requestHash) {
-        if (!existingRefund.getRequestHash().equals(requestHash)) {
-            /*
-             * 같은 Idempotency-Key인데 요청 내용이 다르면 재시도가 아니라 충돌입니다.
-             * 기존 환불을 그대로 반환하면 사용자는 다른 요청이 성공한 것처럼 오해할 수 있습니다.
-             */
-            throw new BusinessException(ErrorCode.CONFLICT);
-        }
-    }
-
-    private String createPartialRefundRequestHash(PartialRefundRequest request) {
-        String itemKey = request.items().stream()
-                .sorted(Comparator.comparing(RefundItemRequest::orderItemId))
-                .map(item -> item.orderItemId() + ":" + item.quantity())
-                .collect(Collectors.joining("|"));
-
-        return sha256(request.reason() + "|" + itemKey);
-    }
-
-    private String createFullRefundRequestHash(FullRefundRequest request) {
-        return sha256(request.reason());
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] encodedHash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : encodedHash) {
-                hexString.append(String.format("%02x", b));
-            }
-
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
 }
