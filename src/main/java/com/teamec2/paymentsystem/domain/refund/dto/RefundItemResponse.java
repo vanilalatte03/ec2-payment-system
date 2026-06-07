@@ -10,7 +10,8 @@ import com.teamec2.paymentsystem.domain.refund.entity.RefundItem;
  * @param productName 상품명
  * @param refundQuantity 환불한 상품 수량
  * @param unitPrice 환불 당시 상품 단가
- * @param refundAmount 상품별 총 환불 금액
+ * @param grossRefundAmount 상품 가격 * 환불 수량 기준 금액입니다. 적립 포인트 회수 전 금액입니다.
+ * @param actualRefundAmount 이 상품에 배분된 실제 반환 금액입니다. pointRefundAmount + pgRefundAmount 입니다.
  * @param pointRefundAmount 상품별 포인트 환불 금액
  * @param pgRefundAmount 상품별 PG 환불 금액
  */
@@ -20,11 +21,13 @@ public record RefundItemResponse(
         String productName,
         int refundQuantity,
         Long unitPrice,
-        Long refundAmount,
+        Long grossRefundAmount,
+        Long actualRefundAmount,
         Long pointRefundAmount,
         Long pgRefundAmount
 ) {
     public static RefundItemResponse from(RefundItem refundItem) {
+        Long actualRefundAmount = refundItem.getPointRefundAmount() + refundItem.getPointRefundAmount();
         return new RefundItemResponse(
                 refundItem.getId(),
                 refundItem.getOrderItem().getId(),
@@ -32,6 +35,7 @@ public record RefundItemResponse(
                 refundItem.getRefundQuantity(),
                 refundItem.getUnitPrice(),
                 refundItem.getRefundAmount(),
+                actualRefundAmount,
                 refundItem.getPointRefundAmount(),
                 refundItem.getPgRefundAmount()
         );
