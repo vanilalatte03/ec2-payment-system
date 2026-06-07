@@ -27,7 +27,7 @@ public record RefundItemResponse(
         Long pgRefundAmount
 ) {
     public static RefundItemResponse from(RefundItem refundItem) {
-        Long actualRefundAmount = refundItem.getPointRefundAmount() + refundItem.getPointRefundAmount();
+        Long actualRefundAmount = refundItem.getPointRefundAmount() + refundItem.getPgRefundAmount();
         return new RefundItemResponse(
                 refundItem.getId(),
                 refundItem.getOrderItem().getId(),
