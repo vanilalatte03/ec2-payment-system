@@ -27,6 +27,9 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * PG 환불 처리 전후의 DB 트랜잭션 상태 변경 담당
+ */
 @Service
 @RequiredArgsConstructor
 public class RefundProcessingTxService {

@@ -6,14 +6,8 @@ import org.springframework.stereotype.Component;
 
 
 /**
- * 환불 시 포인트 반환, 적립 포인트 회수, PG 환불 차감 금액을 계산합니다.
- * 이 클래스는 다음 값을 계산합니다.
- * 1. 최종 반환 포인트
- * 2. 최종 PG 환불 금액
- * 3. 사용 포인트에서 회수한 적립 포인트
- * 4. 현재 보유 포인트에서 회수한 적립 포인트
- * 5. PG 환불 금액에서 차감한 금액
- * 실제 포인트 잔액 변경, 포인트 원장 저장, 환불 상태 변경은 Service 계층에서 처리합니다.
+ * 포인트 정산 계산 담당
+ * 포인트 회수 후 최종 포인트/PG 환불액 계산
  */
 @Component
 public class RefundPointSettlementCalculator {
