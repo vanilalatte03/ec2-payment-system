@@ -10,6 +10,7 @@
 - [DTO](conventions/dto.md)
 - [Entity](conventions/entity.md)
 - [Controller](conventions/controller.md)
+- [Facade](conventions/facade.md)
 - [Service](conventions/service.md)
 - [Repository](conventions/repository.md)
 - [Exception](conventions/exception.md)
