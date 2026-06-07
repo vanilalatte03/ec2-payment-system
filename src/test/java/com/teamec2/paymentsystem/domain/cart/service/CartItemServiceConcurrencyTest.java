@@ -99,9 +99,9 @@ class CartItemServiceConcurrencyTest {
 
         // then
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-        CartItem cartItem = cartItemRepository.findByProduct(cart.getId(), product.getId()).orElseThrow();
+        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId()).orElseThrow();
 
-        assertThat(cartItemRepository.findAllWithProduct(cart.getId())).hasSize(1);
+        assertThat(cartItemRepository.findAllWithProductByCartId(cart.getId())).hasSize(1);
         assertThat(cartItem.getQuantity()).isBetween(1, requestCount);
         assertThat(cart.getVersion()).isGreaterThan(0L);
     }
@@ -152,7 +152,7 @@ class CartItemServiceConcurrencyTest {
 
             // then
             Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow();
-            List<CartItem> cartItems = cartItemRepository.findAllWithProduct(cart.getId());
+            List<CartItem> cartItems = cartItemRepository.findAllWithProductByCartId(cart.getId());
             List<Long> savedProductIds = cartItems.stream()
                     .map(cartItem -> cartItem.getProduct().getId())
                     .toList();
@@ -227,7 +227,7 @@ class CartItemServiceConcurrencyTest {
         return () -> {
             readyLatch.countDown();
             startLatch.await();
-            cartItemService.addCartItem(userId, productId, 1);
+            cartItemService.addItem(userId, productId, 1);
             return null;
         };
     }
@@ -241,7 +241,7 @@ class CartItemServiceConcurrencyTest {
         return () -> {
             readyLatch.countDown();
             startLatch.await();
-            cartItemService.addCartItem(userId, productId, 1);
+            cartItemService.addItem(userId, productId, 1);
             return productId;
         };
     }
@@ -256,7 +256,7 @@ class CartItemServiceConcurrencyTest {
         return () -> {
             readyLatch.countDown();
             startLatch.await();
-            cartItemService.updateCartItemQuantity(userId, cartItemId, targetQuantity);
+            cartItemService.updateQuantity(userId, cartItemId, targetQuantity);
             return targetQuantity;
         };
     }

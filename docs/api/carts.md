@@ -3,7 +3,10 @@
 장바구니는 인증된 회원만 접근할 수 있고, 항상 토큰의 회원 기준으로 조회/수정합니다.
 
 성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
+
 아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
+HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
 
 ## 공통 정책
 
@@ -54,33 +57,15 @@
 }
 ```
 
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `cartItemId` | Long | 생성되었거나 수량이 합산된 장바구니 상품 ID |
-| `productId` | Long | 상품 ID |
-| `productName` | string | 상품명 |
-| `quantity` | int | 장바구니에 최종 반영된 수량 |
-| `unitPrice` | int | 현재 상품 단가 |
-| `lineAmount` | Long | `unitPrice * quantity` |
-| `cartTotalAmount` | Long | 현재 장바구니 전체 상품 합계 금액 |
-
-### Response Example
-
-```json
-{
-  "status": 200,
-  "message": "요청이 성공했습니다.",
-  "data": {
-    "cartItemId": 100,
-    "productId": 10,
-    "productName": "무선 키보드",
-    "quantity": 2,
-    "unitPrice": 39000,
-    "lineAmount": 78000,
-    "cartTotalAmount": 78000
-  }
-}
-```
+| 필드 | 타입     | 설명 |
+| --- |--------| --- |
+| `cartItemId` | Long   | 생성되었거나 수량이 합산된 장바구니 상품 ID |
+| `productId` | Long   | 상품 ID |
+| `productName` | String | 상품명 |
+| `quantity` | int    | 장바구니에 최종 반영된 수량 |
+| `unitPrice` | int    | 현재 상품 단가 |
+| `lineAmount` | Long   | `unitPrice * quantity` |
+| `cartTotalAmount` | Long   | 현재 장바구니 전체 상품 합계 금액 |
 
 ### Errors
 
@@ -128,20 +113,20 @@
 }
 ```
 
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `cartId` | Long 또는 null | 장바구니 ID. 장바구니가 없으면 `null` |
-| `items` | array | 장바구니 상품 목록 |
-| `items[].cartItemId` | Long | 장바구니 상품 ID |
-| `items[].productId` | Long | 상품 ID |
-| `items[].productName` | string | 상품명 |
-| `items[].quantity` | int | 장바구니에 담긴 수량 |
-| `items[].unitPrice` | int | 현재 상품 단가 |
-| `items[].lineAmount` | Long | `unitPrice * quantity` |
-| `items[].stock` | int | 현재 상품 재고 |
-| `items[].status` | ProductStatus | 현재 상품 상태. `ON_SALE`, `SOLD_OUT`, `DISCONTINUED` |
-| `totalQuantity` | int | 장바구니 전체 상품 수량 합계 |
-| `totalAmount` | Long | 장바구니 전체 상품 금액 합계 |
+| 필드 | 타입     | 설명 |
+| --- |--------| --- |
+| `cartId` | Long   | 장바구니 ID. 장바구니가 없으면 `null` |
+| `items` | array  | 장바구니 상품 목록 |
+| `items[].cartItemId` | Long   | 장바구니 상품 ID |
+| `items[].productId` | Long   | 상품 ID |
+| `items[].productName` | String | 상품명 |
+| `items[].quantity` | int    | 장바구니에 담긴 수량 |
+| `items[].unitPrice` | int    | 현재 상품 단가 |
+| `items[].lineAmount` | Long   | `unitPrice * quantity` |
+| `items[].stock` | int    | 현재 상품 재고 |
+| `items[].status` | String | 현재 상품 상태. `ON_SALE`, `SOLD_OUT`, `DISCONTINUED` |
+| `totalQuantity` | int    | 장바구니 전체 상품 수량 합계 |
+| `totalAmount` | Long   | 장바구니 전체 상품 금액 합계 |
 
 ### Empty Cart Response Data
 
@@ -150,17 +135,6 @@
 ```json
 {
   "cartId": 1,
-  "items": [],
-  "totalQuantity": 0,
-  "totalAmount": 0
-}
-```
-
-장바구니 자체가 아직 없으면 `cartId`만 `null`이고 나머지는 동일하게 빈 값으로 반환합니다.
-
-```json
-{
-  "cartId": null,
   "items": [],
   "totalQuantity": 0,
   "totalAmount": 0
@@ -216,27 +190,27 @@
 }
 ```
 
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `cartItemId` | Long | 변경된 장바구니 상품 ID |
-| `productId` | Long | 상품 ID |
-| `productName` | string | 상품명 |
-| `quantity` | int | 변경 후 수량 |
-| `unitPrice` | int | 현재 상품 단가 |
-| `lineAmount` | Long | `unitPrice * quantity` |
-| `cartTotalAmount` | Long | 변경 이후 장바구니 전체 상품 합계 금액 |
+| 필드 | 타입     | 설명 |
+| --- |--------| --- |
+| `cartItemId` | Long   | 변경된 장바구니 상품 ID |
+| `productId` | Long   | 상품 ID |
+| `productName` | String | 상품명 |
+| `quantity` | int    | 변경 후 수량 |
+| `unitPrice` | int    | 현재 상품 단가 |
+| `lineAmount` | Long   | `unitPrice * quantity` |
+| `cartTotalAmount` | Long   | 변경 이후 장바구니 전체 상품 합계 금액 |
 
 ### Errors
 
-| 코드 | HTTP | 발생 조건 |
-| --- | --- | --- |
-| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
-| `VALIDATION_FAILED` | 400 | `quantity` 누락 또는 수량이 1 미만 |
-| `CART_ITEM_NOT_FOUND` | 404 | 장바구니 상품이 없음 |
-| `CART_ITEM_ACCESS_DENIED` | 403 | 타인의 장바구니 상품 |
-| `CART_NOT_FOUND` | 404 | 장바구니 상품이 가리키는 장바구니가 없음 |
-| `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
-| `CART_STOCK_EXCEEDED` | 409 | 변경 수량이 현재 재고 초과 |
+| 코드 | HTTP | 발생 조건                      |
+| --- | --- |----------------------------|
+| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패             |
+| `VALIDATION_FAILED` | 400 | `quantity` 누락 또는 수량이 1 미만  |
+| `CART_ITEM_NOT_FOUND` | 404 | 장바구니 상품이 없음                |
+| `CART_ITEM_ACCESS_DENIED` | 403 | 타인의 장바구니 상품                |
+| `CART_NOT_FOUND` | 404 | 장바구니 상품이 가리키는 장바구니가 없음     |
+| `PRODUCT_NOT_ON_SALE` | 400 | 판매중인 상품이 아님                |
+| `CART_STOCK_EXCEEDED` | 409 | 변경 수량이 현재 재고 초과            |
 | `CONFLICT` | 409 | 같은 장바구니를 동시에 수정해서 버전 충돌 발생 |
 
 ## 장바구니 상품 개별 삭제
@@ -250,8 +224,8 @@
 
 ### Path Variables
 
-| 이름 | 타입 | 설명 |
-| --- | --- | --- |
+| 이름 | 타입 | 설명         |
+| --- | --- |------------|
 | `cartItemId` | Long | 장바구니 상품 ID |
 
 ### Response Data
@@ -275,10 +249,10 @@
 ### Errors
 
 | 코드 | HTTP | 발생 조건 |
-| --- | --- | --- |
+| --- | -- | --- |
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
 | `CART_ITEM_NOT_FOUND` | 404 | 장바구니 상품이 없음 |
-| `CART_ITEM_ACCESS_DENIED` | 403 | 타인의 장바구니 상품 |
+| `CART_ITEM_ACCESS_DENIED` | 403| 타인의 장바구니 상품 |
 | `CART_NOT_FOUND` | 404 | 장바구니 상품이 가리키는 장바구니가 없음 |
 | `CONFLICT` | 409 | 같은 장바구니를 동시에 수정해서 버전 충돌 발생 |
 
