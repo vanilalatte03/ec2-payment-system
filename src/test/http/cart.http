@@ -181,21 +181,41 @@ GET {{baseUrl}}/api/carts
     });
 %}
 
-### 장바구니 수량 변경 - 전체 합계 함께 반환
+### 장바구니 수량 변경 - 첫 번째 상품 수량만 줄이고 두 번째 상품은 유지
 PATCH {{baseUrl}}/api/carts/items/{{cartItemId}}
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
 
 {
-  "quantity": 3
+  "quantity": 1
 }
 
 > {%
-    client.test("장바구니 수량 변경 성공", function () {
+    client.test("첫 번째 상품 수량만 줄인다", function () {
         client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
         client.assert(response.body.data.cartItemId === Number(client.global.get("cartItemId")), "cartItemId가 일치해야 합니다.");
-        client.assert(response.body.data.quantity === 3, "변경 수량은 3이어야 합니다.");
+        client.assert(response.body.data.quantity === 1, "변경 수량은 1이어야 합니다.");
         client.assert(response.body.data.cartTotalAmount >= response.body.data.lineAmount, "전체 합계가 함께 반환되어야 합니다.");
+    });
+%}
+
+### 장바구니 수량 변경 후 조회 - 다른 상품은 그대로 유지
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("첫 번째 상품만 1개로 줄고 두 번째 상품은 유지된다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length === 2, "상품은 계속 2개여야 합니다.");
+        client.assert(response.body.data.totalQuantity === 3, "총 수량은 첫 번째 상품 1개와 두 번째 상품 2개를 더해 3이어야 합니다.");
+
+        const firstItem = response.body.data.items.find(item => item.cartItemId === Number(client.global.get("cartItemId")));
+        const secondItem = response.body.data.items.find(item => item.cartItemId === Number(client.global.get("secondCartItemId")));
+
+        client.assert(firstItem !== undefined, "첫 번째 상품이 장바구니에 남아 있어야 합니다.");
+        client.assert(secondItem !== undefined, "두 번째 상품이 장바구니에 남아 있어야 합니다.");
+        client.assert(firstItem.quantity === 1, "첫 번째 상품 수량은 1이어야 합니다.");
+        client.assert(secondItem.quantity === 2, "두 번째 상품 수량은 2로 유지되어야 합니다.");
     });
 %}
 

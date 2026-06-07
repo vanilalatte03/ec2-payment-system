@@ -21,11 +21,11 @@ public class CartController {
     private final CartService cartService;
 
     @PostMapping("/items")
-    public ResponseEntity<ApiResponse<CartItemCommandResponse>> addCartItem(
+    public ResponseEntity<ApiResponse<AddItemResponse>> addItem(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @Valid @RequestBody AddCartItemRequest request
+            @Valid @RequestBody AddItemRequest request
     ) {
-        CartItemCommandResponse response = cartItemService.addCartItem(
+        AddItemResponse response = cartItemService.addItem(
                 userDetails.getUserId(),
                 request.productId(),
                 request.quantity()
@@ -46,12 +46,12 @@ public class CartController {
     }
 
     @PatchMapping("/items/{cartItemId}")
-    public ResponseEntity<ApiResponse<CartItemCommandResponse>> updateCartItemQuantity(
+    public ResponseEntity<ApiResponse<UpdateQuantityResponse>> updateQuantity(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long cartItemId,
-            @Valid @RequestBody UpdateCartItemQuantityRequest request
+            @Valid @RequestBody UpdateQuantityRequest request
     ) {
-        CartItemCommandResponse response = cartItemService.updateCartItemQuantity(
+        UpdateQuantityResponse response = cartItemService.updateQuantity(
                 userDetails.getUserId(),
                 cartItemId,
                 request.quantity()
@@ -61,11 +61,11 @@ public class CartController {
     }
 
     @DeleteMapping("/items/{cartItemId}")
-    public ResponseEntity<ApiResponse<DeleteCartItemResponse>> deleteCartItem(
+    public ResponseEntity<ApiResponse<DeleteItemResponse>> deleteItem(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long cartItemId
     ) {
-        DeleteCartItemResponse response = cartItemService.deleteCartItem(userDetails.getUserId(), cartItemId);
+        DeleteItemResponse response = cartItemService.deleteItem(userDetails.getUserId(), cartItemId);
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }

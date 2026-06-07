@@ -2,14 +2,15 @@ package com.teamec2.paymentsystem.domain.payment.service;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
-import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -28,8 +29,15 @@ class PaymentServiceUnitTest {
     @Mock
     PaymentGateway paymentGateway;
 
-    @InjectMocks
     PaymentService paymentService;
+
+    PaymentFacade paymentFacade;
+
+    @BeforeEach
+    void setUp() {
+        paymentService = new PaymentService(paymentGateway);
+        paymentFacade = new PaymentFacade(paymentConfirmTxService, paymentService);
+    }
 
     @Test
     void 결제확정_외부결제성공후_내부완료실패면_보상취소하고_원예외를전파한다() {
@@ -54,7 +62,7 @@ class PaymentServiceUnitTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(userId, request))
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(userId, request))
                 .isSameAs(completeFailure);
 
         verify(paymentGateway).cancelPayment(
