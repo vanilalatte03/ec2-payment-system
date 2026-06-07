@@ -74,4 +74,58 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
                 RefundStatus.COMPLETED
         );
     }
+
+    @Query("""
+        select coalesce(sum(r.grossPointRefundAmount), 0)
+        from Refund r
+        where r.payment.id = :paymentId
+          and r.status = :status
+        """)
+    Long sumGrossPointRefundAmountByPaymentIdAndStatus(
+            @Param("paymentId") Long paymentId,
+            @Param("status") RefundStatus status
+    );
+
+    default Long sumCompletedGrossPointRefundAmount(Long paymentId) {
+        return sumGrossPointRefundAmountByPaymentIdAndStatus(
+                paymentId,
+                RefundStatus.COMPLETED
+        );
+    }
+
+    @Query("""
+        select coalesce(sum(r.grossPgRefundAmount), 0)
+        from Refund r
+        where r.payment.id = :paymentId
+          and r.status = :status
+        """)
+    Long sumGrossPgRefundAmountByPaymentIdAndStatus(
+            @Param("paymentId") Long paymentId,
+            @Param("status") RefundStatus status
+    );
+
+    default Long sumCompletedGrossPgRefundAmount(Long paymentId) {
+        return sumGrossPgRefundAmountByPaymentIdAndStatus(
+                paymentId,
+                RefundStatus.COMPLETED
+        );
+    }
+
+    @Query("""
+        select coalesce(sum(r.earnedPointRecoveryAmount), 0)
+        from Refund r
+        where r.payment.id = :paymentId
+          and r.status = :status
+        """)
+    Long sumEarnedPointRecoveryAmountByPaymentIdAndStatus(
+            @Param("paymentId") Long paymentId,
+            @Param("status") RefundStatus status
+    );
+
+    default Long sumCompletedEarnedPointRecoveryAmount(Long paymentId) {
+        return sumEarnedPointRecoveryAmountByPaymentIdAndStatus(
+                paymentId,
+                RefundStatus.COMPLETED
+        );
+    }
 }
