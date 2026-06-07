@@ -87,7 +87,8 @@ public class PointQueryService {
             Set.of(
                     PointTransactionType.EARN,
                     PointTransactionType.USE_RESTORE,
-                    PointTransactionType.USE_CANCEL
+                    PointTransactionType.USE_CANCEL,
+                    PointTransactionType.EARN_RECOVERY_RELEASE
             );
 
     /**
@@ -97,7 +98,8 @@ public class PointQueryService {
             Set.of(
                     PointTransactionType.USE,
                     PointTransactionType.EARN_CANCEL,
-                    PointTransactionType.USE_RESERVE
+                    PointTransactionType.USE_RESERVE,
+                    PointTransactionType.EARN_RECOVERY_RESERVE
             );
 
     private User findPointAccount(Long userId) {

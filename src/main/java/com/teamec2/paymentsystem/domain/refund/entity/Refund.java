@@ -41,6 +41,9 @@ public class Refund {
     @Column(name = "idempotency_key", nullable = false, length = 100)
     private String idempotencyKey;
 
+    @Column(name = "request_hash", nullable = false, length = 64)
+    private String requestHash;
+
     @Column(name = "portone_payment_id", nullable = false, length = 100)
     private String portonePaymentId;
 
@@ -89,22 +92,73 @@ public class Refund {
 
     private static final int MAX_REASON_LENGTH = 500;
 
+    // 적립 포인트 회수 전, 원래 반환 대상이었던 사용 포인트 금액
+    @Column(name = "gross_point_refund_amount", nullable = false)
+    private Long grossPointRefundAmount;
+
+    // 적립 포인트 회수 전, 원래 PG로 환불하려던 금액
+    @Column(name = "gross_pg_refund_amount", nullable = false)
+    private Long grossPgRefundAmount;
+
+    // 이번 환불에서 회수해야 하는 적립 포인트 금액
+    @Column(name = "earned_point_recovery_amount", nullable = false)
+    private Long earnedPointRecoveryAmount;
+
+    // 반환 예정 사용 포인트에서 상계 처리한 적립 포인트 금액
+    @Column(name = "recovered_from_used_point", nullable = false)
+    private Long recoveredFromUsedPoint;
+
+    // 고객의 현재 보유 포인트에서 실제 차감할 적립 포인트 금액
+    @Column(name = "recovered_from_balance", nullable = false)
+    private Long recoveredFromBalance;
+
+    // 보유 포인트로도 회수하지 못해 PG 환불 금액에서 차감한 금액
+    @Column(name = "deducted_from_pg_refund", nullable = false)
+    private Long deductedFromPgRefund;
+
     private Refund(
             String idempotencyKey,
+            String requestHash,
             Order order,
             Payment payment,
             String reason,
             Long refundAmount,
             Long pointRefundAmount,
-            Long pgRefundAmount
+            Long pgRefundAmount,
+            Long grossPointRefundAmount,
+            Long grossPgRefundAmount,
+            Long earnedPointRecoveryAmount,
+            Long recoveredFromUsedPoint,
+            Long recoveredFromBalance,
+            Long deductedFromPgRefund
     ) {
         validateIdempotencyKey(idempotencyKey);
+        validateRequestHash(requestHash);
         validateRequiredValues(order, payment, reason);
         validateOrderMatchesPayment(order, payment);
         validatePortonePaymentId(payment.getPortonePaymentId());
         validateAmount(refundAmount, pointRefundAmount, pgRefundAmount);
+        validateSettlementAmounts(
+                grossPointRefundAmount,
+                grossPgRefundAmount,
+                earnedPointRecoveryAmount,
+                recoveredFromUsedPoint,
+                recoveredFromBalance,
+                deductedFromPgRefund
+        );
+        validateSettlementConsistency(
+                pointRefundAmount,
+                pgRefundAmount,
+                grossPointRefundAmount,
+                grossPgRefundAmount,
+                earnedPointRecoveryAmount,
+                recoveredFromUsedPoint,
+                recoveredFromBalance,
+                deductedFromPgRefund
+        );
 
         this.idempotencyKey = idempotencyKey;
+        this.requestHash = requestHash;
         this.portonePaymentId = payment.getPortonePaymentId();
         this.order = order;
         this.payment = payment;
@@ -113,25 +167,45 @@ public class Refund {
         this.pointRefundAmount = pointRefundAmount;
         this.pgRefundAmount = pgRefundAmount;
         this.status = RefundStatus.PROCESSING;
+        this.grossPointRefundAmount = grossPointRefundAmount;
+        this.grossPgRefundAmount = grossPgRefundAmount;
+        this.earnedPointRecoveryAmount = earnedPointRecoveryAmount;
+        this.recoveredFromUsedPoint = recoveredFromUsedPoint;
+        this.recoveredFromBalance = recoveredFromBalance;
+        this.deductedFromPgRefund = deductedFromPgRefund;
     }
 
     public static Refund createRefund(
             String idempotencyKey,
+            String requestHash,
             Order order,
             Payment payment,
             String reason,
             Long refundAmount,
             Long pointRefundAmount,
-            Long pgRefundAmount
+            Long pgRefundAmount,
+            Long grossPointRefundAmount,
+            Long grossPgRefundAmount,
+            Long earnedPointRecoveryAmount,
+            Long recoveredFromUsedPoint,
+            Long recoveredFromBalance,
+            Long deductedFromPgRefund
     ) {
         return new Refund(
                 idempotencyKey,
+                requestHash,
                 order,
                 payment,
                 reason,
                 refundAmount,
                 pointRefundAmount,
-                pgRefundAmount
+                pgRefundAmount,
+                grossPointRefundAmount,
+                grossPgRefundAmount,
+                earnedPointRecoveryAmount,
+                recoveredFromUsedPoint,
+                recoveredFromBalance,
+                deductedFromPgRefund
         );
     }
 
@@ -139,7 +213,6 @@ public class Refund {
      * PG 취소와 내부 DB 반영이 모두 끝났을 때 호출합니다.
      */
     public void complete(LocalDateTime refundedAt) {
-
         if (refundedAt == null) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
@@ -192,7 +265,6 @@ public class Refund {
     }
 
     private static void validateIdempotencyKey(String idempotencyKey) {
-
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
@@ -216,7 +288,6 @@ public class Refund {
             Order order,
             Payment payment
     ) {
-
         if (order.getId() == null || payment.getOrder() == null || payment.getOrder().getId() == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
@@ -259,7 +330,6 @@ public class Refund {
      * 이미 PG_RESULT_UNKNOWN인 경우에는 멱등성을 위해 그대로 return 합니다.
      */
     public void markPgResultUnknown(String pgResultUnknownReason) {
-
         if (this.status == RefundStatus.PG_RESULT_UNKNOWN) {
             return;
         }
@@ -286,5 +356,93 @@ public class Refund {
         }
 
         return reason.substring(0, MAX_REASON_LENGTH);
+    }
+
+    /**
+     * NOTE: 각 금액이 값으로서 유효한가?
+     * 환불 정산을 영수증 작성이라고 본다면...
+     * => 영수증에 숫자가 비어 있지는 않은지, 마이너스 금액은 없는지 확인하는 단계입니다.
+     * 환불 정산 스냅샷에 필요한 금액 값들이 유효한지 검증합니다.
+     * 이 메서드는 각 금액 필드가 null이 아니며, 음수가 아닌지만 확인합니다.
+     * 즉, "값 자체가 존재하고 기본적으로 말이 되는가"를 검사하는 1차 검증입니다.
+     */
+    private static void validateSettlementAmounts(
+            Long grossPointRefundAmount,
+            Long grossPgRefundAmount,
+            Long earnedPointRecoveryAmount,
+            Long recoveredFromUsedPoint,
+            Long recoveredFromBalance,
+            Long deductedFromPgRefund
+    ) {
+        if (grossPointRefundAmount == null
+                || grossPgRefundAmount == null
+                || earnedPointRecoveryAmount == null
+                || recoveredFromUsedPoint == null
+                || recoveredFromBalance == null
+                || deductedFromPgRefund == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (grossPointRefundAmount < 0
+                || grossPgRefundAmount < 0
+                || earnedPointRecoveryAmount < 0
+                || recoveredFromUsedPoint < 0
+                || recoveredFromBalance < 0
+                || deductedFromPgRefund < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    /**
+     * NOTE: 금액들끼리 계산 관계가 맞는가?
+     * 환불 정산을 영수증 작성이라고 본다면...
+     * => 영수증의 계산식이 맞는지 확인하는 단계입니다.
+     * 환불 정산 스냅샷의 금액 계산 관계가 일관적인지 검증합니다.
+     * 이 메서드는 단순히 금액이 존재하는지를 보는 것이 아니라,
+     * 실제 환불 정책에 따라 각 금액이 서로 맞게 계산되었는지 확인합니다.
+     * 검증하는 관계는 다음과 같습니다.
+     * 1. 사용 포인트에서 회수한 금액은 원래 반환 예정이었던 사용 포인트 금액을 초과할 수 없습니다.
+     * 2. PG 환불액에서 차감한 금액은 원래 PG 환불 예정 금액을 초과할 수 없습니다.
+     * 3. 최종 포인트 환불액은 원래 포인트 환불 예정액에서 사용 포인트 상계액을 뺀 값이어야 합니다.
+     * 4. 최종 PG 환불액은 원래 PG 환불 예정액에서 PG 차감액을 뺀 값이어야 합니다.
+     * 5. 회수해야 하는 적립 포인트 총액은 사용 포인트 상계액 + 보유 포인트 차감액 + PG 환불 차감액의 합과 같아야 합니다.
+     */
+    private static void validateSettlementConsistency(
+            Long pointRefundAmount,
+            Long pgRefundAmount,
+            Long grossPointRefundAmount,
+            Long grossPgRefundAmount,
+            Long earnedPointRecoveryAmount,
+            Long recoveredFromUsedPoint,
+            Long recoveredFromBalance,
+            Long deductedFromPgRefund
+    ) {
+        if (recoveredFromUsedPoint > grossPointRefundAmount) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (deductedFromPgRefund > grossPgRefundAmount) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (!pointRefundAmount.equals(grossPointRefundAmount - recoveredFromUsedPoint)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (!pgRefundAmount.equals(grossPgRefundAmount - deductedFromPgRefund)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        if (!earnedPointRecoveryAmount.equals(
+                recoveredFromUsedPoint + recoveredFromBalance + deductedFromPgRefund
+        )) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    private static void validateRequestHash(String requestHash) {
+        if (requestHash == null || requestHash.isBlank()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
     }
 }

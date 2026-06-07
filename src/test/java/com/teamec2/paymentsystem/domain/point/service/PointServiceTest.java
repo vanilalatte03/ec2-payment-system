@@ -446,17 +446,15 @@ class PointServiceTest {
         Refund refund = 환불_저장(payment);
 
         // when
-        PointService.EarnCancelResult result = pointService.cancelEarnedPoints(payment, refund, 10L);
+        pointService.reserveEarnedPointRecoveryFromBalance(payment, refund, 10L);
 
         // then
         User foundUser = userRepository.findById(user.getId()).orElseThrow();
         List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
 
-        assertThat(result.cancelPointAmount()).isEqualTo(10L);
-        assertThat(result.shortagePointAmount()).isZero();
         assertThat(foundUser.getPointBalance()).isEqualTo(90L);
         assertThat(pointTransactions).hasSize(1);
-        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.EARN_CANCEL);
+        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.EARN_RECOVERY_RESERVE);
         assertThat(pointTransactions.get(0).getAmount()).isEqualTo(10L);
     }
 
@@ -469,18 +467,16 @@ class PointServiceTest {
         Refund refund = 환불_저장(payment);
 
         // when
-        PointService.EarnCancelResult result = pointService.cancelEarnedPoints(payment, refund, 10L);
-
         // then
-        User foundUser = userRepository.findById(user.getId()).orElseThrow();
-        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+        assertThatThrownBy(() -> pointService.reserveEarnedPointRecoveryFromBalance(payment, refund, 10L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INSUFFICIENT_POINT);
 
-        assertThat(result.cancelPointAmount()).isEqualTo(3L);
-        assertThat(result.shortagePointAmount()).isEqualTo(7L);
-        assertThat(foundUser.getPointBalance()).isZero();
-        assertThat(pointTransactions).hasSize(1);
-        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.EARN_CANCEL);
-        assertThat(pointTransactions.get(0).getAmount()).isEqualTo(3L);
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(3L);
+        assertThat(pointTransactionRepository.count()).isZero();
     }
 
     @Test
@@ -492,18 +488,12 @@ class PointServiceTest {
         Refund refund = 환불_저장(payment);
 
         // when
-        PointService.EarnCancelResult result = pointService.cancelEarnedPoints(payment, refund, 10L);
+        pointService.reserveEarnedPointRecoveryFromBalance(payment, refund, 0L);
 
         // then
         User foundUser = userRepository.findById(user.getId()).orElseThrow();
-        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
-
-        assertThat(result.cancelPointAmount()).isZero();
-        assertThat(result.shortagePointAmount()).isEqualTo(10L);
         assertThat(foundUser.getPointBalance()).isZero();
-        assertThat(pointTransactions).hasSize(1);
-        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.EARN_CANCEL);
-        assertThat(pointTransactions.get(0).getAmount()).isZero();
+        assertThat(pointTransactionRepository.count()).isZero();
     }
 
     private ErrorCode 포인트예약_실행결과(Payment payment, CountDownLatch startLatch) {
@@ -540,12 +530,19 @@ class PointServiceTest {
     private Refund 환불_저장(Payment payment) {
         return refundTestRepository.save(Refund.createRefund(
                 "REFUND-" + UUID.randomUUID(),
+                UUID.randomUUID().toString().replace("-", ""),
                 payment.getOrder(),
                 payment,
                 "테스트 환불",
                 payment.getTotalAmount(),
                 payment.getUsedPointAmount(),
-                payment.getPgAmount()
+                payment.getPgAmount(),
+                payment.getUsedPointAmount(),
+                payment.getPgAmount(),
+                0L,
+                0L,
+                0L,
+                0L
         ));
     }
 

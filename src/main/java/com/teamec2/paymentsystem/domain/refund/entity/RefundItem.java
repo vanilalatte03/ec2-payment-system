@@ -139,14 +139,21 @@ public class RefundItem {
     }
 
     /**
-     * 상품별 총 환불 금액 = 포인트 환불 금액 + PG 환불 금액 일치 검증입니다.
+     * 상품 기준 환불 대상 금액보다 실제 반환 금액이 클 수는 없습니다.
+     * refundAmount:
+     * - 상품 가격 * 환불 수량
+     * - 적립 포인트 회수 전 기준 금액
+     * pointRefundAmount + pgRefundAmount:
+     * - 적립 포인트 회수 정책을 반영한 뒤 고객에게 실제 반환되는 금액
      */
     private static void validateRefundAmount(
             Long refundAmount,
             Long pointRefundAmount,
             Long pgRefundAmount
     ) {
-        if (!refundAmount.equals(pointRefundAmount + pgRefundAmount)) {
+        long actualRefundAmount = pointRefundAmount + pgRefundAmount;
+
+        if (actualRefundAmount > refundAmount) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
     }

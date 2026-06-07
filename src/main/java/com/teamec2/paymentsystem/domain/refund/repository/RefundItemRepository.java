@@ -14,7 +14,6 @@ public interface RefundItemRepository extends JpaRepository<RefundItem, Long> {
             select ri
             from RefundItem ri
             join fetch ri.orderItem oi
-            join fetch oi.product
             where ri.refund.id = :refundId
             """)
     List<RefundItem> findAllByRefundIdWithOrderItem(Long refundId);
