@@ -1,5 +1,14 @@
 # ERD
 
+## Refund Settlement Columns
+
+`refunds`는 `request_hash`, `gross_point_refund_amount`, `gross_pg_refund_amount`,
+`earned_point_recovery_amount`, `recovered_from_used_point`, `recovered_from_balance`,
+`deducted_from_pg_refund` 컬럼을 함께 저장합니다.
+
+환불 관련 포인트 거래 타입은 `USE_RESTORE`, `EARN_CANCEL`,
+`EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`를 포함합니다.
+
 결제 시스템의 ERD를 이미지 기준으로 정리한 문서입니다.
 
 ## 관계도

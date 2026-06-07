@@ -360,6 +360,7 @@ INSERT INTO payments (
 INSERT INTO refunds (
     id,
     idempotency_key,
+    request_hash,
     portone_payment_id,
     order_id,
     payment_id,
@@ -367,6 +368,12 @@ INSERT INTO refunds (
     refund_amount,
     point_refund_amount,
     pg_refund_amount,
+    gross_point_refund_amount,
+    gross_pg_refund_amount,
+    earned_point_recovery_amount,
+    recovered_from_used_point,
+    recovered_from_balance,
+    deducted_from_pg_refund,
     status,
     created_at,
     refunded_at,
@@ -376,6 +383,7 @@ INSERT INTO refunds (
       (
           10001,
           'refund-dev-10001',
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           'pay_dev_20260529_10003',
           10003,
           10003,
@@ -383,6 +391,12 @@ INSERT INTO refunds (
           48000,
           0,
           48000,
+          0,
+          48000,
+          480,
+          0,
+          480,
+          0,
           'COMPLETED',
           NOW(),
           NOW(),
@@ -392,13 +406,20 @@ INSERT INTO refunds (
       (
           10002,
           'refund-dev-10002',
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           'pay_dev_20260529_10004',
           10004,
           10004,
           '고객 요청으로 전체 환불',
-          128000,
+          126920,
+          18920,
+          108000,
           20000,
           108000,
+          1080,
+          1080,
+          0,
+          0,
           'COMPLETED',
           NOW(),
           NOW(),
@@ -421,11 +442,10 @@ INSERT INTO point_transactions (
       (10001, 10001, 10001, NULL,  'USE',         'PAYMENT:10001:USE',          1000, NOW()),
       (10002, 10001, 10001, NULL,  'EARN',        'PAYMENT:10001:EARN',          770, NOW()),
       (10003, 10001, 10003, NULL,  'EARN',        'PAYMENT:10003:EARN',          945, NOW()),
-      (10004, 10001, 10003, 10001, 'EARN_CANCEL', 'REFUND:10001:EARN_CANCEL',    480, NOW()),
+      (10004, 10001, 10003, 10001, 'EARN_RECOVERY_RESERVE', 'REFUND:10001:EARN_RECOVERY_RESERVE',    480, NOW()),
       (10005, 10001, 10004, NULL,  'USE',         'PAYMENT:10004:USE',         20000, NOW()),
       (10006, 10001, 10004, NULL,  'EARN',        'PAYMENT:10004:EARN',         1080, NOW()),
-      (10007, 10001, 10004, 10002, 'USE_RESTORE', 'REFUND:10002:USE_RESTORE',  20000, NOW()),
-      (10008, 10001, 10004, 10002, 'EARN_CANCEL', 'REFUND:10002:EARN_CANCEL',   1080, NOW());
+      (10007, 10001, 10004, 10002, 'USE_RESTORE', 'REFUND:10002:USE_RESTORE',  18920, NOW());
 
 -- 환불 상품 데이터
 INSERT INTO refund_items (
@@ -440,4 +460,4 @@ INSERT INTO refund_items (
     created_at
 ) VALUES
       (10001, 10001, 10004, 1,  48000,  48000,     0,  48000, NOW()),
-      (10002, 10002, 10006, 1, 128000, 128000, 20000, 108000, NOW());
+      (10002, 10002, 10006, 1, 128000, 128000, 18920, 108000, NOW());
