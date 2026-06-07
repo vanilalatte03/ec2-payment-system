@@ -2,7 +2,7 @@ package com.teamec2.paymentsystem.domain.payment.controller;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
-import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.global.response.ApiResponse;
 import com.teamec2.paymentsystem.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private final PaymentService paymentService;
+    private final PaymentFacade paymentFacade;
 
     /**
      * 인증 사용자의 결제 확정 요청을 처리한다.
@@ -33,7 +33,7 @@ public class PaymentController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody ConfirmPaymentRequest request
     ) {
-        ConfirmPaymentResponse response = paymentService.confirmPayment(userDetails.getUserId(), request);
+        ConfirmPaymentResponse response = paymentFacade.confirmPayment(userDetails.getUserId(), request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

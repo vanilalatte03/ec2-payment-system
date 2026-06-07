@@ -2,8 +2,8 @@ package com.teamec2.paymentsystem.infra.portone.webhook.service;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
-import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import com.teamec2.paymentsystem.infra.portone.webhook.dto.PortoneWebhookReceiveResponse;
@@ -34,7 +34,7 @@ public class PortoneWebhookEventService {
 
     private final PortoneWebhookEventRepository webhookEventRepository;
     private final PaymentRepository paymentRepository;
-    private final PaymentService paymentService;
+    private final PaymentFacade paymentFacade;
 
     /**
      * 검증이 끝난 PortOne 웹훅을 수신 이력으로 저장하고 처리 대상이면 결제를 확정한다.
@@ -137,7 +137,7 @@ public class PortoneWebhookEventService {
             String portonePaymentId
     ) {
         try {
-            ConfirmPaymentResponse confirmPaymentResponse = paymentService.confirmPaidWebhook(portonePaymentId);
+            ConfirmPaymentResponse confirmPaymentResponse = paymentFacade.confirmPaidWebhook(portonePaymentId);
             Payment payment = paymentRepository.findById(confirmPaymentResponse.paymentId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
 
