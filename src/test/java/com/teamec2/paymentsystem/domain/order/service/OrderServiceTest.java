@@ -349,7 +349,7 @@ class OrderServiceTest {
         );
 
         // then
-        verify(productRepository, times(1)).findAllByIdInForUpdate(List.of(
+        verify(productRepository, times(1)).findAllByIdsWithLock(List.of(
                 firstProduct.getId(),
                 secondProduct.getId()
         ));

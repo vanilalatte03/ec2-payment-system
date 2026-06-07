@@ -439,7 +439,7 @@ public class OrderService {
             return Map.of();
         }
 
-        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdsWithLock(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
 
         if (lockedProducts.size() != productIds.size()) {
@@ -462,7 +462,7 @@ public class OrderService {
 
         // 이 조회가 SELECT ... FOR UPDATE 역할을 합니다.
         // 다른 트랜잭션이 먼저 같은 상품을 차감 중이면 여기서 기다렸다가, 커밋된 최신 값을 읽습니다.
-        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdsWithLock(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
 
         List<OrderTarget> orderTargets = new ArrayList<>();

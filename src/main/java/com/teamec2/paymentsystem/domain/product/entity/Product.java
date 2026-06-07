@@ -81,7 +81,6 @@ public class Product extends BaseEntity {
         }
     }
 
-    // 주문 취소 시 수량 변경
     public void restoreStock(int quantity) {
         if (quantity < 1) {
             throw new BusinessException(ErrorCode.INVALID_RESTORE_STOCK_QUANTITY);
