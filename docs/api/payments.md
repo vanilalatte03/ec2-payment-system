@@ -78,3 +78,5 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
 | `EXTERNAL_API_FAILED` | 502 | PortOne 결제 조회 실패 |
 | `PAYMENT_COMPENSATION_FAILED` | 502 | 보상 취소 실패 |
+| `PAYMENT_COMPENSATION_RESULT_UNKNOWN` | 502 | 보상 취소 결과 미확정. 재조회/운영 확인 대상 |
+| `PAYMENT_COMPENSATION_CLEANUP_FAILED` | 500 | 보상 취소 성공 후 내부 주문/결제 실패 정리 실패 |

@@ -243,6 +243,38 @@ class PaymentServiceTest {
         assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
     }
 
+    @Test
+    void 보상취소성공표시_결제를보상정리필요상태로저장한다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 0L);
+        Payment payment = 결제_저장(order, 1000L, 0L, 1000L);
+
+        // when
+        paymentService.markCompensationRequired(payment.getId());
+
+        // then
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_REQUIRED);
+    }
+
+    @Test
+    void 보상취소결과미확정표시_결제를결과미확정상태로저장한다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 0L);
+        Payment payment = 결제_저장(order, 1000L, 0L, 1000L);
+
+        // when
+        paymentService.markCompensationResultUnknown(payment.getId());
+
+        // then
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_RESULT_UNKNOWN);
+    }
+
     private User 회원_저장() {
         return 회원_저장(0L);
     }

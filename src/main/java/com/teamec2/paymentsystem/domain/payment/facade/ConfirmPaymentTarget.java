@@ -1,6 +1,7 @@
 package com.teamec2.paymentsystem.domain.payment.facade;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
+import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 
 /**
  * 결제 확정 퍼사드와 트랜잭션 서비스 사이에서만 사용하는 내부 전달 객체.
@@ -14,14 +15,33 @@ import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
  * @param pgAmount 우리 서버가 계산한 PG 결제 금액
  * @param pointOnly PG 결제 없이 포인트만으로 결제하는지 여부
  * @param completedResponse 이미 완료된 결제일 때 바로 반환할 멱등 응답. 아직 완료 전이면 {@code null}
+ * @param paymentStatus 현재 내부 결제 상태
  */
 public record ConfirmPaymentTarget(
         Long paymentId,
         String portonePaymentId,
         Long pgAmount,
         boolean pointOnly,
-        ConfirmPaymentResponse completedResponse
+        ConfirmPaymentResponse completedResponse,
+        PaymentStatus paymentStatus
 ) {
+
+    public ConfirmPaymentTarget(
+            Long paymentId,
+            String portonePaymentId,
+            Long pgAmount,
+            boolean pointOnly,
+            ConfirmPaymentResponse completedResponse
+    ) {
+        this(
+                paymentId,
+                portonePaymentId,
+                pgAmount,
+                pointOnly,
+                completedResponse,
+                completedResponse == null ? PaymentStatus.PENDING : PaymentStatus.COMPLETED
+        );
+    }
 
     /**
      * 이미 완료된 결제라서 외부 API 조회나 상태 변경 없이 응답만 반환해도 되는지 확인한다.
@@ -30,5 +50,13 @@ public record ConfirmPaymentTarget(
      */
     public boolean alreadyCompleted() {
         return completedResponse != null;
+    }
+
+    public boolean requiresCompensationCleanup() {
+        return paymentStatus == PaymentStatus.COMPENSATION_REQUIRED;
+    }
+
+    public boolean hasCompensationResultUnknown() {
+        return paymentStatus == PaymentStatus.COMPENSATION_RESULT_UNKNOWN;
     }
 }

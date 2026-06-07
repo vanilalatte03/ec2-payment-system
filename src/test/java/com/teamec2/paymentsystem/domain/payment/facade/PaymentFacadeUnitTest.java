@@ -10,6 +10,7 @@ import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -65,6 +68,42 @@ class PaymentFacadeUnitTest {
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-20"
         );
-        verify(paymentService).failAfterCompensation(20L);
+        InOrder inOrder = inOrder(paymentService);
+        inOrder.verify(paymentService).markCompensationRequired(20L);
+        inOrder.verify(paymentService).failAfterCompensation(20L);
+    }
+
+    @Test
+    void 결제확정_보상취소성공후_내부정리실패면_정리실패예외를던진다() {
+        // given
+        Long userId = 1L;
+        ConfirmPaymentRequest request = new ConfirmPaymentRequest(10L, "pay_123");
+        ConfirmPaymentTarget target = new ConfirmPaymentTarget(20L, "pay_123", 800L, false, null);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse("pay_123", "PAID", 800L, approvedAt);
+
+        when(paymentService.prepare(userId, request)).thenReturn(target);
+        when(paymentGateway.getPayment("pay_123")).thenReturn(gatewayResponse);
+        when(paymentService.complete(20L, approvedAt)).thenThrow(new BusinessException(ErrorCode.CONFLICT));
+        when(paymentGateway.cancelPayment(
+                "pay_123",
+                800L,
+                800L,
+                "PAYMENT_CONFIRM_INTERNAL_FAILURE",
+                "payment-confirm-compensation-20"
+        )).thenReturn(new PaymentCancelResponse("cancel_123", "SUCCEEDED", PaymentCancelStatus.SUCCEEDED));
+        doThrow(new IllegalStateException("cleanup failed"))
+                .when(paymentService).failAfterCompensation(20L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(userId, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_CLEANUP_FAILED);
+
+        InOrder inOrder = inOrder(paymentService);
+        inOrder.verify(paymentService).markCompensationRequired(20L);
+        inOrder.verify(paymentService).failAfterCompensation(20L);
     }
 }

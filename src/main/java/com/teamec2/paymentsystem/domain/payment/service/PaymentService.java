@@ -77,6 +77,10 @@ public class PaymentService {
             return completedTarget(order, payment);
         }
 
+        if (payment.requiresCompensationCleanup() || payment.hasCompensationResultUnknown()) {
+            return pendingTarget(payment);
+        }
+
         validateConfirmable(order, payment);
 
         return pendingTarget(payment);
@@ -102,6 +106,10 @@ public class PaymentService {
 
         if (payment.isCompleted()) {
             return completedTarget(order, payment);
+        }
+
+        if (payment.requiresCompensationCleanup() || payment.hasCompensationResultUnknown()) {
+            return pendingTarget(payment);
         }
 
         validateConfirmable(order, payment);
@@ -160,7 +168,11 @@ public class PaymentService {
     public void failAfterCompensation(Long paymentId) {
         Payment payment = findPaymentByIdForUpdate(paymentId);
 
-        if (!payment.isPending()) {
+        if (payment.isFailed()) {
+            return;
+        }
+
+        if (!payment.isPending() && !payment.requiresCompensationCleanup()) {
             return;
         }
 
@@ -170,6 +182,41 @@ public class PaymentService {
         pointService.cancelReservedPoints(payment);
         order.cancelPendingPayment();
         payment.fail(LocalDateTime.now());
+    }
+
+    /**
+     * PortOne 보상 취소 성공 사실을 내부 정리 전에 별도 트랜잭션으로 기록한다.
+     *
+     * <p>이 표시가 남아 있으면 이후 결제 확정 재시도나 취소 웹훅에서 PortOne 재취소 없이
+     * 내부 주문/결제 실패 정리만 다시 실행할 수 있다.
+     *
+     * @param paymentId 보상 취소된 내부 결제 ID
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markCompensationRequired(Long paymentId) {
+        Payment payment = findPaymentByIdForUpdate(paymentId);
+
+        if (payment.isFailed()) {
+            return;
+        }
+
+        payment.markCompensationRequired();
+    }
+
+    /**
+     * PortOne 보상 취소 요청 결과를 확정하지 못한 결제를 운영 확인/재조회 대상으로 표시한다.
+     *
+     * @param paymentId 보상 취소 결과를 확정하지 못한 내부 결제 ID
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markCompensationResultUnknown(Long paymentId) {
+        Payment payment = findPaymentByIdForUpdate(paymentId);
+
+        if (payment.isFailed()) {
+            return;
+        }
+
+        payment.markCompensationResultUnknown();
     }
 
     /**
@@ -200,7 +247,8 @@ public class PaymentService {
                 payment.getPortonePaymentId(),
                 payment.getPgAmount(),
                 payment.isPointOnly(),
-                ConfirmPaymentResponse.from(order, payment, payment.isCartCleared())
+                ConfirmPaymentResponse.from(order, payment, payment.isCartCleared()),
+                payment.getStatus()
         );
     }
 
@@ -216,7 +264,8 @@ public class PaymentService {
                 payment.getPortonePaymentId(),
                 payment.getPgAmount(),
                 payment.isPointOnly(),
-                null
+                null,
+                payment.getStatus()
         );
     }
 

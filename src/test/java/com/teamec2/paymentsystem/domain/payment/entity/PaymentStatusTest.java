@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PaymentStatusTest {
 
     @Test
-    void 결제상태는_대기_완료_실패_부분환불_전액환불을_가진다() {
+    void 결제상태는_대기_완료_실패_보상정리필요_보상결과미확정_부분환불_전액환불을_가진다() {
         // when
         PaymentStatus[] statuses = PaymentStatus.values();
 
@@ -16,20 +16,28 @@ class PaymentStatusTest {
                 PaymentStatus.PENDING,
                 PaymentStatus.COMPLETED,
                 PaymentStatus.FAILED,
+                PaymentStatus.COMPENSATION_REQUIRED,
+                PaymentStatus.COMPENSATION_RESULT_UNKNOWN,
                 PaymentStatus.PARTIAL_REFUNDED,
                 PaymentStatus.FULL_REFUNDED
         );
     }
 
     @Test
-    void 결제대기상태는_완료또는실패로_변경할수있다() {
+    void 결제대기상태는_완료_실패_보상상태로_변경할수있다() {
         // when
         boolean canTransitionToCompleted = PaymentStatus.PENDING.canTransitionTo(PaymentStatus.COMPLETED);
         boolean canTransitionToFailed = PaymentStatus.PENDING.canTransitionTo(PaymentStatus.FAILED);
+        boolean canTransitionToCompensationRequired = PaymentStatus.PENDING
+                .canTransitionTo(PaymentStatus.COMPENSATION_REQUIRED);
+        boolean canTransitionToCompensationResultUnknown = PaymentStatus.PENDING
+                .canTransitionTo(PaymentStatus.COMPENSATION_RESULT_UNKNOWN);
 
         // then
         assertThat(canTransitionToCompleted).isTrue();
         assertThat(canTransitionToFailed).isTrue();
+        assertThat(canTransitionToCompensationRequired).isTrue();
+        assertThat(canTransitionToCompensationResultUnknown).isTrue();
     }
 
     @Test
@@ -52,6 +60,32 @@ class PaymentStatusTest {
         // then
         assertThat(canTransitionToPartialRefunded).isTrue();
         assertThat(canTransitionToRefunded).isTrue();
+    }
+
+    @Test
+    void 보상정리필요상태는_실패상태로만_변경할수있다() {
+        // when
+        boolean canTransitionToFailed = PaymentStatus.COMPENSATION_REQUIRED.canTransitionTo(PaymentStatus.FAILED);
+        boolean canTransitionToCompleted = PaymentStatus.COMPENSATION_REQUIRED.canTransitionTo(PaymentStatus.COMPLETED);
+
+        // then
+        assertThat(canTransitionToFailed).isTrue();
+        assertThat(canTransitionToCompleted).isFalse();
+    }
+
+    @Test
+    void 보상결과미확정상태는_보상정리필요또는실패상태로_변경할수있다() {
+        // when
+        boolean canTransitionToCompensationRequired = PaymentStatus.COMPENSATION_RESULT_UNKNOWN
+                .canTransitionTo(PaymentStatus.COMPENSATION_REQUIRED);
+        boolean canTransitionToFailed = PaymentStatus.COMPENSATION_RESULT_UNKNOWN.canTransitionTo(PaymentStatus.FAILED);
+        boolean canTransitionToCompleted = PaymentStatus.COMPENSATION_RESULT_UNKNOWN
+                .canTransitionTo(PaymentStatus.COMPLETED);
+
+        // then
+        assertThat(canTransitionToCompensationRequired).isTrue();
+        assertThat(canTransitionToFailed).isTrue();
+        assertThat(canTransitionToCompleted).isFalse();
     }
 
     @Test

@@ -136,6 +136,47 @@ class PaymentTest {
     }
 
     @Test
+    void 결제대기상태_보상정리필요로표시하면_COMPENSATION_REQUIRED가된다() {
+        // given
+        Payment payment = 결제_생성();
+
+        // when
+        payment.markCompensationRequired();
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_REQUIRED);
+        assertThat(payment.requiresCompensationCleanup()).isTrue();
+    }
+
+    @Test
+    void 결제대기상태_보상결과미확정으로표시하면_COMPENSATION_RESULT_UNKNOWN이된다() {
+        // given
+        Payment payment = 결제_생성();
+
+        // when
+        payment.markCompensationResultUnknown();
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_RESULT_UNKNOWN);
+        assertThat(payment.hasCompensationResultUnknown()).isTrue();
+    }
+
+    @Test
+    void 보상정리필요상태_실패처리하면_FAILED가된다() {
+        // given
+        Payment payment = 결제_생성();
+        payment.markCompensationRequired();
+        LocalDateTime failedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+
+        // when
+        payment.fail(failedAt);
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(payment.getFailedAt()).isEqualTo(failedAt);
+    }
+
+    @Test
     void 결제완료상태_부분환불처리하면_PARTIAL_REFUNDED가된다() {
         // given
         Payment payment = 결제_생성();

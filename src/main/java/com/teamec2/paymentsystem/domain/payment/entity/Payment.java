@@ -16,7 +16,7 @@ import java.util.UUID;
  * 주문에 대한 결제 정보를 관리하는 엔티티.
  *
  * <p>결제는 주문 생성 시 PENDING 상태로 먼저 생성되고, PortOne 결제 검증 결과에 따라
- * 완료, 실패 또는 환불 상태로 전이된다.
+ * 완료, 실패, 보상 정리 필요 또는 환불 상태로 전이된다.
  */
 @Entity
 @Getter
@@ -123,6 +123,18 @@ public class Payment extends BaseEntity {
         return status == PaymentStatus.PENDING;
     }
 
+    public boolean requiresCompensationCleanup() {
+        return status == PaymentStatus.COMPENSATION_REQUIRED;
+    }
+
+    public boolean hasCompensationResultUnknown() {
+        return status == PaymentStatus.COMPENSATION_RESULT_UNKNOWN;
+    }
+
+    public boolean isFailed() {
+        return status == PaymentStatus.FAILED;
+    }
+
     public boolean isPointOnly() {
         return pgAmount == 0;
     }
@@ -162,6 +174,28 @@ public class Payment extends BaseEntity {
 
         changeStatus(PaymentStatus.FAILED);
         this.failedAt = failedAt;
+    }
+
+    /**
+     * PortOne 보상 취소 성공 후 내부 실패 정리만 남은 상태로 표시한다.
+     */
+    public void markCompensationRequired() {
+        if (requiresCompensationCleanup()) {
+            return;
+        }
+
+        changeStatus(PaymentStatus.COMPENSATION_REQUIRED);
+    }
+
+    /**
+     * PortOne 보상 취소 요청 결과를 확정하지 못한 상태로 표시한다.
+     */
+    public void markCompensationResultUnknown() {
+        if (hasCompensationResultUnknown()) {
+            return;
+        }
+
+        changeStatus(PaymentStatus.COMPENSATION_RESULT_UNKNOWN);
     }
 
     /**

@@ -67,6 +67,8 @@ public enum ErrorCode {
     PAYMENT_STATUS_NOT_PAID(HttpStatus.BAD_REQUEST, "PortOne 결제 상태가 성공 상태가 아닙니다."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PortOne 승인 금액과 서버 산정 PG 금액이 일치하지 않습니다."),
     PAYMENT_COMPENSATION_FAILED(HttpStatus.BAD_GATEWAY, "외부 성공/내부 실패 보상 취소에 실패했습니다."),
+    PAYMENT_COMPENSATION_RESULT_UNKNOWN(HttpStatus.BAD_GATEWAY, "외부 성공/내부 실패 보상 취소 결과를 확정할 수 없습니다."),
+    PAYMENT_COMPENSATION_CLEANUP_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "외부 보상 취소 성공 후 내부 실패 정리에 실패했습니다."),
 
     // Point
     POINT_INCREASE_AMOUNT_INVALID(HttpStatus.BAD_REQUEST, "증가할 포인트는 0보다 커야 합니다."),

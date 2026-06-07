@@ -505,13 +505,13 @@ class PaymentFacadeTest {
     }
 
     @Test
-    void 결제확정_보상취소응답이_SUCCEEDED가아니면_PAYMENT_COMPENSATION_FAILED가발생하고_내부상태는대기상태로남는다() {
+    void 결제확정_보상취소응답이_RESULT_UNKNOWN이면_결과미확정상태로남기고_재시도시_PortOne조회하지않는다() {
         // given
         User user = 회원_저장();
         Order order = 주문_저장(user, 1000L, 200L);
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
         testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
-        testPaymentGateway.cancelStatus("REQUESTED");
+        testPaymentGateway.cancelResultUnknown("REQUESTED");
 
         // when
         // then
@@ -521,14 +521,56 @@ class PaymentFacadeTest {
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_RESULT_UNKNOWN);
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
 
         assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
-        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_RESULT_UNKNOWN);
+
+        testPaymentGateway.reset();
+
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_RESULT_UNKNOWN);
+
+        assertThat(testPaymentGateway.getCallCount()).isZero();
+        assertThat(testPaymentGateway.getCancelCallCount()).isZero();
+    }
+
+    @Test
+    void 결제확정_보상정리필요상태이면_PortOne조회없이_내부정리만수행한다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 0L);
+        Payment payment = 결제_저장(order, 1000L, 0L, 1000L);
+        payment.markCompensationRequired();
+        paymentRepository.saveAndFlush(payment);
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
+                user.getId(),
+                new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CONFLICT);
+
+        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(testPaymentGateway.getCallCount()).isZero();
+        assertThat(testPaymentGateway.getCancelCallCount()).isZero();
+        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(foundPayment.getFailedAt()).isNotNull();
     }
 
     private User 회원_저장() {
@@ -677,7 +719,7 @@ class PaymentFacadeTest {
             cancelFailure = true;
         }
 
-        void cancelStatus(String cancelStatus) {
+        void cancelResultUnknown(String cancelStatus) {
             this.cancelStatus = cancelStatus;
             this.interpretedCancelStatus = PaymentCancelStatus.RESULT_UNKNOWN;
         }

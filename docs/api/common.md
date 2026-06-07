@@ -115,6 +115,8 @@ Authorization: Bearer {accessToken}
 | `PENDING` | 결제대기 |
 | `COMPLETED` | 결제완료 |
 | `FAILED` | 결제실패 |
+| `COMPENSATION_REQUIRED` | 외부 보상 취소 성공 후 내부 실패 정리 필요 |
+| `COMPENSATION_RESULT_UNKNOWN` | 외부 보상 취소 결과 미확정. 재조회/운영 확인 대상 |
 | `PARTIAL_REFUNDED` | 부분환불 |
 | `FULL_REFUNDED` | 전액환불 |
 
@@ -198,6 +200,8 @@ Authorization: Bearer {accessToken}
 | `PAYMENT_STATUS_NOT_PAID` | 400 | PortOne 결제 상태가 성공 상태가 아님 |
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
 | `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 성공/내부 실패 보상 취소 실패 |
+| `PAYMENT_COMPENSATION_RESULT_UNKNOWN` | 502 | 외부 성공/내부 실패 보상 취소 결과 미확정 |
+| `PAYMENT_COMPENSATION_CLEANUP_FAILED` | 500 | 외부 보상 취소 성공 후 내부 실패 정리 실패 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
 | `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
 | `POINT_ACCOUNT_NOT_FOUND` | 404 | 포인트 계정 없음 |

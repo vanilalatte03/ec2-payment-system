@@ -87,6 +87,15 @@ public class PaymentFacade {
             return target.completedResponse();
         }
 
+        if (target.requiresCompensationCleanup()) {
+            completeInternalCompensationCleanup(target);
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+
+        if (target.hasCompensationResultUnknown()) {
+            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_RESULT_UNKNOWN);
+        }
+
         if (target.pointOnly()) {
             return paymentService.complete(target.paymentId(), LocalDateTime.now());
         }
@@ -180,9 +189,13 @@ public class PaymentFacade {
      * <p>이 메서드는 일반적인 사용자 환불 기능이 아니다. 결제 확정 과정에서
      * "PortOne은 성공했지만 우리 DB 완료 처리가 실패한 상황"을 되돌리기 위한 보상 작업이다.
      *
-     * <p>PortOne 취소가 성공하면 내부 주문/결제도 실패 상태로 정리한다.
-     * PortOne 취소 자체가 실패하면 내부 상태를 완료/실패로 섣불리 바꾸지 않고
-     * {@link ErrorCode#PAYMENT_COMPENSATION_FAILED}를 반환해 운영자가 확인할 수 있게 한다.
+     * <p>PortOne 취소가 성공하면 먼저 내부 결제를 보상 정리 필요 상태로 표시한 뒤
+     * 내부 주문/결제를 실패 상태로 정리한다. 이 표시가 남아 있으면 내부 정리 실패 후
+     * 재시도할 때 PortOne 재취소 없이 DB 정리만 다시 실행할 수 있다.
+     *
+     * <p>PortOne 취소 결과가 미확정이면 내부 결제를 결과미확정 상태로 표시해 운영자 확인이나
+     * 취소 완료 웹훅 처리 대상임을 남긴다. PortOne 취소 자체가 명확히 실패한 경우에만
+     * {@link ErrorCode#PAYMENT_COMPENSATION_FAILED}를 반환한다.
      *
      * @param target 보상 취소할 내부 결제 정보
      * @param cancelAmount PortOne에서 실제 성공 처리된 금액
@@ -191,28 +204,92 @@ public class PaymentFacade {
             ConfirmPaymentTarget target,
             Long cancelAmount
     ) {
+        PaymentCancelResponse cancelResponse = cancelExternalPayment(target, cancelAmount);
+
+        if (cancelResponse == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+        }
+
+        if (cancelResponse.isResultUnknown()) {
+            markCompensationResultUnknown(target);
+            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_RESULT_UNKNOWN);
+        }
+
+        if (!cancelResponse.isSucceeded()) {
+            log.error(
+                    "결제 확정 보상 취소 실패: paymentId={}, portonePaymentId={}, cancelStatus={}",
+                    target.paymentId(),
+                    target.portonePaymentId(),
+                    cancelResponse.cancelStatus()
+            );
+            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+        }
+
+        markCompensationRequired(target);
+        completeInternalCompensationCleanup(target);
+    }
+
+    private PaymentCancelResponse cancelExternalPayment(
+            ConfirmPaymentTarget target,
+            Long cancelAmount
+    ) {
         try {
-            PaymentCancelResponse cancelResponse = paymentGateway.cancelPayment(
+            return paymentGateway.cancelPayment(
                     target.portonePaymentId(),
                     cancelAmount,
                     cancelAmount,
                     COMPENSATION_REASON,
                     COMPENSATION_IDEMPOTENCY_KEY_PREFIX + target.paymentId()
             );
-
-            if (!cancelResponse.isSucceeded()) {
-                throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
-            }
-
-            paymentService.failAfterCompensation(target.paymentId());
         } catch (RuntimeException compensationFailure) {
             log.error(
-                    "결제 확정 보상 취소 실패: paymentId={}, portonePaymentId={}",
+                    "결제 확정 보상 취소 요청 실패: paymentId={}, portonePaymentId={}",
                     target.paymentId(),
                     target.portonePaymentId(),
                     compensationFailure
             );
             throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+        }
+    }
+
+    private void markCompensationRequired(ConfirmPaymentTarget target) {
+        try {
+            paymentService.markCompensationRequired(target.paymentId());
+        } catch (RuntimeException cleanupFailure) {
+            log.error(
+                    "결제 확정 보상 취소 성공 후 내부 정리 필요 상태 저장 실패: paymentId={}, portonePaymentId={}",
+                    target.paymentId(),
+                    target.portonePaymentId(),
+                    cleanupFailure
+            );
+            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_CLEANUP_FAILED);
+        }
+    }
+
+    private void markCompensationResultUnknown(ConfirmPaymentTarget target) {
+        try {
+            paymentService.markCompensationResultUnknown(target.paymentId());
+        } catch (RuntimeException cleanupFailure) {
+            log.error(
+                    "결제 확정 보상 취소 결과미확정 상태 저장 실패: paymentId={}, portonePaymentId={}",
+                    target.paymentId(),
+                    target.portonePaymentId(),
+                    cleanupFailure
+            );
+        }
+    }
+
+    private void completeInternalCompensationCleanup(ConfirmPaymentTarget target) {
+        try {
+            paymentService.failAfterCompensation(target.paymentId());
+        } catch (RuntimeException cleanupFailure) {
+            log.error(
+                    "결제 확정 보상 취소 성공 후 내부 실패 정리 실패: paymentId={}, portonePaymentId={}",
+                    target.paymentId(),
+                    target.portonePaymentId(),
+                    cleanupFailure
+            );
+            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_CLEANUP_FAILED);
         }
     }
 }
