@@ -339,36 +339,42 @@ public class RefundService {
             Map<Long, Integer> quantityMap,
             RefundAmount refundAmount
     ) {
-        List<RefundItem> refundItems = new ArrayList<>();
+        List<Long> itemGrossAmounts = new ArrayList<>();
 
-        long remainingPointRefundAmount = refundAmount.pointRefundAmount();
-        long remainingPgRefundAmount = refundAmount.pgRefundAmount();
+        for (OrderItem orderItem : refundTargetItems) {
+            int quantity = quantityMap.get(orderItem.getId());
+            long itemGrossAmount = (long) orderItem.getPrice() * quantity;
+
+            itemGrossAmounts.add(itemGrossAmount);
+        }
+
+        /**
+         * 1. 적립 포인트 회수 후 실제 환불 총액을 상품별 gross 금액 비율대로 나눕니다.
+         * 적립 포인트 회수 때문에 실제 환불액은 gross 합계보다 작을 수 있습니다.
+         */
+        List<Long> itemActualRefundAmounts = allocateAmountByCap(
+                itemGrossAmounts,
+                refundAmount.refundAmount()
+        );
+
+        /**
+         * 2. 실제 환불액 안에서 포인트 환불액을 다시 나눕니다.
+         * 각 상품의 point + pg가 itemActualRefundAmount를 넘지 않게 만들기 위해서입니다.
+         */
+        List<Long> itemPointRefundAmounts = allocateAmountByCap(
+                itemActualRefundAmounts,
+                refundAmount.pointRefundAmount()
+        );
+
+        List<RefundItem> refundItems = new ArrayList<>();
 
         for (int i = 0; i < refundTargetItems.size(); i++) {
             OrderItem orderItem = refundTargetItems.get(i);
             int quantity = quantityMap.get(orderItem.getId());
-            long itemRefundAmount = (long) orderItem.getPrice() * quantity;
 
-            boolean lastItem = i == refundTargetItems.size() - 1;
-
-            long itemPointRefundAmount;
-            long itemPgRefundAmount;
-
-            if (lastItem) {
-                // 마지막 상품에는 남은 금액을 그대로 넣습니다.
-                itemPointRefundAmount = remainingPointRefundAmount;
-                itemPgRefundAmount = remainingPgRefundAmount;
-            } else {
-                // 상품벽 배분은 "상품 기준 환불 요청 금액" 비율로 계산합니다.
-                itemPointRefundAmount =
-                        itemRefundAmount * refundAmount.pointRefundAmount() / refundAmount.requestedRefundAmount();
-
-                itemPgRefundAmount =
-                        itemRefundAmount * refundAmount.pgRefundAmount() / refundAmount.requestedRefundAmount();
-            }
-
-            remainingPointRefundAmount -= itemPointRefundAmount;
-            remainingPgRefundAmount -= itemPgRefundAmount;
+            long itemActualRefundAmount = itemActualRefundAmounts.get(i);
+            long itemPointRefundAmount = itemPointRefundAmounts.get(i);
+            long itemPgRefundAmount = itemActualRefundAmount - itemPointRefundAmount;
 
             refundItems.add(RefundItem.createRefundItem(
                     refund,
@@ -380,6 +386,57 @@ public class RefundService {
         }
 
         return refundItems;
+    }
+    /**
+     *  mountToAllocate를 각 항목의 상한 금액 안에서 비율대로 배분합니다.
+     * 예를 들어
+     * 상품 A 상한 900원,
+     * 상품 B 상한 100원이고
+     * 실제 배분할 금액이 800원이면,
+     * 이 경우 800원을 A/B 비율대로 나누되
+     * 어떤 상품도 자기 상한을 넘지 않도록 보장합니다.
+     */
+    private List<Long> allocateAmountByCap(List<Long> caps, long amountToAllocate) {
+        if (caps.isEmpty() || amountToAllocate < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        long totalCap = caps.stream()
+                .mapToLong(Long::longValue)
+                .sum();
+
+        if (totalCap <= 0 || amountToAllocate > totalCap) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        List<Long> allocations = new ArrayList<>();
+        long remainingAmount = amountToAllocate;
+
+        for (Long cap : caps) {
+            long allocatedAmount = cap * amountToAllocate / totalCap;
+
+            allocations.add(allocatedAmount);
+            remainingAmount -= allocatedAmount;
+        }
+
+        /**
+         * 정수 나눗셈에서 버려진 나머지 금액을 1원씩 분산합니다.
+         * 단, 각 항목의 상한 금액은 절대 넘지 않습니다.
+         */
+        int index = 0;
+        while (remainingAmount > 0) {
+            long currentAmount = allocations.get(index);
+            long cap = caps.get(index);
+
+            if (currentAmount < cap) {
+                allocations.set(index, currentAmount + 1);
+                remainingAmount--;
+            }
+
+            index = (index + 1) % allocations.size();
+        }
+
+        return allocations;
     }
 
     /**
