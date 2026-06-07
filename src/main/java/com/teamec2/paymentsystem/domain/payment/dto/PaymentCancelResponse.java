@@ -1,6 +1,6 @@
 package com.teamec2.paymentsystem.domain.payment.dto;
 
-import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 
 /**
  * 외부 결제 취소 결과를 도메인 계층에 전달하기 위한 응답 객체.

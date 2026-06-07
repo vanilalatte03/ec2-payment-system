@@ -2,7 +2,7 @@ package com.teamec2.paymentsystem.infra.portone.webhook.service;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
-import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -33,7 +33,7 @@ public class PortoneWebhookEventService {
     private static final String REASON_UNSUPPORTED_EVENT_TYPE = "UNSUPPORTED_EVENT_TYPE";
 
     private final PortoneWebhookEventRepository webhookEventRepository;
-    private final PaymentRepository paymentRepository;
+    private final PaymentFacade paymentFacade;
     private final PaymentService paymentService;
 
     /**
@@ -137,9 +137,8 @@ public class PortoneWebhookEventService {
             String portonePaymentId
     ) {
         try {
-            ConfirmPaymentResponse confirmPaymentResponse = paymentService.confirmPaidWebhook(portonePaymentId);
-            Payment payment = paymentRepository.findById(confirmPaymentResponse.paymentId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+            ConfirmPaymentResponse confirmPaymentResponse = paymentFacade.confirmPaidWebhook(portonePaymentId);
+            Payment payment = paymentService.findPaymentById(confirmPaymentResponse.paymentId());
 
             event.markProcessed(payment);
             webhookEventRepository.saveAndFlush(event);

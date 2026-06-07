@@ -20,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +50,34 @@ public class ProductService {
     public Product findProductEntity(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+    }
+
+    /**
+     * 상품 ID 목록으로 상품 row를 쓰기 잠금으로 조회한다.
+     *
+     * <p>주문 생성이나 보상 취소처럼 재고를 변경하는 흐름에서 사용한다.
+     * 호출자는 {@link ProductRepository}를 직접 참조하지 않고 이 메서드를 통해
+     * ID 오름차순으로 잠긴 상품을 가져온다.
+     *
+     * @param productIds 잠금으로 조회할 상품 ID 목록
+     * @return 상품 ID를 key로 하는 잠금 획득 완료 상품 맵
+     */
+    @Transactional
+    public Map<Long, Product> findProductsByIdsForUpdate(List<Long> productIds) {
+        List<Long> distinctProductIds = distinctSortedProductIds(productIds);
+
+        if (distinctProductIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(distinctProductIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        if (lockedProducts.size() != distinctProductIds.size()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        return lockedProducts;
     }
 
     private ProductResponse toResponse(Product product) {
@@ -90,6 +121,23 @@ public class ProductService {
         if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "최소 가격은 최대 가격보다 클 수 없습니다.");
         }
+    }
+
+    /**
+     * 상품 잠금 순서를 고정하기 위해 null이 아닌 상품 ID를 중복 제거 후 오름차순 정렬한다.
+     *
+     * @param productIds 원본 상품 ID 목록
+     * @return 잠금 조회에 사용할 정렬된 상품 ID 목록
+     */
+    private List<Long> distinctSortedProductIds(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+
+        return productIds.stream()
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     private Specification<Product> toSpecification(ProductSearchCondition condition) {

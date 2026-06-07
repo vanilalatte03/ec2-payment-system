@@ -5,7 +5,7 @@ import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
-import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -56,7 +56,7 @@ class PortoneWebhookEventServiceTest {
     PortoneWebhookEventRepository webhookEventRepository;
 
     @Mock
-    PaymentRepository paymentRepository;
+    PaymentFacade paymentFacade;
 
     @Mock
     PaymentService paymentService;
@@ -71,9 +71,9 @@ class PortoneWebhookEventServiceTest {
         when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(paymentService.confirmPaidWebhook("pay_123"))
+        when(paymentFacade.confirmPaidWebhook("pay_123"))
                 .thenReturn(결제확정응답("pay_123"));
-        when(paymentRepository.findById(300L)).thenReturn(Optional.of(payment));
+        when(paymentService.findPaymentById(300L)).thenReturn(payment);
 
         // when
         PortoneWebhookReceiveResponse response = portoneWebhookEventService.receive(
@@ -100,8 +100,8 @@ class PortoneWebhookEventServiceTest {
         assertThat(savedEvent.getRawPayload()).isEqualTo(RAW_PAYLOAD);
         assertThat(savedEvent.getFailureReason()).isNull();
         assertThat(savedEvent.getProcessedAt()).isNotNull();
-        verify(paymentService).confirmPaidWebhook("pay_123");
-        verify(paymentRepository).findById(300L);
+        verify(paymentFacade).confirmPaidWebhook("pay_123");
+        verify(paymentService).findPaymentById(300L);
     }
 
     @Test
@@ -110,7 +110,7 @@ class PortoneWebhookEventServiceTest {
         when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
         when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(paymentService.confirmPaidWebhook("pay_123"))
+        when(paymentFacade.confirmPaidWebhook("pay_123"))
                 .thenThrow(new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
 
         // when
@@ -134,8 +134,8 @@ class PortoneWebhookEventServiceTest {
         assertThat(savedEvent.getPortonePaymentId()).isEqualTo("pay_123");
         assertThat(savedEvent.getFailureReason()).isEqualTo("PAYMENT_NOT_FOUND");
         assertThat(savedEvent.getProcessedAt()).isNotNull();
-        verify(paymentService).confirmPaidWebhook("pay_123");
-        verify(paymentRepository, never()).findById(any());
+        verify(paymentFacade).confirmPaidWebhook("pay_123");
+        verify(paymentService, never()).findPaymentById(any());
     }
 
     @Test
@@ -156,7 +156,7 @@ class PortoneWebhookEventServiceTest {
 
         verify(webhookEventRepository).findByWebhookId(WEBHOOK_ID);
         verify(webhookEventRepository, never()).saveAndFlush(any(PortoneWebhookEvent.class));
-        verify(paymentService, never()).confirmPaidWebhook(any());
+        verify(paymentFacade, never()).confirmPaidWebhook(any());
     }
 
     @Test

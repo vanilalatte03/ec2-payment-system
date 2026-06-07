@@ -1,10 +1,11 @@
-package com.teamec2.paymentsystem.domain.payment.service;
+package com.teamec2.paymentsystem.domain.payment.facade;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
-import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
+import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
@@ -20,16 +21,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentServiceUnitTest {
+class PaymentFacadeUnitTest {
 
     @Mock
-    PaymentConfirmTxService paymentConfirmTxService;
+    PaymentService paymentService;
 
     @Mock
     PaymentGateway paymentGateway;
 
     @InjectMocks
-    PaymentService paymentService;
+    PaymentFacade paymentFacade;
 
     @Test
     void 결제확정_외부결제성공후_내부완료실패면_보상취소하고_원예외를전파한다() {
@@ -41,9 +42,9 @@ class PaymentServiceUnitTest {
         PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse("pay_123", "PAID", 800L, approvedAt);
         BusinessException completeFailure = new BusinessException(ErrorCode.CONFLICT);
 
-        when(paymentConfirmTxService.prepare(userId, request)).thenReturn(target);
+        when(paymentService.prepare(userId, request)).thenReturn(target);
         when(paymentGateway.getPayment("pay_123")).thenReturn(gatewayResponse);
-        when(paymentConfirmTxService.complete(20L, approvedAt)).thenThrow(completeFailure);
+        when(paymentService.complete(20L, approvedAt)).thenThrow(completeFailure);
         when(paymentGateway.cancelPayment(
                 "pay_123",
                 800L,
@@ -54,7 +55,7 @@ class PaymentServiceUnitTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(userId, request))
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(userId, request))
                 .isSameAs(completeFailure);
 
         verify(paymentGateway).cancelPayment(
@@ -64,6 +65,6 @@ class PaymentServiceUnitTest {
                 "PAYMENT_CONFIRM_INTERNAL_FAILURE",
                 "payment-confirm-compensation-20"
         );
-        verify(paymentConfirmTxService).failAfterCompensation(20L);
+        verify(paymentService).failAfterCompensation(20L);
     }
 }

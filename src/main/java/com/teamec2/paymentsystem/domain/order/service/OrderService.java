@@ -253,6 +253,35 @@ public class OrderService {
         );
     }
 
+    /**
+     * 주문 ID로 주문 엔티티를 조회한다.
+     *
+     * <p>다른 도메인이 주문 존재 여부, 소유자, 상태를 검증해야 할 때
+     * {@link OrderRepository}를 직접 참조하지 않고 이 메서드를 통해 조회한다.
+     *
+     * @param orderId 조회할 주문 ID
+     * @return 주문 엔티티
+     */
+    @Transactional(readOnly = true)
+    public Order findOrderEntity(Long orderId) {
+        return findOrder(orderId);
+    }
+
+    /**
+     * 주문 ID로 주문 상품 목록을 조회한다.
+     *
+     * <p>재고 복구처럼 상품 row를 별도로 비관락 조회해야 하는 흐름을 위해
+     * 상품을 fetch join 하지 않는 조회를 제공한다. 다른 도메인은
+     * {@link OrderItemRepository}를 직접 참조하지 않고 이 메서드를 통해 주문 상품을 가져온다.
+     *
+     * @param orderId 주문 상품을 조회할 주문 ID
+     * @return 주문에 포함된 주문 상품 목록
+     */
+    @Transactional(readOnly = true)
+    public List<OrderItem> findOrderItemsByOrderId(Long orderId) {
+        return orderItemRepository.findAllByOrderId(orderId);
+    }
+
     private User findUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
