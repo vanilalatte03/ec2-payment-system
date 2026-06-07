@@ -15,7 +15,8 @@ import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
-import com.teamec2.paymentsystem.domain.payment.enums.PaymentCancelStatus;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
@@ -49,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PaymentServiceTest {
 
     @Autowired
-    PaymentService paymentService;
+    PaymentFacade paymentFacade;
 
     @Autowired
     UserRepository userRepository;
@@ -117,7 +118,7 @@ class PaymentServiceTest {
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
 
         // when
-        ConfirmPaymentResponse response = paymentService.confirmPayment(
+        ConfirmPaymentResponse response = paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         );
@@ -153,7 +154,7 @@ class PaymentServiceTest {
         pointService.reserveUsedPoints(payment);
 
         // when
-        ConfirmPaymentResponse response = paymentService.confirmPayment(
+        ConfirmPaymentResponse response = paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         );
@@ -186,7 +187,7 @@ class PaymentServiceTest {
         paymentRepository.saveAndFlush(payment);
 
         // when
-        ConfirmPaymentResponse response = paymentService.confirmPayment(
+        ConfirmPaymentResponse response = paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         );
@@ -215,7 +216,7 @@ class PaymentServiceTest {
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, approvedAt);
 
         // when
-        ConfirmPaymentResponse response = paymentService.confirmPaidWebhook(payment.getPortonePaymentId());
+        ConfirmPaymentResponse response = paymentFacade.confirmPaidWebhook(payment.getPortonePaymentId());
 
         // then
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
@@ -252,7 +253,7 @@ class PaymentServiceTest {
         paymentRepository.saveAndFlush(payment);
 
         // when
-        ConfirmPaymentResponse response = paymentService.confirmPaidWebhook(payment.getPortonePaymentId());
+        ConfirmPaymentResponse response = paymentFacade.confirmPaidWebhook(payment.getPortonePaymentId());
 
         // then
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
@@ -278,7 +279,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPaidWebhook(payment.getPortonePaymentId()))
+        assertThatThrownBy(() -> paymentFacade.confirmPaidWebhook(payment.getPortonePaymentId()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
@@ -309,7 +310,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 otherUser.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -329,7 +330,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), "pay_mismatch")
         ))
@@ -355,7 +356,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -375,7 +376,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -402,7 +403,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -430,7 +431,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -465,7 +466,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -488,7 +489,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))
@@ -515,7 +516,7 @@ class PaymentServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> paymentService.confirmPayment(
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(
                 user.getId(),
                 new ConfirmPaymentRequest(order.getId(), payment.getPortonePaymentId())
         ))

@@ -24,5 +24,5 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
             where p.id in :productIds
             order by p.id
             """)
-    List<Product> findAllByIdInForUpdate(List<Long> productIds);
+    List<Product> findAllByIdsWithLock(List<Long> productIds);
 }

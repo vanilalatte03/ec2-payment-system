@@ -9,6 +9,7 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
 /**
  * 결제 확정 과정에서 DB 상태 변경만 담당하는 트랜잭션 서비스.
  *
- * <p>{@link PaymentService}는 PortOne 같은 외부 API를 호출하는 Facade이고,
+ * <p>{@link PaymentFacade}는 PortOne 같은 외부 API를 호출하는 Facade이고,
  * 이 클래스는 주문/결제 상태 변경처럼 DB 트랜잭션이 필요한 작업을 짧게 실행한다.
  *
  * <p>외부 API 호출과 DB 변경을 한 트랜잭션에 섞으면 트랜잭션 시간이 길어지고,
@@ -249,7 +250,7 @@ public class PaymentConfirmTxService {
             return Map.of();
         }
 
-        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdsWithLock(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
 
         if (lockedProducts.size() != productIds.size()) {

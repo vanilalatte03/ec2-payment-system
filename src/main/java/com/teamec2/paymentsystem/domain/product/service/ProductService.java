@@ -1,7 +1,7 @@
 package com.teamec2.paymentsystem.domain.product.service;
 
 import com.teamec2.paymentsystem.domain.product.dto.ProductDetailResponse;
-import com.teamec2.paymentsystem.domain.product.dto.ProductResponse;
+import com.teamec2.paymentsystem.domain.product.dto.ProductListResponse;
 import com.teamec2.paymentsystem.domain.product.dto.ProductSearchCondition;
 import com.teamec2.paymentsystem.domain.product.entity.Product;
 import com.teamec2.paymentsystem.domain.product.entity.ProductSort;
@@ -28,29 +28,47 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    public PageResponse<ProductResponse> findAll(ProductSearchCondition condition, ProductSort sort, int page, int size) {
+    // 상품 목록 조회의 전체 흐름을 담당합니다.
+    // 가격 조건 검증, 페이지 정보 생성, 검색 조건 적용, 응답 DTO 변환을 순서대로 처리합니다.
+    public PageResponse<ProductListResponse> findProducts(ProductSearchCondition condition, ProductSort sort, int page, int size) {
         validatePriceRange(condition);
 
-        Pageable pageable = PageableFactory.create(page, size, sort.toSort());
-        Page<ProductResponse> products = productRepository.findAll(toSpecification(condition), pageable)
-                .map(this::toResponse);
+        Pageable pageable = createPageable(sort, page, size);
+        Page<ProductListResponse> products = findProductsByCondition(condition, pageable)
+                .map(this::toListResponse);
 
         return PageResponse.from(products);
     }
 
-    public ProductDetailResponse findById(Long id) {
-        Product product = findProductEntity(id);
+    // 상품 상세 조회 API에 필요한 응답을 만듭니다.
+    // 상품이 없으면 getProductById에서 PRODUCT_NOT_FOUND 예외가 발생합니다.
+    public ProductDetailResponse findProductDetail(Long productId) {
+        Product product = getProductById(productId);
 
         return toDetailResponse(product);
     }
 
-    public Product findProductEntity(Long id) {
-        return productRepository.findById(id)
+    // 상품 상세 조회에서 공통으로 쓰는 상품 로직
+    private Product getProductById(Long productId) {
+        return productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
     }
 
-    private ProductResponse toResponse(Product product) {
-        return new ProductResponse(
+    // page, size, sort 값을 Spring Data JPA가 이해하는 Pageable 객체로 변환합니다.
+    // page나 size가 잘못된 경우 PageableFactory에서 INVALID_PAGINATION 예외가 발생합니다.
+    private Pageable createPageable(ProductSort sort, int page, int size) {
+        return PageableFactory.create(page, size, sort.toSort());
+    }
+
+    // 검색 조건과 페이지 조건을 함께 적용해서 상품 엔티티 목록을 조회합니다.
+    private Page<Product> findProductsByCondition(ProductSearchCondition condition, Pageable pageable) {
+        return productRepository.findAll(createSearchSpecification(condition), pageable);
+    }
+
+    // 목록 화면에 필요한 상품 정보만 담은 DTO로 변환합니다.
+    // 상세 설명과 updatedAt은 목록에서 사용하지 않기 때문에 제외합니다.
+    private ProductListResponse toListResponse(Product product) {
+        return new ProductListResponse(
                 product.getId(),
                 product.getName(),
                 product.getPrice(),
@@ -61,6 +79,8 @@ public class ProductService {
         );
     }
 
+    // 상세 화면에 필요한 상품 정보를 DTO로 변환합니다.
+    // 목록 응답과 달리 description, updatedAt까지 포함합니다.
     private ProductDetailResponse toDetailResponse(Product product) {
         return new ProductDetailResponse(
                 product.getId(),
@@ -75,6 +95,8 @@ public class ProductService {
         );
     }
 
+    // 가격 검색 조건이 정상적인 범위인지 확인합니다.
+    // null은 조건을 사용하지 않는다는 뜻이므로 검증 대상에서 제외합니다.
     private void validatePriceRange(ProductSearchCondition condition) {
         Integer minPrice = condition.minPrice();
         Integer maxPrice = condition.maxPrice();
@@ -92,7 +114,9 @@ public class ProductService {
         }
     }
 
-    private Specification<Product> toSpecification(ProductSearchCondition condition) {
+    // ProductSearchCondition을 JPA Specification으로 변환합니다.
+    // Specification은 조건이 있을 때만 WHERE 절을 동적으로 추가할 때 사용합니다.
+    private Specification<Product> createSearchSpecification(ProductSearchCondition condition) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
