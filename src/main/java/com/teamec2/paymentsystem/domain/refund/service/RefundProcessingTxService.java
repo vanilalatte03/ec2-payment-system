@@ -5,6 +5,8 @@ import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
+import com.teamec2.paymentsystem.domain.product.entity.Product;
+import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
 import com.teamec2.paymentsystem.domain.refund.entity.Refund;
 import com.teamec2.paymentsystem.domain.refund.entity.RefundItem;
 import com.teamec2.paymentsystem.domain.refund.entity.RefundOutbox;
@@ -20,7 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,7 @@ public class RefundProcessingTxService {
     private final RefundItemRepository refundItemRepository;
     private final OrderItemRepository orderItemRepository;
     private final PointService pointService;
+    private final ProductRepository productRepository;
 
     /**
      * PG 환불 API 호출 전에 Outbox를 PROCESSING 상태로 선점하고,
@@ -116,7 +122,6 @@ public class RefundProcessingTxService {
      */
     @Transactional
     public void complete(Long outboxId) {
-
         RefundOutbox outbox = findOutboxForUpdate(outboxId);
         Refund refund = outbox.getRefund();
         Payment payment = refund.getPayment();
@@ -131,24 +136,29 @@ public class RefundProcessingTxService {
         }
 
         /**
-         * 현재 환불에 포함된 호나불 상품 상세 목록을 조회합니다.
+         * 현재 환불에 포함된 환불 상품 상세 목록을 조회합니다.
          */
         List<RefundItem> refundItems =
                 refundItemRepository.findAllByRefundIdWithOrderItem(refund.getId());
 
-        /**
-         * 환불 상품별 환불 완료 수량을 반영합니다.
-         */
+        Map<Long, Product> lockedProducts = lockProductsForRefund(refundItems);
+
         for (RefundItem refundItem : refundItems) {
-            refundItem.getOrderItem().refund(refundItem.getRefundQuantity());
+            OrderItem orderItem = refundItem.getOrderItem();
+            Product lockedProduct = lockedProducts.get(orderItem.getProductId());
+
+            /*
+             * 환불 완료 시 재고를 복구합니다.
+             * Product row를 먼저 비관적 락으로 잡아야 동시 주문/환불 상황에서 재고 값이 꼬이지 않습니다.
+             */
+            orderItem.refund(refundItem.getRefundQuantity(), lockedProduct);
         }
 
-        /**
-         * 사용 포인트 복구입니다.
-         */
-        pointService.restoreUsedPoints(payment, refund, refund.getPointRefundAmount());
-
-         // 결제 시 적립했던 포인트 반환 일단 추가해야함
+        pointService.restoreUsedPoints(
+                payment,
+                refund,
+                refund.getPointRefundAmount()
+        );
 
         /**
          * 현재 주문의 모든 주문 상품을 조회하여 환불이 끝난 뒤 이 주문이 전체 환불상태인지 부분 환불 상태인지 판단해야합니다.
@@ -180,7 +190,6 @@ public class RefundProcessingTxService {
      */
     @Transactional
     public void fail(Long outboxId, String reason) {
-
         RefundOutbox outbox = findOutboxForUpdate(outboxId);
         Refund refund = outbox.getRefund();
 
@@ -200,6 +209,11 @@ public class RefundProcessingTxService {
         for (RefundItem refundItem : refundItems) {
             refundItem.getOrderItem().releaseRefundQuantity(refundItem.getRefundQuantity());
         }
+
+        pointService.releaseReservedEarnedPointRecovery(
+                refund.getPayment(),
+                refund
+        );
 
         refund.fail(reason);
         outbox.markFailed(reason);
@@ -223,45 +237,41 @@ public class RefundProcessingTxService {
 
         boolean retryScheduled = outbox.markRetry(message, LocalDateTime.now());
 
-        /**
-         * 최대 재시도 횟수를 초과한 경우입니다.
-         *
-         * 이때 Outbox만 FAILED로 끝내면 Refund는 PG_RESULT_UNKNOWN으로 남고,
-         * 이후 새 환불 요청이 REFUND_IN_PROGRESS로 계속 막힙니다.
-         *
-         * 따라서 Refund도 FAILED로 전환하고,
-         * 환불 요청 생성 시 예약했던 OrderItem 수량을 해제해야 합니다.
-         */
         if (!retryScheduled) {
-            failRefundAfterRetryExceeded(
-                    refund,
-                    "최대 재시도 횟수를 초과하여 환불 실패로 확정했습니다. 마지막 오류: " + message
-            );
-        }
-    }
-
-    /**
-     * 재시도 한도를 초과한 환불을 최종 실패로 정리합니다.
-     * PG_RESULT_UNKNOWN 상태가 계속 남으면 새 환불 요청이 계속 REFUND_IN_PROGRESS로 막히므로,
-     * 최종 실패 시 Refund 상태를 FAILED로 바꾸고 예약 수량을 해제합니다.
-     */
-    private void failRefundAfterRetryExceeded(Refund refund, String reason) {
-        if (refund.isFailed()) {
+            /**
+             * PG_RESULT_UNKNOWN은 실제 PG에서 이미 환불 성공했을 가능성이 있습니다.
+             * 따라서 자동으로 Refund FAILED 처리하거나 예약 수량/포인트를 해제하면
+             * 같은 상품을 다시 환불할 수 있어 중복 환불 위험이 생깁니다.
+             * 재시도 초과 시에는 Outbox만 FAILED로 멈추고,
+             * Refund는 PG_RESULT_UNKNOWN으로 남겨 운영자가 PortOne 관리자 콘솔/API로 확인해야 합니다.
+             */
             return;
         }
-
-        List<RefundItem> refundItems =
-                refundItemRepository.findAllByRefundIdWithOrderItem(refund.getId());
-
-        for (RefundItem refundItem : refundItems) {
-            refundItem.getOrderItem().releaseRefundQuantity(refundItem.getRefundQuantity());
-        }
-
-        refund.fail(reason);
     }
 
     private RefundOutbox findOutboxForUpdate(Long outboxId) {
         return refundOutboxRepository.findByIdForUpdate(outboxId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private Map<Long, Product> lockProductsForRefund(List<RefundItem> refundItems) {
+        List<Long> productIds = refundItems.stream()
+                .map(refundItem -> refundItem.getOrderItem().getProductId())
+                .distinct()
+                .sorted()
+                .toList();
+
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Product> lockedProducts = productRepository.findAllByIdInForUpdate(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        if (lockedProducts.size() != productIds.size()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        return lockedProducts;
     }
 }
