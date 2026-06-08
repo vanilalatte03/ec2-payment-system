@@ -6,6 +6,7 @@ import com.teamec2.paymentsystem.domain.order.entity.Order;
 import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
+import com.teamec2.paymentsystem.domain.order.service.OrderCancelService;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
@@ -40,6 +41,7 @@ public class PaymentConfirmTxService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderCancelService orderCancelService;
     private final PointService pointService;
     private final CartService cartService;
 
@@ -190,7 +192,7 @@ public class PaymentConfirmTxService {
      * <p>정리 순서는 다음과 같다.
      * <ol>
      *     <li>주문 생성 때 예약 차감했던 포인트를 복구한다.</li>
-     *     <li>주문을 결제대기에서 취소 상태로 변경한다.</li>
+     *     <li>주문 도메인에 결제 전 취소를 요청해 주문 상품과 재고를 함께 되돌린다.</li>
      *     <li>결제를 실패 상태로 변경한다.</li>
      * </ol>
      *
@@ -207,7 +209,7 @@ public class PaymentConfirmTxService {
         Order order = payment.getOrder();
 
         pointService.cancelReservedPoints(payment);
-        order.cancelBeforePayment();
+        orderCancelService.cancelBeforePayment(order);
         payment.fail(LocalDateTime.now());
     }
 

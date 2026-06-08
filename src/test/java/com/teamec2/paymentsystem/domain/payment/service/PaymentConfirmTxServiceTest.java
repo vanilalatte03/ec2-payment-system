@@ -151,10 +151,13 @@ class PaymentConfirmTxServiceTest {
     }
 
     @Test
-    void 보상취소성공후_주문결제를실패처리하고_주문상품재고는복구하지않는다() {
+    void 보상취소성공후_주문결제를실패처리하고_주문상품재고를복구한다() {
         // given
         User user = 회원_저장();
+        // 주문 생성 시 이미 재고가 선차감된 상태를 테스트 데이터로 표현한다.
+        // 후드 집업은 원래 10개에서 2개 주문되어 현재 8개가 남은 상황이다.
         Product firstProduct = 상품_저장("후드 집업", 55000, 8);
+        // 볼캡은 원래 10개에서 3개 주문되어 현재 7개가 남은 상황이다.
         Product secondProduct = 상품_저장("볼캡", 24000, 7);
         Order order = 주문_저장(user, 158000L, 0L);
         주문상품_저장(order, firstProduct, 2);
@@ -173,14 +176,15 @@ class PaymentConfirmTxServiceTest {
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(foundPayment.getFailedAt()).isNotNull();
-        assertThat(foundFirstProduct.getStock()).isEqualTo(8);
-        assertThat(foundSecondProduct.getStock()).isEqualTo(7);
+        assertThat(foundFirstProduct.getStock()).isEqualTo(10);
+        assertThat(foundSecondProduct.getStock()).isEqualTo(10);
     }
 
     @Test
     void 보상취소성공후_예약차감한포인트를복구하고_취소원장을기록한다() {
         // given
         User user = 회원_저장(1000L);
+        // 주문 생성 시 상품 1개가 선차감되어 현재 재고는 4개만 남아 있다.
         Product product = 상품_저장("후드 집업", 55000, 4);
         Order order = 주문_저장(user, 1000L, 200L);
         주문상품_저장(order, product, 1);
@@ -207,7 +211,7 @@ class PaymentConfirmTxServiceTest {
         assertThat(foundUser.getPointBalance()).isEqualTo(1000L);
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-        assertThat(foundProduct.getStock()).isEqualTo(4);
+        assertThat(foundProduct.getStock()).isEqualTo(5);
         assertThat(cancelTransaction.getType()).isEqualTo(PointTransactionType.USE_CANCEL);
         assertThat(cancelTransaction.getAmount()).isEqualTo(200L);
     }
