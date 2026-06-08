@@ -4,8 +4,8 @@ import com.teamec2.paymentsystem.domain.cart.entity.Cart;
 import com.teamec2.paymentsystem.domain.cart.entity.CartItem;
 import com.teamec2.paymentsystem.domain.cart.repository.CartItemRepository;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
-import com.teamec2.paymentsystem.domain.order.dto.CancelOrderResponse;
-import com.teamec2.paymentsystem.domain.order.dto.CreateOrderResponse;
+import com.teamec2.paymentsystem.domain.order.dto.CancelResponse;
+import com.teamec2.paymentsystem.domain.order.dto.CreateResponse;
 import com.teamec2.paymentsystem.domain.order.entity.Order;
 import com.teamec2.paymentsystem.domain.order.entity.OrderItem;
 import com.teamec2.paymentsystem.domain.order.entity.OrderItemStatus;
@@ -110,7 +110,7 @@ class OrderServiceTest {
         장바구니상품_저장(user, notSelectedProduct, 1);
 
         // when
-        CreateOrderResponse response = orderService.createOrder(
+        CreateResponse response = orderService.createOrder(
                 user.getId(),
                 List.of(selectedCartItem.getId()),
                 5000L
@@ -189,7 +189,7 @@ class OrderServiceTest {
         CartItem cartItem = 장바구니상품_저장(user, product, 2);
 
         // when
-        CreateOrderResponse response = orderService.createOrder(
+        CreateResponse response = orderService.createOrder(
                 user.getId(),
                 List.of(cartItem.getId(), cartItem.getId()),
                 0L
@@ -277,7 +277,7 @@ class OrderServiceTest {
                 .orElseThrow();
 
         // when
-        CancelOrderResponse response = orderService.cancelOrder(
+        CancelResponse response = orderService.cancelOrder(
                 user.getId(),
                 order.getId(),
                 List.of(cancelOrderItem.getId())

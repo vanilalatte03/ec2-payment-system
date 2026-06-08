@@ -39,7 +39,7 @@ class OrderNumberGeneratorTest {
         String today = TODAY.format(DATE_FORMATTER);
         OrderNumberSequence sequence = OrderNumberSequence.create(TODAY);
 
-        when(orderNumberSequenceRepository.findByOrderDateForUpdate(TODAY))
+        when(orderNumberSequenceRepository.findForUpdate(TODAY))
                 .thenReturn(Optional.of(sequence));
 
         // when
@@ -56,7 +56,7 @@ class OrderNumberGeneratorTest {
         String today = TODAY.format(DATE_FORMATTER);
         OrderNumberSequence sequence = OrderNumberSequence.create(TODAY);
 
-        when(orderNumberSequenceRepository.findByOrderDateForUpdate(TODAY))
+        when(orderNumberSequenceRepository.findForUpdate(TODAY))
                 .thenReturn(Optional.of(sequence));
 
         // when
@@ -74,7 +74,7 @@ class OrderNumberGeneratorTest {
         OrderNumberGenerator orderNumberGenerator = new OrderNumberGenerator(orderNumberSequenceRepository, FIXED_CLOCK);
         String today = TODAY.format(DATE_FORMATTER);
 
-        when(orderNumberSequenceRepository.findByOrderDateForUpdate(TODAY))
+        when(orderNumberSequenceRepository.findForUpdate(TODAY))
                 .thenReturn(Optional.empty());
         when(orderNumberSequenceRepository.saveAndFlush(any(OrderNumberSequence.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -94,7 +94,7 @@ class OrderNumberGeneratorTest {
         OrderNumberSequence existingSequence = OrderNumberSequence.create(TODAY);
         increaseSequence(existingSequence, 10);
 
-        when(orderNumberSequenceRepository.findByOrderDateForUpdate(TODAY))
+        when(orderNumberSequenceRepository.findForUpdate(TODAY))
                 .thenReturn(Optional.empty(), Optional.of(existingSequence));
         when(orderNumberSequenceRepository.saveAndFlush(any(OrderNumberSequence.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate order date"));
