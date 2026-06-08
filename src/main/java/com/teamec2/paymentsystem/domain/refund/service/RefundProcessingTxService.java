@@ -189,7 +189,50 @@ public class RefundProcessingTxService {
             return new RefundWebhookProcessResult(refund.getPayment(), refund);
         }
 
+        Optional<RefundWebhookProcessResult> unidentifiedWebhookResult =
+                completeUnidentifiedWebhookCandidate(portonePaymentId, portoneCancellationId);
+
+        if (unidentifiedWebhookResult.isPresent()) {
+            return unidentifiedWebhookResult.get();
+        }
+
         throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+    }
+
+    private Optional<RefundWebhookProcessResult> completeUnidentifiedWebhookCandidate(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        List<RefundOutbox> candidates =
+                refundOutboxRepository.findUnidentifiedWebhookCandidatesForUpdate(portonePaymentId);
+
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (candidates.size() != 1) {
+            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+        }
+
+        RefundOutbox outbox = candidates.get(0);
+        Refund refund = outbox.getRefund();
+
+        if (outbox.getStatus() == RefundOutboxStatus.FAILED && !refund.isPgResultUnknown()) {
+            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+        }
+
+        refund.recordPortoneCancellationId(portoneCancellationId);
+
+        if (outbox.getStatus() == RefundOutboxStatus.PENDING) {
+            outbox.markProcessing(LocalDateTime.now());
+        }
+
+        if (outbox.getStatus() == RefundOutboxStatus.FAILED) {
+            outbox.markProcessingForWebhookRecovery(LocalDateTime.now());
+        }
+
+        completeOutbox(outbox);
+        return Optional.of(new RefundWebhookProcessResult(refund.getPayment(), refund));
     }
 
     private void completeOutbox(RefundOutbox outbox) {

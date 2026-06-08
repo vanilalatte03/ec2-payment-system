@@ -148,4 +148,35 @@ public interface RefundOutboxRepository extends JpaRepository<RefundOutbox, Long
                 List.of(RefundOutboxStatus.FAILED)
         );
     }
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ro
+            from RefundOutbox ro
+            join fetch ro.refund r
+            join fetch r.payment p
+            join fetch r.order o
+            where r.portonePaymentId = :portonePaymentId
+              and r.portoneCancellationId is null
+              and r.status in :refundStatuses
+              and ro.status in :outboxStatuses
+            order by ro.id
+            """)
+    List<RefundOutbox> findUnidentifiedByPortonePaymentIdForUpdate(
+            @Param("portonePaymentId") String portonePaymentId,
+            @Param("refundStatuses") List<RefundStatus> refundStatuses,
+            @Param("outboxStatuses") List<RefundOutboxStatus> outboxStatuses
+    );
+
+    default List<RefundOutbox> findUnidentifiedWebhookCandidatesForUpdate(String portonePaymentId) {
+        return findUnidentifiedByPortonePaymentIdForUpdate(
+                portonePaymentId,
+                List.of(RefundStatus.PROCESSING, RefundStatus.PG_RESULT_UNKNOWN),
+                List.of(
+                        RefundOutboxStatus.PENDING,
+                        RefundOutboxStatus.PROCESSING,
+                        RefundOutboxStatus.FAILED
+                )
+        );
+    }
 }

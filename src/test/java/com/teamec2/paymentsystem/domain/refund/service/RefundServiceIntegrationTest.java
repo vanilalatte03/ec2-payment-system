@@ -382,6 +382,112 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
+    void 환불웹훅완료_PG호출예외로취소ID가저장되지않아도_미확정환불을완료한다() {
+        // given
+        RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
+        RefundResponse response = refundService.requestPartialRefund(
+                fixture.user().getId(),
+                fixture.order().getId(),
+                uniqueKey("refund-webhook-unidentified"),
+                new PartialRefundRequest(
+                        "partial refund",
+                        List.of(new RefundItemRequest(fixture.firstItem().getId(), 1))
+                )
+        );
+        Long outboxId = onlyOutbox().getId();
+        String cancellationId = "cancellation-unidentified-123";
+
+        refundProcessingTxService.start(outboxId);
+        refundProcessingTxService.retryAsPgResultUnknown(outboxId, "PortOne 취소 API 호출 타임아웃");
+
+        Refund pendingRefund = refundRepository.findById(response.refundId()).orElseThrow();
+        RefundOutbox pendingOutbox = refundOutboxRepository.findById(outboxId).orElseThrow();
+
+        assertThat(pendingRefund.getStatus()).isEqualTo(RefundStatus.PG_RESULT_UNKNOWN);
+        assertThat(pendingRefund.getPortoneCancellationId()).isNull();
+        assertThat(pendingOutbox.getStatus()).isEqualTo(RefundOutboxStatus.PENDING);
+
+        // when
+        RefundProcessingTxService.RefundWebhookProcessResult result =
+                refundProcessingTxService.completeByPortoneCancellationId(
+                        fixture.payment().getPortonePaymentId(),
+                        cancellationId
+                );
+
+        // then
+        Refund refund = refundRepository.findById(response.refundId()).orElseThrow();
+        RefundOutbox outbox = refundOutboxRepository.findById(outboxId).orElseThrow();
+        OrderItem refundedOrderItem = orderItemRepository.findById(fixture.firstItem().getId()).orElseThrow();
+        Payment payment = paymentRepository.findById(fixture.payment().getId()).orElseThrow();
+
+        assertThat(result.payment().getId()).isEqualTo(payment.getId());
+        assertThat(result.refund().getId()).isEqualTo(refund.getId());
+        assertThat(refund.getPortoneCancellationId()).isEqualTo(cancellationId);
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(outbox.getStatus()).isEqualTo(RefundOutboxStatus.SUCCEEDED);
+        assertThat(refundedOrderItem.getRefundReservedQuantity()).isZero();
+        assertThat(refundedOrderItem.getRefundedQuantity()).isEqualTo(1);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PARTIAL_REFUNDED);
+    }
+
+    @Test
+    void 환불웹훅완료_완료된취소ID가중복으로오면_새환불을완료하지않는다() {
+        // given
+        RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
+        RefundResponse firstResponse = refundService.requestPartialRefund(
+                fixture.user().getId(),
+                fixture.order().getId(),
+                uniqueKey("refund-first-webhook-duplicate"),
+                new PartialRefundRequest(
+                        "first partial refund",
+                        List.of(new RefundItemRequest(fixture.firstItem().getId(), 1))
+                )
+        );
+        Long firstOutboxId = onlyOutbox().getId();
+        String firstCancellationId = "cancellation-duplicate-old-123";
+
+        refundProcessingTxService.start(firstOutboxId);
+        refundProcessingTxService.retryAsPgResultUnknown(
+                firstOutboxId,
+                firstCancellationId,
+                "PortOne 취소 결과 미확정 상태: REQUESTED"
+        );
+        refundProcessingTxService.completeByPortoneCancellationId(
+                fixture.payment().getPortonePaymentId(),
+                firstCancellationId
+        );
+
+        RefundResponse secondResponse = refundService.requestPartialRefund(
+                fixture.user().getId(),
+                fixture.order().getId(),
+                uniqueKey("refund-second-active"),
+                new PartialRefundRequest(
+                        "second partial refund",
+                        List.of(new RefundItemRequest(fixture.secondItem().getId(), 1))
+                )
+        );
+        RefundOutbox secondOutboxBeforeWebhook = latestOutbox();
+
+        // when
+        RefundProcessingTxService.RefundWebhookProcessResult duplicateResult =
+                refundProcessingTxService.completeByPortoneCancellationId(
+                        fixture.payment().getPortonePaymentId(),
+                        firstCancellationId
+                );
+
+        // then
+        Refund firstRefund = refundRepository.findById(firstResponse.refundId()).orElseThrow();
+        Refund secondRefund = refundRepository.findById(secondResponse.refundId()).orElseThrow();
+        RefundOutbox secondOutbox = refundOutboxRepository.findById(secondOutboxBeforeWebhook.getId()).orElseThrow();
+
+        assertThat(duplicateResult.refund().getId()).isEqualTo(firstRefund.getId());
+        assertThat(firstRefund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(secondRefund.getStatus()).isEqualTo(RefundStatus.PROCESSING);
+        assertThat(secondRefund.getPortoneCancellationId()).isNull();
+        assertThat(secondOutbox.getStatus()).isEqualTo(RefundOutboxStatus.PENDING);
+    }
+
+    @Test
     void complete_full_refund_updates_payment_to_full_refunded_and_order_to_canceled() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
@@ -650,6 +756,12 @@ class RefundServiceIntegrationTest {
     private RefundOutbox onlyOutbox() {
         assertThat(refundOutboxRepository.count()).isEqualTo(1);
         return refundOutboxRepository.findAll().get(0);
+    }
+
+    private RefundOutbox latestOutbox() {
+        return refundOutboxRepository.findAll().stream()
+                .max(java.util.Comparator.comparing(RefundOutbox::getId))
+                .orElseThrow();
     }
 
     private String uniqueEmail() {
