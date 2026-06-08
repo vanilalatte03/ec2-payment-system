@@ -2,6 +2,10 @@ package com.teamec2.paymentsystem.domain.auth.controller;
 
 import com.teamec2.paymentsystem.domain.cart.entity.Cart;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
+import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
+import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
+import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -9,12 +13,15 @@ import com.teamec2.paymentsystem.global.security.jwt.JwtTokenProvider;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -44,10 +51,29 @@ class AuthControllerTest {
     CartRepository cartRepository;
 
     @Autowired
+    PointTransactionRepository pointTransactionRepository;
+
+    @Autowired
     PasswordEncoder passwordEncoder;
 
     @Autowired
     JwtTokenProvider jwtTokenProvider;
+
+    @BeforeEach
+    void setUp() {
+        clearDatabase();
+    }
+
+    @AfterEach
+    void tearDown() {
+        clearDatabase();
+    }
+
+    private void clearDatabase() {
+        pointTransactionRepository.deleteAll();
+        cartRepository.deleteAll();
+        userRepository.deleteAll();
+    }
 
     @Test
     void 회원가입_성공하면_회원정보를반환한다() throws Exception {
@@ -105,6 +131,29 @@ class AuthControllerTest {
                 .orElseThrow();
 
         assertThat(cart.getUser().getId()).isEqualTo(user.getId());
+    }
+
+    @Test
+    void 회원가입_성공하면_기본포인트와_가입보너스원장을생성한다() throws Exception {
+        // given
+        String email = uniqueEmail();
+
+        // when
+        signup(email, "Password123!");
+
+        // then
+        User user = userRepository.findByEmail(email)
+                .orElseThrow();
+        PointTransaction pointTransaction = pointTransactionRepository
+                .findAllByUser_Id(user.getId(), Pageable.unpaged())
+                .getContent()
+                .get(0);
+
+        assertThat(user.getPointBalance()).isEqualTo(PointService.SIGNUP_BONUS_POINT_AMOUNT);
+        assertThat(pointTransaction.getType()).isEqualTo(PointTransactionType.SIGNUP_BONUS);
+        assertThat(pointTransaction.getAmount()).isEqualTo(PointService.SIGNUP_BONUS_POINT_AMOUNT);
+        assertThat(pointTransaction.getPayment()).isNull();
+        assertThat(pointTransaction.getRefund()).isNull();
     }
 
     @Test

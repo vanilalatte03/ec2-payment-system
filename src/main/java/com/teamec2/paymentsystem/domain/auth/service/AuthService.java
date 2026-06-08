@@ -7,6 +7,7 @@ import com.teamec2.paymentsystem.domain.auth.dto.SignupRequest;
 import com.teamec2.paymentsystem.domain.auth.dto.SignupResponse;
 import com.teamec2.paymentsystem.domain.cart.entity.Cart;
 import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
 import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -25,6 +26,7 @@ public class AuthService {
     private final CartRepository cartRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final PointService pointService;
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -40,6 +42,8 @@ public class AuthService {
         );
 
         User savedUser = userRepository.save(user);
+
+        pointService.grantSignupBonus(savedUser);
 
         cartRepository.save(new Cart(savedUser));
 
