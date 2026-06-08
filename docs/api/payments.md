@@ -2,6 +2,12 @@
 
 결제 확정은 서버가 최종 책임자입니다. 클라이언트 콜백과 PortOne 웹훅은 순서가 바뀌거나 중복될 수 있으므로 같은 도메인 서비스를 호출해 멱등하게 처리해야 합니다.
 
+성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
+
+아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
+HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
+
 ## 결제 확정
 
 PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요청합니다. 포인트 전액 결제(`pgAmount = 0`)도 이 API를 호출하되 PortOne 조회는 생략합니다.
@@ -13,10 +19,10 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 
 ### Request Body
 
-| 필드 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| `orderId` | Long | Y | 주문 ID |
-| `portonePaymentId` | string | Y | 주문 생성 시 서버가 반환한 PortOne 결제 ID |
+| 필드 | 타입     | 필수 | 설명 |
+| --- |--------| --- | --- |
+| `orderId` | Long   | Y | 주문 ID |
+| `portonePaymentId` | String | Y | 주문 생성 시 서버가 반환한 PortOne 결제 ID |
 
 ```json
 {
@@ -33,7 +39,7 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
   "orderNumber": "ORD-20260529-000001",
   "orderStatus": "COMPLETED",
   "paymentId": 300,
-  "portonePaymentId": "pay_20260529_000001",
+  "portonePaymentId": "pay_9381dde4-49d5-4079-af45-2ea490dbcc6d",
   "paymentStatus": "COMPLETED",
   "paymentType": "POINT_CARD",
   "totalAmount": 78000,
@@ -63,18 +69,18 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 
 ### Errors
 
-| 코드 | HTTP | 발생 조건 |
-| --- | --- | --- |
-| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
-| `VALIDATION_FAILED` | 400 | `orderId` 또는 `portonePaymentId` 누락 |
-| `ORDER_NOT_FOUND` | 404 | 주문 없음 |
-| `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
-| `PAYMENT_NOT_FOUND` | 404 | 결제 없음 |
-| `PAYMENT_PORTONE_ID_MISMATCH` | 400 | 주문의 결제 식별자와 요청 식별자 불일치 |
-| `INVALID_ORDER_STATUS` | 400 | 주문이 결제대기 상태가 아님 |
-| `PAYMENT_ALREADY_PROCESSED` | 200 | 이미 완료된 결제. 성공 응답으로 처리 |
-| `PAYMENT_IN_PROGRESS` | 409 | 같은 결제 건 처리 중 |
-| `PAYMENT_STATUS_NOT_PAID` | 400 | PortOne 결제 상태가 성공 상태가 아님 |
-| `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
-| `EXTERNAL_API_FAILED` | 502 | PortOne 결제 조회 실패 |
-| `PAYMENT_COMPENSATION_FAILED` | 502 | 보상 취소 실패 |
+| 코드 | HTTP | 발생 조건                              |
+| --- | --- |------------------------------------|
+| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패                     |
+| `VALIDATION_FAILED` | 400 | `orderId` 누락, `portonePaymentId` 누락 또는 빈 문자열 |
+| `ORDER_NOT_FOUND` | 404 | 주문 없음                              |
+| `ORDER_ACCESS_DENIED` | 403 | 타인의 주문                             |
+| `PAYMENT_NOT_FOUND` | 404 | 결제 없음                              |
+| `PAYMENT_PORTONE_ID_MISMATCH` | 400 | 주문의 결제 식별자와 요청 식별자 불일치             |
+| `INVALID_ORDER_STATUS` | 400 | 주문이 결제 대기 상태가 아님                   |
+| `CONFLICT` | 409 | 결제가 확정 가능한 대기 상태가 아님 |
+| `PAYMENT_STATUS_NOT_PAID` | 400 | PortOne 결제 상태가 성공 상태가 아님           |
+| `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치     |
+| `EXTERNAL_API_FAILED` | 502 | PortOne 결제 조회 실패                   |
+| `PAYMENT_COMPENSATION_FAILED` | 502 | 보상 취소 실패                           |
+| `POINT_ERROR_EXCEPTION` | 500 | 예약 포인트 원장 정합성 오류 |

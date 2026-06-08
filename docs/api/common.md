@@ -52,7 +52,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-`data`가 `null`이면 응답에서 생략할 수 있습니다.
+`data`가 `null`이면 응답 JSON에서 생략됩니다.
 
 ## 페이지네이션
 
@@ -128,14 +128,17 @@ Authorization: Bearer {accessToken}
 
 ### PointTransactionType
 
-| 값 | 설명 |
-| --- | --- |
-| `USE_RESERVE` | 주문 생성 시 사용 포인트 예약 |
-| `USE` | 결제 확정 시 예약 포인트 최종 사용 처리 |
-| `USE_CANCEL` | 결제 실패 또는 주문 취소 시 예약 포인트 취소/복구 |
-| `EARN` | 결제 완료 후 PG 실결제 금액 기준 포인트 적립 |
-| `USE_RESTORE` | 환불에 따른 사용 포인트 복구 |
-| `EARN_CANCEL` | 환불에 따른 적립 포인트 회수 |
+| 값              | 설명 |
+|----------------| --- |
+| `SIGNUP_BONUS` | 회원가입 시 가입 축하 포인트 지급 |
+| `USE_RESERVE`  | 주문 생성 시 사용 포인트 예약 |
+| `USE`          | 결제 확정 시 예약 포인트 최종 사용 처리 |
+| `USE_CANCEL`   | 결제 실패 또는 주문 취소 시 예약 포인트 취소/복구 |
+| `EARN`         | 결제 완료 후 PG 실결제 금액 기준 포인트 적립 |
+| `USE_RESTORE`  | 환불에 따른 사용 포인트 복구 |
+| `EARN_CANCEL`  | 환불에 따른 적립 포인트 회수 |
+| `EARN_RECOVERY_RESERVE` | 환불 요청 시 적립 포인트 회수 예약 |
+| `EARN_RECOVERY_RELEASE` | PG 환불 실패 시 적립 포인트 회수 예약 해제 |
 
 ### RefundStatus
 
@@ -145,6 +148,15 @@ Authorization: Bearer {accessToken}
 | `COMPLETED` | 환불 완료 |
 | `FAILED` | PG 취소 실패 또는 환불 처리 실패 |
 | `PG_RESULT_UNKNOWN` | PortOne 취소 요청 결과를 확정하지 못한 상태. 타임아웃/네트워크 오류 후 재조회 대상 |
+
+### RefundOutboxStatus
+
+| 값 | 설명 |
+| --- | --- |
+| `PENDING` | 처리 대기 |
+| `PROCESSING` | 처리 중 |
+| `SUCCEEDED` | 처리 성공 |
+| `FAILED` | 처리 실패 |
 
 ## 공통 에러 코드
 
@@ -175,6 +187,9 @@ Authorization: Bearer {accessToken}
 | `PRODUCT_NOT_FOUND` | 404 | 상품 없음 |
 | `PRODUCT_NOT_ON_SALE` | 400 | 판매중이 아닌 상품 |
 | `PRODUCT_OUT_OF_STOCK` | 409 | 상품 재고 부족 |
+| `INVALID_PRICE` | 400 | 상품 가격 오류 |
+| `INVALID_STOCK` | 400 | 상품 재고 오류 |
+| `INVALID_RESTORE_STOCK_QUANTITY` | 400 | 재고 복구 수량 오류 |
 | `CART_NOT_FOUND` | 404 | 장바구니 없음 |
 | `CART_ITEM_NOT_FOUND` | 404 | 장바구니 상품 없음 |
 | `CART_ITEM_ACCESS_DENIED` | 403 | 타인의 장바구니 상품 접근 |
@@ -186,6 +201,7 @@ Authorization: Bearer {accessToken}
 | `ORDER_STOCK_SHORTAGE` | 409 | 주문 생성 중 재고 부족 |
 | `INVALID_ORDER_STATUS` | 400 | 요청할 수 없는 주문 상태 |
 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 결제대기 상태가 아니라 직접 취소 불가 |
+| `ORDER_CANCEL_QUANTITY_EXCEEDED` | 400 | 취소 가능 수량 초과 |
 | `INVALID_ORDER_PRICE` | 400 | 주문 가격 오류 |
 | `INVALID_ORDER_QUANTITY` | 400 | 주문 수량 오류 |
 | `INVALID_ORDER_STOCK` | 400 | 주문 재고 오류 |
@@ -199,13 +215,19 @@ Authorization: Bearer {accessToken}
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
 | `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 성공/내부 실패 보상 취소 실패 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
-| `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
+| `POINT_INCREASE_AMOUNT_INVALID` | 400 | 증가 포인트 금액 오류 |
+| `POINT_DECREASE_AMOUNT_INVALID` | 400 | 차감 포인트 금액 오류 |
 | `POINT_ACCOUNT_NOT_FOUND` | 404 | 포인트 계정 없음 |
 | `POINT_LEDGER_SYNC_FAILED` | 500 | 포인트 스냅샷과 원장 동기화 실패 |
+| `POINT_ERROR_EXCEPTION` | 500 | 포인트 관련 예외 |
+| `INVALID_POINT_TRANSACTION_AMOUNT` | 400 | 포인트 거래 금액 오류 |
+| `INVALID_POINT_TRANSACTION_TYPE` | 400 | 포인트 거래 유형 오류 |
 | `REFUND_ITEM_REQUIRED` | 400 | 환불할 주문 상품 목록 누락 |
+| `INVALID_REFUND_QUANTITY` | 400 | 환불 수량 오류 |
 | `REFUND_QUANTITY_EXCEEDED` | 400 | 잔여 환불 가능 수량 초과 |
 | `REFUND_NOT_ALLOWED` | 409 | 환불 가능한 결제 상태가 아님 |
 | `REFUND_PG_CANCEL_FAILED` | 502 | PG 취소 실패 |
+| `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
 | `INVALID_REFUND_STATUS` | 409 | 현재 환불 상태에서 수행할 수 없는 작업 |
 | `PAYMENT_CANCEL_REQUEST_FAILED` | 502 | 외부 결제 취소 요청 실패 |
 | `INVALID_REFUND_OUTBOX_STATUS` | 409 | 현재 환불 Outbox 상태에서 수행할 수 없는 작업 |

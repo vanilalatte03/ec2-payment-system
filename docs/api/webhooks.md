@@ -4,6 +4,12 @@ PortOne 웹훅은 JWT 인증을 사용하지 않습니다. PortOne 웹훅 시크
 
 PortOne V2 웹훅은 Standard Webhooks 방식의 메시지 검증을 지원합니다. 구현 시 raw body와 요청 헤더를 그대로 사용해야 합니다.
 
+성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
+
+아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
+HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
+
 참고:
 
 - [PortOne 웹훅 연동하기](https://developers.portone.io/opi/ko/integration/webhook/readme-v2?v=v2)
@@ -47,6 +53,15 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 
 ### Response Data
 
+#### PortoneWebhookReceiveResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `received` | `Boolean` | 웹훅을 서버가 정상 수신했는지 여부 |
+| `processed` | `Boolean` | 처리 대상 웹훅의 결제 확정 처리까지 완료했는지 여부 |
+| `portonePaymentId` | `String` | 처리 대상 PortOne 결제 ID. 중복 수신 또는 무시 이벤트이면 `null` |
+| `reason` | `String` | 처리 결과 사유. `PROCESSED`, `DUPLICATE_WEBHOOK_ID`, `UNSUPPORTED_EVENT_TYPE` 등 |
+
 ```json
 {
   "received": true,
@@ -57,6 +72,7 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 ```
 
 이미 처리 완료됐거나 무시 처리된 같은 `webhook-id`가 다시 들어오면 중복 수신으로 보고 `200 OK`를 반환합니다.
+단, 같은 `webhook-id`의 `Transaction.Paid` 이벤트가 `FAILED` 또는 `RECEIVED` 상태로 남아 있으면 중복 응답을 반환하지 않고 결제 확정을 다시 시도합니다.
 
 ```json
 {
@@ -82,7 +98,7 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 
 - 서명 검증 실패 시 400을 반환합니다.
 - `Transaction.Paid`는 결제 확정 API와 동일한 결제 확정 도메인 서비스를 호출합니다.
-- `Transaction.Paid` 외 이벤트는 현재 단계에서 처리하지 않고 `IGNORE` 상태로 저장한 뒤 200을 반환합니다.
+- `Transaction.Paid` 외 이벤트는 현재 단계에서 처리하지 않고 `IGNORE` 상태로 저장한 뒤 200을 반환합니다. 예를 들어 `Transaction.Failed`, `Transaction.Cancelled`, `Transaction.PartialCancelled`, `Transaction.CancelPending`은 결제 확정 대상으로 처리하지 않습니다.
 - 같은 `webhook-id`가 이미 `PROCESSED` 또는 `IGNORE` 상태면 중복 수신으로 보고 추가 처리를 하지 않습니다.
 - 같은 `webhook-id`의 `Transaction.Paid` 이벤트가 `FAILED` 또는 `RECEIVED` 상태로 남아 있으면 재전송 시 결제 확정을 다시 시도합니다.
 - 본문 금액이나 상태는 최종 신뢰하지 않고 PortOne API 조회 결과만 사용합니다.
@@ -92,8 +108,8 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
-| `WEBHOOK_SIGNATURE_INVALID` | 400 | 서명 검증 실패 |
-| `WEBHOOK_PAYLOAD_INVALID` | 400 | JSON 파싱 실패 |
+| `WEBHOOK_SIGNATURE_INVALID` | 400 | 필수 웹훅 헤더 누락 또는 서명 검증 실패 |
+| `WEBHOOK_PAYLOAD_INVALID` | 400 | 본문 누락, 빈 본문 또는 JSON 파싱 실패 |
 | `WEBHOOK_PAYMENT_ID_MISSING` | 400 | 결제 이벤트인데 `paymentId` 없음 |
 | `PAYMENT_NOT_FOUND` | 404 | 내부 결제 레코드 없음 |
 | `PAYMENT_PORTONE_ID_MISMATCH` | 400 | PortOne 결제 조회 결과의 결제 식별자가 내부 결제 식별자와 다름 |

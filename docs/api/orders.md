@@ -146,14 +146,15 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 | 코드 | HTTP | 발생 조건                               |
 | --- | --- |-------------------------------------|
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패                      |
-| `VALIDATION_FAILED` | 400 | 요청 본문 형식 오류 또는 `usedPointAmount` 누락 |
+| `VALIDATION_FAILED` | 400 | 요청 본문 형식 오류, `usedPointAmount` 누락 또는 음수 |
 | `USER_NOT_FOUND` | 404 | 인증 사용자를 찾을 수 없음                     |
-| `INVALID_USED_POINT` | 400 | 사용할 포인트가 음수이거나 주문 금액 초과             |
+| `INVALID_USED_POINT` | 400 | 사용할 포인트가 주문 금액 초과                    |
 | `CART_EMPTY` | 400 | 주문 대상 장바구니 상품 없음                    |
 | `CART_ITEM_NOT_FOUND` | 404 | 선택한 장바구니 상품을 찾을 수 없음                |
 | `PRODUCT_NOT_ON_SALE` | 400 | 판매중인 상품이 아님                         |
 | `ORDER_STOCK_SHORTAGE` | 409 | 재고 검증/차감 중 재고 부족                    |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족                           |
+| `CONFLICT` | 409 | 같은 장바구니를 동시에 수정해서 버전 충돌 발생 |
 
 ## 내 주문 내역 조회
 
@@ -272,7 +273,7 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
 | `ORDER_NOT_FOUND` | 404 | 주문 없음 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
-| `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 없음 |
+| `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 데이터 없음. 데이터 정합성이 깨진 경우 발생 |
 
 ## 주문 상태 변경
 
@@ -362,7 +363,7 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 - 전체 취소하면 주문 상태는 `CANCELED`, 결제 상태는 `FAILED`로 변경됩니다.
 - 취소된 주문상품의 재고는 즉시 복구됩니다.
 - 예약 차감된 포인트 중 남은 주문 금액에 더 이상 사용할 수 없는 금액은 `USE_CANCEL` 원장으로 복구됩니다.
-- 부분 취소 후 남은 결제 금액에 따라 결제 타입은 `CARD`, `POINT_ONLY`, `POINT_CARD` 중 하나로 다시 계산됩니다.
+- 부분 취소 후 남은 결제 금액에 따라 내부 결제 레코드의 결제 타입은 `CARD`, `POINT_ONLY`, `POINT_CARD` 중 하나로 다시 계산됩니다.
 - 주문 취소 API는 결제 전 `PENDING` 주문을 내부 상태 기준으로 정리하는 API입니다.
 - 주문 도메인에서는 PortOne 결제 조회나 PG 취소를 호출하지 않습니다. 외부 결제가 완료된 주문은 결제 확정 또는 환불 흐름에서 처리합니다.
 
@@ -377,7 +378,7 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 | `USER_NOT_FOUND` | 404 | 인증 사용자를 찾을 수 없음 |
 | `ORDER_NOT_FOUND` | 404 | 주문 없음 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
-| `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 없음 |
+| `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 데이터 없음. 데이터 정합성이 깨진 경우 발생 |
 | `ORDER_ITEM_NOT_FOUND` | 404 | 주문상품 없음 또는 취소할 수 있는 주문상품 없음 |
 | `INVALID_ORDER_STATUS` | 400 | 이미 취소된 주문상품을 다시 취소하려는 경우 |
 | `INVALID_ORDER_QUANTITY` | 400 | 취소 수량이 1보다 작은 경우 |

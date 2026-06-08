@@ -42,9 +42,9 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(productService.findProducts(condition, productSort, page, size)));
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<ProductDetailResponse>> getProduct(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(productService.findProductDetail(id)));
+    @GetMapping("/{productId}")
+    public ResponseEntity<ApiResponse<ProductDetailResponse>> getProduct(@PathVariable Long productId) {
+        return ResponseEntity.ok(ApiResponse.success(productService.findProductDetail(productId)));
     }
 
     private ProductSearchCondition createSearchCondition(

@@ -91,7 +91,7 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 ### Response Data
 
 `items`에는 장바구니 상품별 현재 상품 정보가 함께 포함됩니다.
-상품 상태나 재고가 바뀐 경우에도 조회 시점의 `stock`, `status`가 내려갑니다.
+상품의 현재 재고와 상태를 기준으로 `stock`, `status` 값을 반환합니다.
 
 ```json
 {
@@ -130,7 +130,7 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 
 ### Empty Cart Response Data
 
-회원의 장바구니에 담긴 상품이 없으면 빈 목록과 합계 `0`을 반환합니다.
+회원의 장바구니에 담긴 상품이 없으면 `cartId`와 빈 목록을 반환합니다.
 
 ```json
 {
@@ -249,10 +249,10 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 ### Errors
 
 | 코드 | HTTP | 발생 조건 |
-| --- | -- | --- |
+| --- |-----| --- |
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
 | `CART_ITEM_NOT_FOUND` | 404 | 장바구니 상품이 없음 |
-| `CART_ITEM_ACCESS_DENIED` | 403| 타인의 장바구니 상품 |
+| `CART_ITEM_ACCESS_DENIED` | 403 | 타인의 장바구니 상품 |
 | `CART_NOT_FOUND` | 404 | 장바구니 상품이 가리키는 장바구니가 없음 |
 | `CONFLICT` | 409 | 같은 장바구니를 동시에 수정해서 버전 충돌 발생 |
 

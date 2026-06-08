@@ -2,23 +2,27 @@
 
 환불 금액은 클라이언트가 직접 입력하지 않습니다. 서버가 주문 상품 가격, 환불 수량, 결제 당시 포인트/PG 비율, 적립 포인트 회수 금액을 기준으로 계산합니다.
 
-## 공통 응답 DTO
+성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
 
-부분 환불과 전체 환불은 동일한 `RefundResponse` DTO를 사용합니다.
+아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
+부분 환불과 전체 환불 예시는 동일한 `RefundResponse` DTO를 사용합니다.
+
+HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
 
 ### RefundResponse
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `refundId` | `Long` | 생성된 환불 ID |
-| `refundStatus` | `RefundStatus` | `PROCESSING`, `COMPLETED`, `FAILED`, `PG_RESULT_UNKNOWN` |
 | `actualRefundAmount` | `Long` | 적립 포인트 회수 후 고객에게 실제 반환되는 최종 환불 금액 |
 | `pointRefundAmount` | `Long` | 고객에게 실제 복구되는 사용 포인트 금액 |
 | `pgRefundAmount` | `Long` | PG사를 통해 실제 환불되는 금액 |
 | `reason` | `String` | 환불 사유 |
-| `items` | `List<RefundItemResponse>` | 환불 상품 목록 |
 | `createdAt` | `LocalDateTime` | 환불 요청 생성 시각 |
 | `refundedAt` | `LocalDateTime` | PG 환불 완료 시각. 완료 전 또는 실패 시 `null` |
+| `refundStatus` | `RefundStatus` | `PROCESSING`, `COMPLETED`, `FAILED`, `PG_RESULT_UNKNOWN` |
+| `items` | `List<RefundItemResponse>` | 환불 상품 목록 |
 
 ### RefundItemResponse
 
@@ -39,11 +43,13 @@
 ```json
 {
   "refundId": 5001,
-  "refundStatus": "COMPLETED",
   "actualRefundAmount": 10000,
   "pointRefundAmount": 2000,
   "pgRefundAmount": 8000,
   "reason": "일부 상품 환불 요청",
+  "createdAt": "2026-05-31T15:20:00",
+  "refundedAt": null,
+  "refundStatus": "PROCESSING",
   "items": [
     {
       "refundItemId": 9001,
@@ -67,13 +73,11 @@
       "pointRefundAmount": 200,
       "pgRefundAmount": 800
     }
-  ],
-  "createdAt": "2026-05-31T15:20:00",
-  "refundedAt": "2026-05-31T15:20:05"
+  ]
 }
 ```
 
-## 1. 부분 환불 요청
+## 부분 환불 요청
 
 결제 완료된 주문에 대해 일부 주문 상품 또는 일부 수량 환불을 요청합니다.
 
@@ -93,7 +97,7 @@
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `reason` | `String` | Y | 환불 사유 |
+| `reason` | `String` | Y | 환불 사유. 255자 이하 |
 | `items` | `List<RefundItemRequest>` | Y | 환불할 주문 상품과 수량 목록 |
 | `items[].orderItemId` | `Long` | Y | 주문 상품 ID |
 | `items[].quantity` | `Integer` | Y | 환불 수량. 1 이상 |
@@ -138,7 +142,7 @@
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `reason` | `String` | Y | 환불 사유 |
+| `reason` | `String` | Y | 환불 사유. 255자 이하 |
 
 ```json
 {
@@ -158,7 +162,7 @@
 - 상품별 실제 반환액은 각 상품의 gross 금액을 초과하지 않도록 배분합니다.
 - 마지막 전체 환불에서는 이전 부분 환불에서 발생한 비율 계산 오차를 보정하기 위해 남은 gross 포인트/PG 금액을 기준으로 계산합니다.
 
-## 4. PortOne 결제 취소 API
+## 4. 서버 내부 PortOne 결제 취소 호출
 
 `pgRefundAmount > 0`이면 백엔드 서버가 PortOne V2 결제 취소 API를 호출합니다.
 
@@ -210,13 +214,16 @@
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
-| `VALIDATION_FAILED` | 400 | 사유 누락, 수량 1 미만, 환불 금액 계산 불일치 |
+| `VALIDATION_FAILED` | 400 | 요청 본문 형식 오류, 환불 금액 계산 검증 실패 |
+| `MISSING_REQUIRED_FIELD` | 400 | `Idempotency-Key` 빈 값, 환불 사유 누락 |
 | `REFUND_ITEM_REQUIRED` | 400 | 환불할 주문 상품 목록 없음 |
-| `ORDER_NOT_FOUND` | 404 | 주문 없음 |
+| `INVALID_REFUND_QUANTITY` | 400 | 환불 수량이 1 미만 |
+| `DUPLICATE_REQUEST` | 400 | 부분 환불 요청에서 같은 `orderItemId`가 중복됨 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
 | `ORDER_ITEM_NOT_FOUND` | 404 | 주문 상품 없음 |
 | `PAYMENT_NOT_FOUND` | 404 | 결제 없음 |
 | `REFUND_NOT_ALLOWED` | 409 | 결제가 환불 가능한 상태가 아님 |
 | `REFUND_QUANTITY_EXCEEDED` | 400 | 남은 환불 가능 수량 초과 |
-| `REFUND_PG_CANCEL_FAILED` | 502 | PortOne PG 취소 실패 |
 | `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
+| `CONFLICT` | 409 | 같은 `Idempotency-Key`지만 요청 내용이 다름 |
+| `PRODUCT_NOT_FOUND` | 404 | 환불 확정 처리 중 상품 없음 |

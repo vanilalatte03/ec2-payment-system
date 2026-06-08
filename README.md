@@ -10,6 +10,9 @@
 - 결제 확정 API와 웹훅의 멱등 처리
 - 포인트 원장 기반 적립/사용/복구 관리
 - 포인트/PG 결제 비율 기반 부분 환불
+
+## 향후 확장 고려 사항
+
 - 멤버십 등급 및 구독 결제 확장 설계
 
 ## 기술 스택
@@ -25,8 +28,17 @@
 - [ERD](./docs/ERD.md)
 - [API 명세](./docs/api/README.md)
 - [코드 컨벤션](./docs/CODE_CONVENTION.md)
+- [더미 데이터](./docs/DUMMY_DATA.md)
 
 ## 실행 방법
+
+`.env.example` 파일을 복사해 `.env` 파일을 만들고, 로컬 환경에 맞게 값을 수정합니다.
+
+```bash
+cp .env.example .env
+```
+
+MySQL에 `ec2_payment_system` 데이터베이스를 생성한 뒤 애플리케이션을 실행합니다.
 
 ```bash
 ./gradlew bootRun
@@ -37,6 +49,11 @@ Windows:
 ```powershell
 .\gradlew.bat bootRun
 ```
+
+실행 후 다음 주소에서 정적 화면을 확인할 수 있습니다.
+
+- `http://localhost:8080`
+- `http://localhost:8080/payment.html`
 
 ## 테스트
 
