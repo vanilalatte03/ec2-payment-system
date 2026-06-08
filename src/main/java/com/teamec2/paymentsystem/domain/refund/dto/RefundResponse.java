@@ -11,9 +11,9 @@ import java.util.List;
  * 환불 요청 응답 DTO입니다.
  *
  * @param refundId 환불 ID
- * @param refundAmount 환불 총 금액
- * @param pointRefundAmount 포인트 환불 금액
- * @param pgRefundAmount PG 환불 금액
+ * @param actualRefundAmount 적립 포인트 회수 후 고객에게 실제 반환되는 최종 환불 금액
+ * @param pointRefundAmount 고객에게 실제 복구되는 사용 포인트 금액
+ * @param pgRefundAmount PG사를 통해 실제 환불되는 금액
  * @param reason 환불 사유
  * @param createdAt 환불 요청 생성일시
  * @param refundedAt 환불 완료일시
@@ -23,7 +23,7 @@ import java.util.List;
 public record RefundResponse(
 
         Long refundId,
-        Long refundAmount,
+        Long actualRefundAmount,
         Long pointRefundAmount,
         Long pgRefundAmount,
         String reason,

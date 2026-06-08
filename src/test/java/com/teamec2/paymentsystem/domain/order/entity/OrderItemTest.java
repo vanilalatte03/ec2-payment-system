@@ -7,6 +7,7 @@ import com.teamec2.paymentsystem.domain.user.entity.User;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -160,7 +161,7 @@ class OrderItemTest {
 
         // when
         orderItem.reserveRefundQuantity(2);
-        orderItem.refund(2);
+        orderItem.refund(2, product);
 
         // then
         assertThat(orderItem.getRefundedQuantity()).isEqualTo(2);
@@ -176,7 +177,7 @@ class OrderItemTest {
         Product product = 상품_생성();
         OrderItem orderItem = new OrderItem(order, product, SOURCE_CART_ITEM_ID, 3);
         orderItem.reserveRefundQuantity(2);
-        orderItem.refund(2);
+        orderItem.refund(2, product);
 
         // when
         // then
@@ -195,7 +196,7 @@ class OrderItemTest {
 
         // when
         // then
-        assertThatThrownBy(() -> orderItem.refund(0))
+        assertThatThrownBy(() -> orderItem.refund(0, product))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_REFUND_QUANTITY);
@@ -224,7 +225,7 @@ class OrderItemTest {
     }
 
     private Product 상품_생성(int price) {
-        return new Product(
+        Product product = new Product(
                 "테스트 상품",
                 price,
                 10,
@@ -232,5 +233,9 @@ class OrderItemTest {
                 ProductStatus.ON_SALE,
                 ProductCategory.ELECTRONIC
         );
+
+        ReflectionTestUtils.setField(product, "id", 1L);
+
+        return product;
     }
 }

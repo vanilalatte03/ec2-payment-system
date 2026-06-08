@@ -113,8 +113,8 @@ class RefundServiceIntegrationTest {
         RefundOutbox outbox = onlyOutbox();
 
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.PROCESSING);
-        assertThat(refund.getRefundAmount()).isEqualTo(3_000L);
-        assertThat(refund.getPointRefundAmount()).isEqualTo(300L);
+        assertThat(refund.getRefundAmount()).isEqualTo(2_973L);
+        assertThat(refund.getPointRefundAmount()).isEqualTo(273L);
         assertThat(refund.getPgRefundAmount()).isEqualTo(2_700L);
         assertThat(refundItems).hasSize(1);
         assertThat(refundItems.get(0).getRefundQuantity()).isEqualTo(1);
@@ -222,7 +222,7 @@ class RefundServiceIntegrationTest {
         assertThat(refundedOrderItem.getRefundReservedQuantity()).isZero();
         assertThat(refundedOrderItem.getRefundedQuantity()).isEqualTo(1);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PARTIAL_REFUNDED);
-        assertThat(user.getPointBalance()).isEqualTo(300L);
+        assertThat(user.getPointBalance()).isEqualTo(273L);
         assertThat(pointTransactionRepository.findAll())
                 .extracting("type")
                 .contains(PointTransactionType.USE_RESTORE);
@@ -292,6 +292,45 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
+    void fail_refund_releases_reserved_earned_point_recovery_to_user_balance() {
+        // given
+        RefundFixture fixture = completedPaymentFixture(0L, 9_000L);
+        fixture.user().increasePointBalance(100L);
+        userRepository.saveAndFlush(fixture.user());
+
+        RefundResponse response = refundService.requestPartialRefund(
+                fixture.user().getId(),
+                fixture.order().getId(),
+                uniqueKey("refund-fail-point-release"),
+                new PartialRefundRequest(
+                        "partial refund",
+                        List.of(new RefundItemRequest(fixture.firstItem().getId(), 1))
+                )
+        );
+        Long outboxId = onlyOutbox().getId();
+        User userAfterReserve = userRepository.findById(fixture.user().getId()).orElseThrow();
+
+        refundProcessingTxService.start(outboxId);
+
+        // when
+        refundProcessingTxService.fail(outboxId, "PortOne cancel failed");
+
+        // then
+        Refund refund = refundRepository.findById(response.refundId()).orElseThrow();
+        User userAfterFail = userRepository.findById(fixture.user().getId()).orElseThrow();
+
+        assertThat(refund.getRecoveredFromBalance()).isEqualTo(30L);
+        assertThat(userAfterReserve.getPointBalance()).isEqualTo(70L);
+        assertThat(userAfterFail.getPointBalance()).isEqualTo(100L);
+        assertThat(pointTransactionRepository.findAll())
+                .extracting("type", "amount")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple(PointTransactionType.EARN_RECOVERY_RESERVE, 30L),
+                        org.assertj.core.groups.Tuple.tuple(PointTransactionType.EARN_RECOVERY_RELEASE, 30L)
+                );
+    }
+
+    @Test
     void unknown_pg_result_keeps_reserved_quantity_and_schedules_retry() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
@@ -353,8 +392,8 @@ class RefundServiceIntegrationTest {
         Refund refund = refundRepository.findById(response.refundId()).orElseThrow();
         List<RefundItem> refundItems = refundItemRepository.findAllByRefund_Id(refund.getId());
 
-        assertThat(refund.getRefundAmount()).isEqualTo(7_000L);
-        assertThat(refund.getPointRefundAmount()).isEqualTo(700L);
+        assertThat(refund.getRefundAmount()).isEqualTo(6_937L);
+        assertThat(refund.getPointRefundAmount()).isEqualTo(637L);
         assertThat(refund.getPgRefundAmount()).isEqualTo(6_300L);
         assertThat(refund.getRefundAmount())
                 .isEqualTo(refund.getPointRefundAmount() + refund.getPgRefundAmount());
@@ -362,6 +401,17 @@ class RefundServiceIntegrationTest {
         assertThat(refundItems)
                 .extracting(RefundItem::getRefundAmount)
                 .containsExactlyInAnyOrder(3_000L, 4_000L);
+        // 상품별 실제 반환액(point + pg)은 상품 기준 환불 금액을 넘으면 안 됩니다.
+        // 마지막 환불에서 버림 오차를 보정하더라도 RefundItem 검증 조건을 지켜야 합니다.
+        assertThat(refundItems)
+                .allSatisfy(refundItem ->
+                        assertThat(refundItem.getPointRefundAmount() + refundItem.getPgRefundAmount())
+                                .isLessThanOrEqualTo(refundItem.getRefundAmount())
+                );
+        assertThat(refundItems.stream().mapToLong(RefundItem::getPointRefundAmount).sum())
+                .isEqualTo(refund.getPointRefundAmount());
+        assertThat(refundItems.stream().mapToLong(RefundItem::getPgRefundAmount).sum())
+                .isEqualTo(refund.getPgRefundAmount());
         assertThat(refundOutboxRepository.count()).isEqualTo(2);
     }
 

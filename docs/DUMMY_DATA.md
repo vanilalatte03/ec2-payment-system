@@ -51,6 +51,11 @@ Spring Boot 시작 시 자동 실행되도록 연결하지 않았습니다. 현�
 - 처리 중이거나 PG 결과 미확정인 환불은 `order_items.refund_reserved_quantity`로 환불 가능 수량을 먼저 예약해야 합니다.
 - 현재 기본 더미 데이터에는 진행 중 환불이 없으므로 `refund_reserved_quantity`는 모두 `0`입니다.
 - `refunds.idempotency_key`와 `refunds.portone_payment_id`는 환불 중복 생성 방지와 PortOne 취소 요청 추적을 위해 함께 저장합니다.
+- `refunds.request_hash`는 같은 `Idempotency-Key` 재요청이 들어왔을 때 요청 내용이 같은지 비교하기 위한 값입니다.
+- `refunds.refund_amount`는 적립 포인트 회수 후 실제 최종 반환액입니다.
+- `refunds.gross_point_refund_amount`, `refunds.gross_pg_refund_amount`는 적립 포인트 회수 전 원래 반환 예정이던 금액입니다.
+- `refunds.earned_point_recovery_amount`, `recovered_from_used_point`, `recovered_from_balance`, `deducted_from_pg_refund`는 적립 포인트 회수 금액이 어디에서 차감됐는지 확인하기 위한 정산 스냅샷입니다.
+- `refund_items.refund_amount`는 상품 기준 gross 금액입니다. 상품별 실제 반환액은 `point_refund_amount + pg_refund_amount`로 확인합니다.
 
 ## 필수 기능별 테스트 데이터
 

@@ -1,5 +1,14 @@
 # ERD
 
+## Refund Settlement Columns
+
+`refunds`는 `request_hash`, `gross_point_refund_amount`, `gross_pg_refund_amount`,
+`earned_point_recovery_amount`, `recovered_from_used_point`, `recovered_from_balance`,
+`deducted_from_pg_refund` 컬럼을 함께 저장합니다.
+
+환불 관련 포인트 거래 타입은 `USE_RESTORE`, `EARN_CANCEL`,
+`EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`를 포함합니다.
+
 결제 시스템의 ERD를 이미지 기준으로 정리한 문서입니다.
 
 ## 관계도
@@ -128,13 +137,20 @@ erDiagram
     refunds {
         BIGINT id PK "환불ID"
         VARCHAR idempotency_key "멱등 키"
+        VARCHAR request_hash "요청 해시"
         VARCHAR portone_payment_id "포트원 ID"
         BIGINT order_id FK "주문ID"
         BIGINT payment_id FK "결제ID"
         VARCHAR reason "환불사유"
-        BIGINT refund_amount "총 환불 금액"
-        BIGINT point_refund_amount "포인트 환불 금액"
-        BIGINT pg_refund_amount "PG 환불 금액"
+        BIGINT refund_amount "실제 최종 환불 금액"
+        BIGINT point_refund_amount "실제 포인트 환불 금액"
+        BIGINT pg_refund_amount "실제 PG 환불 금액"
+        BIGINT gross_point_refund_amount "회수 전 포인트 환불 예정액"
+        BIGINT gross_pg_refund_amount "회수 전 PG 환불 예정액"
+        BIGINT earned_point_recovery_amount "적립 포인트 회수 대상액"
+        BIGINT recovered_from_used_point "사용 포인트에서 회수한 금액"
+        BIGINT recovered_from_balance "보유 포인트에서 회수한 금액"
+        BIGINT deducted_from_pg_refund "PG 환불액에서 차감한 금액"
         VARCHAR status "환불 상태"
         DATETIME created_at "생성일시"
         DATETIME refunded_at "환불완료일시"
@@ -163,9 +179,9 @@ erDiagram
         BIGINT order_item_id FK "주문상품ID"
         INT refund_quantity "환불수량"
         INT unit_price "상품 단가"
-        BIGINT refund_amount "상품별 총 환불 금액"
-        BIGINT point_refund_amount "포인트 환불금액"
-        BIGINT pg_refund_amount "PG 환불 금액"
+        BIGINT refund_amount "상품 기준 gross 환불 금액"
+        BIGINT point_refund_amount "상품별 실제 포인트 환불금액"
+        BIGINT pg_refund_amount "상품별 실제 PG 환불 금액"
         DATETIME created_at "생성일시"
     }
 
@@ -300,8 +316,8 @@ erDiagram
 | 포인트거래ID | id         | BIGINT | NOT NULL | PK                                  |
 | 결제ID    | payment_id | BIGINT | NOT NULL | FK: payments.id                     |
 | 유저 ID   | user_id    | BIGINT | NOT NULL | FK: users.id                        |
-| 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`인 경우 저장 |
-| 거래타입    | type       | VARCHAR | NOT NULL | USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL |
+| 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`, `EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`인 경우 저장 |
+| 거래타입    | type       | VARCHAR | NOT NULL | USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL, EARN_RECOVERY_RESERVE, EARN_RECOVERY_RELEASE |
 | 멱등 키 | idempotency_key | VARCHAR | NOT NULL | UNIQUE. 결제성 거래는 `PAYMENT:{paymentId}:{type}`, 환불성 거래는 `REFUND:{refundId}:{type}` |
 | 거래금액    | amount     | BIGINT | NOT NULL | `EARN_CANCEL`은 멱등 기록을 위해 0 허용, 그 외 타입은 1 이상 |
 | 생성일시    | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
@@ -312,13 +328,20 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | 환불ID | id | BIGINT | NOT NULL | PK                            |
 | 멱등 키 | idempotency_key | VARCHAR(100) | NOT NULL | 같은 결제 안에서 중복 환불 생성을 막기 위해 `UNIQUE(payment_id, idempotency_key)` 적용 |
+| 요청 해시 | request_hash | VARCHAR(64) | NOT NULL | 같은 `Idempotency-Key` 재요청 시 요청 내용이 같은지 비교하기 위한 SHA-256 해시 |
 | 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | 환불 생성 시점의 `payment.portone_payment_id` 스냅샷 |
 | 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id                 |
 | 결제ID | payment_id | BIGINT | NOT NULL | FK: payments.id               |
 | 환불사유 | reason | VARCHAR(255) | NOT NULL |                               |
-| 총 환불 금액 | refund_amount | BIGINT | NOT NULL | 포인트 + PG 포함 총 환불 금액           |
-| 포인트 환불 금액 | point_refund_amount | BIGINT | NOT NULL | 고객에게 복구되는 포인트 금액              |
-| PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL |                               |
+| 실제 최종 환불 금액 | refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 후 고객에게 실제 반환되는 금액. `point_refund_amount + pg_refund_amount` |
+| 실제 포인트 환불 금액 | point_refund_amount | BIGINT | NOT NULL | 고객에게 실제 복구되는 사용 포인트 금액 |
+| 실제 PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL | PG사를 통해 실제 환불되는 금액 |
+| 회수 전 포인트 환불 예정액 | gross_point_refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 전 원래 반환 예정이던 사용 포인트 금액 |
+| 회수 전 PG 환불 예정액 | gross_pg_refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 전 원래 PG로 환불하려던 금액 |
+| 적립 포인트 회수 대상액 | earned_point_recovery_amount | BIGINT | NOT NULL | 이번 환불에서 회수해야 하는 적립 포인트 총액 |
+| 사용 포인트 회수액 | recovered_from_used_point | BIGINT | NOT NULL | 반환 예정 사용 포인트에서 회수한 적립 포인트 금액 |
+| 보유 포인트 회수액 | recovered_from_balance | BIGINT | NOT NULL | 고객의 현재 보유 포인트에서 차감한 적립 포인트 금액 |
+| PG 환불 차감액 | deducted_from_pg_refund | BIGINT | NOT NULL | 보유 포인트로 회수하지 못해 PG 환불 금액에서 차감한 금액 |
 | 환불 상태 | status | VARCHAR(30) | NOT NULL | PROCESSING, COMPLETED, FAILED, PG_RESULT_UNKNOWN |
 | 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각                 |
 | 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각              |
@@ -353,9 +376,9 @@ erDiagram
 | 주문상품ID | order_item_id | BIGINT | NOT NULL | FK: order_items.id |
 | 환불수량 | refund_quantity | INT | NOT NULL | 1 이상 |
 | 상품 단가 | unit_price | INT | NOT NULL | 환불 당시 주문 상품 단가 |
-| 상품별 총 환불 금액 | refund_amount | BIGINT | NOT NULL | 해당 주문상품 기준 총 환불 금액 |
-| 포인트 환불금액 | point_refund_amount | BIGINT | NOT NULL |  |
-| PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL |  |
+| 상품 기준 gross 환불 금액 | refund_amount | BIGINT | NOT NULL | `unit_price * refund_quantity`. 적립 포인트 회수 전 상품 기준 금액 |
+| 상품별 실제 포인트 환불금액 | point_refund_amount | BIGINT | NOT NULL | 해당 상품에 배분된 실제 포인트 반환액 |
+| 상품별 실제 PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL | 해당 상품에 배분된 실제 PG 환불액 |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 
 ### refund_outbox

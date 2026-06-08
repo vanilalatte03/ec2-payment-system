@@ -133,8 +133,14 @@ public class OrderItem extends BaseEntity {
      * 환불이 최종 완료되었을 때 호출합니다.
      * 예약해둔 환불 수량을 실제 환불 완료 수량으로 이동시키고,상품 재고를 복구합니다.
      */
-    public void refund(int refundQuantity) {
+    public void refund(int refundQuantity, Product lockedProduct) {
         validateRefundQuantity(refundQuantity);
+
+        if (lockedProduct == null
+                || lockedProduct.getId() == null
+                || !lockedProduct.getId().equals(getProductId())) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
 
         if (refundQuantity > this.refundReservedQuantity) {
             throw new BusinessException(ErrorCode.REFUND_QUANTITY_EXCEEDED);
@@ -142,7 +148,10 @@ public class OrderItem extends BaseEntity {
 
         this.refundReservedQuantity -= refundQuantity;
         this.refundedQuantity += refundQuantity;
-        this.product.restoreStock(refundQuantity);
+
+
+        // 동시에 주문/환불이 들어와도 최신 재고 기준으로 안전하게 변경됩니다.
+        lockedProduct.restoreStock(refundQuantity);
     }
 
     /**
