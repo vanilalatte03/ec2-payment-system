@@ -12,7 +12,7 @@
 | [auth.md](./auth.md) | 회원가입, 로그인, 로그아웃 |
 | [products.md](./products.md) | 상품 목록 조회, 상품 단건 조회 |
 | [carts.md](./carts.md) | 상품 담기, 장바구니 조회, 수량 변경, 상품 개별 삭제, 전체 비우기 |
-| [orders.md](./orders.md) | 주문서 미리보기, 내 주문 내역 조회, 주문 상세 조회, 주문/결제 생성, 주문 상태 변경 |
+| [orders.md](./orders.md) | 주문서 미리보기, 주문/결제 생성, 주문 내역 조회, 주문 상세 조회, 주문 상태 변경 |
 | [payments.md](./payments.md) | 결제 확정, 포인트 전액 결제 확정 |
 | [points.md](./points.md) | 포인트 잔액 조회, 포인트 거래 내역 조회 |
 | [refunds.md](./refunds.md) | 부분/전액 환불 요청 |
@@ -33,9 +33,9 @@
 | 장바구니 | 장바구니 상품 개별 삭제 | DELETE | `/api/carts/items/{cartItemId}` | 필요 |
 | 장바구니 | 장바구니 전체 비우기   | DELETE | `/api/carts` | 필요 |
 | 주문 | 주문서 미리보기       | GET | `/api/orders/preview` | 필요 |
-| 주문 | 내 주문 내역 조회      | GET | `/api/orders` | 필요 |
-| 주문 | 주문 상세 조회       | GET | `/api/orders/{orderId}` | 필요 |
 | 주문 | 주문/결제 생성      | POST | `/api/orders` | 필요 |
+| 주문 | 주문 내역 조회      | GET | `/api/orders` | 필요 |
+| 주문 | 주문 상세 조회       | GET | `/api/orders/{orderId}` | 필요 |
 | 주문 | 주문 상태 변경      | PATCH | `/api/orders/{orderId}/status` | 필요 |
 | 결제 | 결제 확정         | POST | `/api/payments/confirm` | 필요 |
 | 포인트 | 포인트 잔액 조회     | GET | `/api/points/balance` | 필요 |
