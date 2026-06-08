@@ -2,6 +2,7 @@ package com.teamec2.paymentsystem.domain.refund.repository;
 
 import com.teamec2.paymentsystem.domain.refund.entity.RefundOutbox;
 import com.teamec2.paymentsystem.domain.refund.enums.RefundOutboxStatus;
+import com.teamec2.paymentsystem.domain.refund.enums.RefundStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -85,6 +86,49 @@ public interface RefundOutboxRepository extends JpaRepository<RefundOutbox, Long
                 RefundOutboxStatus.PROCESSING,
                 threshold,
                 pageable
+        );
+    }
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ro
+            from RefundOutbox ro
+            join fetch ro.refund r
+            join fetch r.payment p
+            join fetch r.order o
+            where r.portonePaymentId = :portonePaymentId
+              and r.portoneCancellationId = :portoneCancellationId
+              and r.status in :refundStatuses
+              and ro.status in :outboxStatuses
+            """)
+    Optional<RefundOutbox> findByPortoneCancellationIdForUpdate(
+            @Param("portonePaymentId") String portonePaymentId,
+            @Param("portoneCancellationId") String portoneCancellationId,
+            @Param("refundStatuses") List<RefundStatus> refundStatuses,
+            @Param("outboxStatuses") List<RefundOutboxStatus> outboxStatuses
+    );
+
+    default Optional<RefundOutbox> findProcessableByPortoneCancellationIdForUpdate(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        return findByPortoneCancellationIdForUpdate(
+                portonePaymentId,
+                portoneCancellationId,
+                List.of(RefundStatus.PROCESSING, RefundStatus.PG_RESULT_UNKNOWN),
+                List.of(RefundOutboxStatus.PENDING, RefundOutboxStatus.PROCESSING)
+        );
+    }
+
+    default Optional<RefundOutbox> findRecoverableFailedByPortoneCancellationIdForUpdate(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        return findByPortoneCancellationIdForUpdate(
+                portonePaymentId,
+                portoneCancellationId,
+                List.of(RefundStatus.PG_RESULT_UNKNOWN),
+                List.of(RefundOutboxStatus.FAILED)
         );
     }
 }

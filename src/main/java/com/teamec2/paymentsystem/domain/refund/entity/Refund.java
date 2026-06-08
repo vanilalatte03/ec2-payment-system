@@ -47,6 +47,9 @@ public class Refund {
     @Column(name = "portone_payment_id", nullable = false, length = 100)
     private String portonePaymentId;
 
+    @Column(name = "portone_cancellation_id", unique = true, length = 100)
+    private String portoneCancellationId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
@@ -223,6 +226,19 @@ public class Refund {
 
         this.status = RefundStatus.COMPLETED;
         this.refundedAt = refundedAt;
+    }
+
+    public void recordPortoneCancellationId(String portoneCancellationId) {
+        if (portoneCancellationId == null || portoneCancellationId.isBlank()) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (this.portoneCancellationId != null
+                && !this.portoneCancellationId.equals(portoneCancellationId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+
+        this.portoneCancellationId = portoneCancellationId;
     }
 
     /**

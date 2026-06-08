@@ -79,13 +79,14 @@ public class RefundProcessor {
      */
     private void handleCancelResponse(Long outboxId, PaymentCancelResponse response) {
         if (response.isSucceeded()) {
-            refundProcessingTxService.complete(outboxId);
+            refundProcessingTxService.complete(outboxId, response.cancellationId());
             return;
         }
 
         if (response.isResultUnknown()) {
             refundProcessingTxService.retryAsPgResultUnknown(
                     outboxId,
+                    response.cancellationId(),
                     "PortOne 취소 결과 미확정 상태: " + response.rawStatus()
             );
 
@@ -107,6 +108,7 @@ public class RefundProcessor {
          */
         refundProcessingTxService.retryAsPgResultUnknown(
                 outboxId,
+                response.cancellationId(),
                 "PortOne 취소 응답 상태를 해석할 수 없습니다. status=" + response.rawStatus()
         );
     }
