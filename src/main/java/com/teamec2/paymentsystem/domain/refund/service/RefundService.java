@@ -64,7 +64,7 @@ public class RefundService {
 
         validateNoActiveRefund(payment);
 
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
+        List<OrderItem> orderItems = orderItemRepository.findWithProductByOrderId(order.getId());
         List<OrderItem> refundTargetItems = findPartialRefundItems(orderItems, request.items());
 
         Map<Long, Integer> quantityMap = toQuantityMap(request.items());
@@ -120,7 +120,7 @@ public class RefundService {
 
         validateNoActiveRefund(payment);
 
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
+        List<OrderItem> orderItems = orderItemRepository.findWithProductByOrderId(order.getId());
 
         List<OrderItem> refundTargetItems = orderItems.stream()
                 .filter(orderItem -> orderItem.getRemainingRefundableQuantity() > 0)

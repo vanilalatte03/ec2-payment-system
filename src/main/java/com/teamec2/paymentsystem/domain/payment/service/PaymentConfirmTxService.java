@@ -12,8 +12,6 @@ import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
-import com.teamec2.paymentsystem.domain.product.entity.Product;
-import com.teamec2.paymentsystem.domain.product.repository.ProductRepository;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -23,10 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * 결제 확정 과정에서 DB 상태 변경만 담당하는 트랜잭션 서비스.
@@ -46,7 +41,6 @@ public class PaymentConfirmTxService {
     private final PaymentRepository paymentRepository;
     private final OrderItemRepository orderItemRepository;
     private final PointService pointService;
-    private final ProductRepository productRepository;
     private final CartService cartService;
 
     /**
@@ -166,7 +160,8 @@ public class PaymentConfirmTxService {
         payment.complete(approvedAt);
         order.complete();
 
-        List<Long> sourceCartItemIds = orderItemRepository.findAllByOrderId(order.getId()).stream()
+        List<Long> sourceCartItemIds = orderItemRepository.findByOrderId(order.getId()).stream()
+                .filter(orderItem -> !orderItem.isCanceled())
                 .map(OrderItem::getSourceCartItemId)
                 .filter(Objects::nonNull)
                 .distinct()
@@ -194,7 +189,6 @@ public class PaymentConfirmTxService {
      *
      * <p>정리 순서는 다음과 같다.
      * <ol>
-     *     <li>주문 생성 때 선차감했던 재고를 복구한다.</li>
      *     <li>주문 생성 때 예약 차감했던 포인트를 복구한다.</li>
      *     <li>주문을 결제대기에서 취소 상태로 변경한다.</li>
      *     <li>결제를 실패 상태로 변경한다.</li>
@@ -212,52 +206,9 @@ public class PaymentConfirmTxService {
 
         Order order = payment.getOrder();
 
-        restoreStock(order);
         pointService.cancelReservedPoints(payment);
-        order.cancelPendingPayment();
+        order.cancelBeforePayment();
         payment.fail(LocalDateTime.now());
-    }
-
-    /**
-     * 주문 생성 시점에 미리 차감했던 상품 재고를 복구한다.
-     *
-     * <p>이 프로젝트의 주문 생성 흐름은 결제 완료 전 재고를 먼저 차감한다.
-     * 그래서 외부 결제를 보상 취소한 경우에는 주문 상품 수량만큼 재고를 되돌려야 한다.
-     *
-     * @param order 재고를 복구할 주문
-     */
-    private void restoreStock(Order order) {
-        List<OrderItem> orderItems = orderItemRepository.findAllByOrderId(order.getId());
-        List<OrderItem> restorableOrderItems = orderItems.stream()
-                .filter(orderItem -> !orderItem.isCanceled())
-                .toList();
-        Map<Long, Product> lockedProducts = lockProductsForStockRestore(restorableOrderItems);
-
-        for (OrderItem orderItem : restorableOrderItems) {
-            Product product = lockedProducts.get(orderItem.getProductId());
-            product.restoreStock(orderItem.getQuantity());
-        }
-    }
-
-    private Map<Long, Product> lockProductsForStockRestore(List<OrderItem> orderItems) {
-        List<Long> productIds = orderItems.stream()
-                .map(OrderItem::getProductId)
-                .distinct()
-                .sorted()
-                .toList();
-
-        if (productIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, Product> lockedProducts = productRepository.findAllByIdsWithLock(productIds).stream()
-                .collect(Collectors.toMap(Product::getId, Function.identity()));
-
-        if (lockedProducts.size() != productIds.size()) {
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
-        }
-
-        return lockedProducts;
     }
 
     private Payment findPaymentByOrderIdForUpdate(Long orderId) {
@@ -306,7 +257,7 @@ public class PaymentConfirmTxService {
      * @param payment 확정 대상 결제
      */
     private void validateConfirmable(Order order, Payment payment) {
-        if (!order.isPaymentConfirmable()) {
+        if (!order.canConfirmPayment()) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 

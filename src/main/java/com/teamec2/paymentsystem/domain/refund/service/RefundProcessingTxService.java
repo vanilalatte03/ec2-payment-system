@@ -154,7 +154,7 @@ public class RefundProcessingTxService {
          * 현재 주문의 모든 주문 상품을 조회하여 환불이 끝난 뒤 이 주문이 전체 환불상태인지 부분 환불 상태인지 판단해야합니다.
          * 이를 판단하려면 이번 환불 대상만 보면 안 되고 주문 전체 상품을 봐야합니다.
          */
-        List<OrderItem> allOrderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
+        List<OrderItem> allOrderItems = orderItemRepository.findWithProductByOrderId(order.getId());
 
         /**
          * 전체 환불 여부 판단
@@ -166,7 +166,7 @@ public class RefundProcessingTxService {
 
         if (fullyRefunded) {
             payment.markAsRefunded();
-            order.cancelCompletedByRefund();
+            order.cancelByRefund();
         } else {
             payment.markAsPartialRefunded();
         }
