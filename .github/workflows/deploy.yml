@@ -130,21 +130,28 @@ jobs:
         run: |
           image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
           compose_base64=$(base64 -w 0 docker-compose.yml)
+          health_check_codes="200 301 302 401 403 404"
+
+          cat > ssm-parameters.json <<EOF
+          {
+            "commands": [
+              "set -e",
+              "sudo mkdir -p /opt/ec2-payment/env",
+              "printf '%s' '${compose_base64}' | base64 -d | sudo tee /opt/ec2-payment/docker-compose.yml > /dev/null",
+              "cd /opt/ec2-payment",
+              "aws ecr get-login-password --region ${AWS_REGION} | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+              "sudo env APP_IMAGE=${image_uri} docker compose --env-file env/.env pull app-${NEXT_COLOR}",
+              "sudo env APP_IMAGE=${image_uri} docker compose --env-file env/.env up -d --force-recreate app-${NEXT_COLOR}",
+              "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do code=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${NEXT_PORT}/ || true); for expected in ${health_check_codes}; do if [ \"\$code\" = \"\$expected\" ]; then exit 0; fi; done; sleep 5; done; exit 1"
+            ]
+          }
+          EOF
 
           command_id=$(aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy ${NEXT_COLOR} ${IMAGE_TAG}" \
-            --parameters commands="[
-              \"set -e\",
-              \"sudo mkdir -p /opt/ec2-payment/env\",
-              \"printf '%s' '${compose_base64}' | base64 -d | sudo tee /opt/ec2-payment/docker-compose.yml > /dev/null\",
-              \"cd /opt/ec2-payment\",
-              \"aws ecr get-login-password --region ${AWS_REGION} | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
-              \"sudo env APP_IMAGE=${image_uri} docker compose --env-file env/.env pull app-${NEXT_COLOR}\",
-              \"sudo env APP_IMAGE=${image_uri} docker compose --env-file env/.env up -d --force-recreate app-${NEXT_COLOR}\",
-              \"for i in \$(seq 1 24); do code=\\\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${NEXT_PORT}/ || true); if [ \\\"\\\$code\\\" = \\\"200\\\" ] || [ \\\"\\\$code\\\" = \\\"301\\\" ] || [ \\\"\\\$code\\\" = \\\"302\\\" ] || [ \\\"\\\$code\\\" = \\\"401\\\" ] || [ \\\"\\\$code\\\" = \\\"403\\\" ] || [ \\\"\\\$code\\\" = \\\"404\\\" ]; then exit 0; fi; sleep 5; done; exit 1\"
-            ]" \
+            --parameters file://ssm-parameters.json \
             --query 'Command.CommandId' \
             --output text)
 
