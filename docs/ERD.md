@@ -6,6 +6,7 @@
 `earned_point_recovery_amount`, `recovered_from_used_point`, `recovered_from_balance`,
 `deducted_from_pg_refund` 컬럼을 함께 저장합니다.
 
+회원가입 포인트 거래 타입은 `SIGNUP_BONUS`입니다.
 환불 관련 포인트 거래 타입은 `USE_RESTORE`, `EARN_CANCEL`,
 `EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`를 포함합니다.
 
@@ -125,7 +126,7 @@ erDiagram
 
     point_transactions {
         BIGINT id PK "포인트거래ID"
-        BIGINT payment_id FK "결제ID"
+        BIGINT payment_id FK "결제ID, nullable"
         BIGINT user_id FK "유저 ID"
         BIGINT refund_id FK "환불ID, nullable"
         VARCHAR type "거래타입"
@@ -314,11 +315,11 @@ erDiagram
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
 | 포인트거래ID | id         | BIGINT | NOT NULL | PK                                  |
-| 결제ID    | payment_id | BIGINT | NOT NULL | FK: payments.id                     |
+| 결제ID    | payment_id | BIGINT | NULL | FK: payments.id. `SIGNUP_BONUS`는 결제 없이 생성 |
 | 유저 ID   | user_id    | BIGINT | NOT NULL | FK: users.id                        |
 | 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`, `EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`인 경우 저장 |
-| 거래타입    | type       | VARCHAR | NOT NULL | USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL, EARN_RECOVERY_RESERVE, EARN_RECOVERY_RELEASE |
-| 멱등 키 | idempotency_key | VARCHAR | NOT NULL | UNIQUE. 결제성 거래는 `PAYMENT:{paymentId}:{type}`, 환불성 거래는 `REFUND:{refundId}:{type}` |
+| 거래타입    | type       | VARCHAR | NOT NULL | SIGNUP_BONUS, USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL, EARN_RECOVERY_RESERVE, EARN_RECOVERY_RELEASE |
+| 멱등 키 | idempotency_key | VARCHAR | NOT NULL | UNIQUE. 가입 보너스는 `SIGNUP_BONUS:{userId}`, 결제성 거래는 `PAYMENT:{paymentId}:{type}`, 환불성 거래는 `REFUND:{refundId}:{type}` |
 | 거래금액    | amount     | BIGINT | NOT NULL | `EARN_CANCEL`은 멱등 기록을 위해 0 허용, 그 외 타입은 1 이상 |
 | 생성일시    | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
 
