@@ -1,5 +1,8 @@
 package com.teamec2.paymentsystem.infra.portone.webhook.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
@@ -32,7 +35,12 @@ public class PortoneWebhookEventService {
     private static final String TYPE_TRANSACTION_CANCELLED = "Transaction.Cancelled";
     private static final String TYPE_TRANSACTION_PARTIAL_CANCELLED = "Transaction.PartialCancelled";
     private static final String TYPE_TRANSACTION_CANCEL_PENDING = "Transaction.CancelPending";
+
     private static final String REASON_UNSUPPORTED_EVENT_TYPE = "UNSUPPORTED_EVENT_TYPE";
+    private static final String REASON_CANCELLATION_ID_MISSING = "WEBHOOK_CANCELLATION_ID_MISSING";
+    private static final String REASON_WEBHOOK_PAYLOAD_PARSE_FAILED = "WEBHOOK_PAYLOAD_PARSE_FAILED";
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final PortoneWebhookEventRepository webhookEventRepository;
     private final PaymentRepository paymentRepository;
@@ -73,7 +81,7 @@ public class PortoneWebhookEventService {
     ) {
         String type = resolveType(webhook);
         String portonePaymentId = resolvePortonePaymentId(webhook);
-        String portoneCancellationId = resolvePortoneCancellationId(webhook);
+        String portoneCancellationId = resolvePortoneCancellationId(webhook, rawPayload);
 
         if (isUnsupportedEvent(webhook)) {
             return saveIgnoredEvent(webhookId, type, portonePaymentId, rawPayload);
@@ -129,9 +137,8 @@ public class PortoneWebhookEventService {
      * 현재 단계에서 처리하지 않는 웹훅 이벤트인지 확인한다.
      */
     private boolean isUnsupportedEvent(Webhook webhook) {
-        return !(webhook instanceof WebhookTransactionPaid
-                || webhook instanceof WebhookTransactionCancelledCancelled
-                || webhook instanceof WebhookTransactionCancelledPartialCancelled);
+        return !(webhook instanceof WebhookTransactionPaid)
+                && !isRefundCompletedEvent(webhook);
     }
 
     private boolean isProcessableType(String type) {
@@ -156,6 +163,14 @@ public class PortoneWebhookEventService {
         }
 
         return PortoneWebhookReceiveResponse.ignored(REASON_UNSUPPORTED_EVENT_TYPE);
+    }
+
+    /**
+     * 환불 완료로 볼 수 있는 웹훅인지 확인합니다.
+     */
+    private boolean isRefundCompletedEvent(Webhook webhook) {
+        return webhook instanceof WebhookTransactionCancelledCancelled
+                || webhook instanceof WebhookTransactionCancelledPartialCancelled;
     }
 
     /**
@@ -302,6 +317,19 @@ public class PortoneWebhookEventService {
         return null;
     }
 
+    private String resolvePortoneCancellationId(Webhook webhook, String rawPayload) {
+        String cancellationId = resolvePortoneCancellationId(webhook);
+        if (cancellationId != null && !cancellationId.isBlank()) {
+            return cancellationId;
+        }
+
+        if (!isRefundCompletedEvent(webhook)) {
+            return null;
+        }
+
+        return resolvePortoneCancellationId(rawPayload);
+    }
+
     private String resolvePortoneCancellationId(Webhook webhook) {
         if (webhook instanceof WebhookTransactionCancelledCancelled cancelled) {
             return cancelled.getData().getCancellationId();
@@ -309,6 +337,48 @@ public class PortoneWebhookEventService {
 
         if (webhook instanceof WebhookTransactionCancelledPartialCancelled partialCancelled) {
             return partialCancelled.getData().getCancellationId();
+        }
+
+        return null;
+    }
+
+    /**
+     * rawPayload에서 PortOne cancellationId를 추출합니다.
+     *
+     * PortOne SDK 웹훅 객체에서 cancellationId를 바로 꺼내는 메서드명이 프로젝트 SDK 버전에 따라
+     * 다를 수 있기 때문에, 현재는 서명 검증에 사용한 원본 payload에서 JSON 경로로 추출합니다.
+     */
+    private String resolvePortoneCancellationId(String rawPayload) {
+        if (rawPayload == null || rawPayload.isBlank()) {
+            return null;
+        }
+
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(rawPayload);
+
+            return firstTextValue(
+                    root.at("/data/cancellationId"),
+                    root.at("/data/cancellation/id"),
+                    root.at("/data/cancelId"),
+                    root.at("/cancellationId"),
+                    root.at("/cancellation/id")
+            );
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException(REASON_WEBHOOK_PAYLOAD_PARSE_FAILED, e);
+        }
+    }
+
+    private String firstTextValue(JsonNode... nodes) {
+        for (JsonNode node : nodes) {
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                continue;
+            }
+
+            String value = node.asText();
+
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
         }
 
         return null;
@@ -345,7 +415,11 @@ public class PortoneWebhookEventService {
             return businessException.getErrorCode().name();
         }
 
+        if (exception.getMessage() != null && !exception.getMessage().isBlank()) {
+            return exception.getMessage();
+        }
+
         return exception.getClass().getSimpleName();
     }
-
 }
+

@@ -228,19 +228,6 @@ public class Refund {
         this.refundedAt = refundedAt;
     }
 
-    public void recordPortoneCancellationId(String portoneCancellationId) {
-        if (portoneCancellationId == null || portoneCancellationId.isBlank()) {
-            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
-        }
-
-        if (this.portoneCancellationId != null
-                && !this.portoneCancellationId.equals(portoneCancellationId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
-        }
-
-        this.portoneCancellationId = portoneCancellationId;
-    }
-
     /**
      * 환불 실패가 확정되었을 때 호출합니다.
      * 1. PROCESSING 상태에서 명확한 실패 응답을 받은 경우
@@ -278,6 +265,31 @@ public class Refund {
 
     public boolean isFailed() {
         return this.status == RefundStatus.FAILED;
+    }
+
+    /**
+     * PortOne 취소 ID를 기록합니다.
+     * cancellationId는 PortOne에서 생성한 취소 건 식별자입니다.
+     * 같은 결제에서 여러 번 부분 환불이 발생할 수 있으므로,
+     * 환불 건 매칭은 portonePaymentId가 아니라 cancellationId 기준으로 합니다.
+     */
+    public void recordPortoneCancellationId(String portoneCancellationId) {
+        if (portoneCancellationId == null || portoneCancellationId.isBlank()) {
+            return;
+        }
+
+        // 아직 기록된 cancellationId가 없다면 새로 저장합니다.
+        if (this.portoneCancellationId == null) {
+            this.portoneCancellationId = portoneCancellationId;
+            return;
+        }
+
+        // 이미 같은 cancellationId가 기록되어 있다면 멱등 처리로 보고 그대로 둡니다.
+        if (this.portoneCancellationId.equals(portoneCancellationId)) {
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.VALIDATION_FAILED);
     }
 
     private static void validateIdempotencyKey(String idempotencyKey) {

@@ -14,7 +14,6 @@ public class RefundProcessor {
 
     /**
      * 일반 PENDING Outbox를 처리합니다.
-     *
      * 흐름:
      * 1. DB 트랜잭션 안에서 Outbox를 PROCESSING으로 선점
      * 2. 트랜잭션 밖에서 PG 환불 API 호출
@@ -28,13 +27,7 @@ public class RefundProcessor {
             return;
         }
 
-        /**
-         * PG 환불 금액이 0원인 경우입니다.
-         *
-         * 예:
-         * - 전액 포인트 결제
-         * - PG 취소 없이 내부 포인트 복구만 하면 되는 환불
-         */
+        // PG 환불 금액이 0원인 경우입니다.
         if (command.pgRefundAmount() == 0L) {
             refundProcessingTxService.complete(outboxId);
             return;
@@ -51,7 +44,7 @@ public class RefundProcessor {
                     command.portoneIdempotencyKey()
             );
         } catch (RuntimeException e) {
-            /**
+            /*
              * 외부 PG 호출 중 예외가 발생한 경우입니다.
              * 이 경우 실제로 PortOne에서 취소가 성공했는지 실패했는지 알 수 없으므로
              * 실패로 확정하지 않고 PG_RESULT_UNKNOWN + 재시도 대상으로 처리합니다.
@@ -69,20 +62,28 @@ public class RefundProcessor {
 
     /**
      * 외부 결제 취소 응답(rawStatus)을 우리 서비스 기준 상태(cancelStatus)에 따라 처리합니다.
-     * SUCCEEDED:
-     * - PG 취소 성공이므로 내부 DB 환불 완료 처리
+     * SUCCEEDED: PG 취소 성공이므로 내부 DB 환불 완료 처리
      * RESULT_UNKNOWN:
      * - PortOne 원본 상태가 REQUESTED이거나 알 수 없는 상태인 경우
      * - 실패로 확정하지 않고 PG_RESULT_UNKNOWN + 재시도 대상으로 처리
-     * FAILED:
-     * - 명확한 실패 상태이므로 환불 실패 처리
+     * FAILED: 명확한 실패 상태이므로 환불 실패 처리
      */
     private void handleCancelResponse(Long outboxId, PaymentCancelResponse response) {
+        /*
+         * PG 취소 성공 상태
+         * cancellationId를 Refund에 기록한 뒤,
+         * 재고 복구, 포인트 복구, Payment/Order 상태 변경, Outbox 성공 처리합니다.
+         */
         if (response.isSucceeded()) {
             refundProcessingTxService.complete(outboxId, response.cancellationId());
             return;
         }
 
+        /*
+         * PG 취소 결과 미확정 상태.
+         * 실패 확정이 아니며,
+         * 실제 PG에서는 이미 취소가 성공했을 가능성도 있습니다.
+         */
         if (response.isResultUnknown()) {
             refundProcessingTxService.retryAsPgResultUnknown(
                     outboxId,
@@ -93,6 +94,7 @@ public class RefundProcessor {
             return;
         }
 
+        // PG 취소가 명확히 실패한 상태
         if (response.isFailed()) {
             refundProcessingTxService.fail(
                     outboxId,
@@ -104,7 +106,7 @@ public class RefundProcessor {
 
         /**
          * 결제/환불 도메인에서는 알 수 없는 상태를 실패로 확정하지 않고
-         * 결과 미확정으로 보냅니다.
+         * 결과 PG_RESULT_UNKNOWN(미확정)으로 보냅니다.
          */
         refundProcessingTxService.retryAsPgResultUnknown(
                 outboxId,

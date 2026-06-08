@@ -58,6 +58,15 @@ class PortoneWebhookEventServiceTest {
               }
             }
             """;
+    private static final String RAW_REFUND_PAYLOAD = """
+            {
+              "type": "Transaction.PartialCancelled",
+              "data": {
+                "paymentId": "pay_123",
+                "cancellationId": "cancel_123"
+              }
+            }
+            """;
 
     @Mock
     PortoneWebhookEventRepository webhookEventRepository;
@@ -491,12 +500,19 @@ class PortoneWebhookEventServiceTest {
     }
 
     private WebhookTransactionCancelledPartialCancelled partialCancelledWebhook(String paymentId) {
+        return partialCancelledWebhook(paymentId, "cancellation-123");
+    }
+
+    private WebhookTransactionCancelledPartialCancelled partialCancelledWebhook(
+            String paymentId,
+            String cancellationId
+    ) {
         WebhookTransactionCancelledDataPartialCancelled data =
                 new WebhookTransactionCancelledDataPartialCancelled(
                         paymentId,
                         "store-123",
                         "transaction-123",
-                        "cancellation-123"
+                        cancellationId
                 );
 
         return new WebhookTransactionCancelledPartialCancelled(
