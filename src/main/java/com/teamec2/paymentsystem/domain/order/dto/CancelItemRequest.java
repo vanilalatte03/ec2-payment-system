@@ -3,7 +3,7 @@ package com.teamec2.paymentsystem.domain.order.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
-public record CancelOrderItemRequest(
+public record CancelItemRequest(
         @NotNull(message = "주문 상품 ID는 필수입니다.")
         Long orderItemId,
 

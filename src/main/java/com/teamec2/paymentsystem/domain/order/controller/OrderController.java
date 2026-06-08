@@ -1,9 +1,9 @@
 package com.teamec2.paymentsystem.domain.order.controller;
 
-import com.teamec2.paymentsystem.domain.order.dto.CancelOrderRequest;
-import com.teamec2.paymentsystem.domain.order.dto.CreateOrderRequest;
-import com.teamec2.paymentsystem.domain.order.dto.CreateOrderResponse;
-import com.teamec2.paymentsystem.domain.order.dto.CancelOrderResponse;
+import com.teamec2.paymentsystem.domain.order.dto.CancelRequest;
+import com.teamec2.paymentsystem.domain.order.dto.CancelResponse;
+import com.teamec2.paymentsystem.domain.order.dto.CreateRequest;
+import com.teamec2.paymentsystem.domain.order.dto.CreateResponse;
 import com.teamec2.paymentsystem.domain.order.dto.OrderDetailResponse;
 import com.teamec2.paymentsystem.domain.order.dto.OrderListResponse;
 import com.teamec2.paymentsystem.domain.order.dto.OrderPreviewResponse;
@@ -44,11 +44,11 @@ public class OrderController {
     // 주문서에서 "결제하기" 버튼을 눌렀을 때 호출되는 주문 생성 API입니다.
     // 이 API는 주문과 결제 대기 레코드를 함께 만들고, 실제 결제창에 필요한 portonePaymentId를 응답합니다.
     @PostMapping
-    public ResponseEntity<ApiResponse<CreateOrderResponse>> createOrder(
+    public ResponseEntity<ApiResponse<CreateResponse>> createOrder(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @Valid @RequestBody CreateOrderRequest request
+            @Valid @RequestBody CreateRequest request
     ) {
-        CreateOrderResponse response = orderService.createOrder(
+        CreateResponse response = orderService.createOrder(
                 userDetails.getUserId(),
                 request.cartItemIds(),
                 request.usedPointAmount()
@@ -82,12 +82,12 @@ public class OrderController {
     }
 
     @PatchMapping("/{orderId}/status")
-    public ResponseEntity<ApiResponse<CancelOrderResponse>> cancelOrder(
+    public ResponseEntity<ApiResponse<CancelResponse>> cancelOrder(
             @PathVariable Long orderId,
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @Valid @RequestBody(required = false) CancelOrderRequest request
+            @Valid @RequestBody(required = false) CancelRequest request
     ) {
-        CancelOrderResponse response = orderService.cancelOrderByRequest(
+        CancelResponse response = orderService.cancelOrderByRequest(
                 userDetails.getUserId(),
                 orderId,
                 request

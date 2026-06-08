@@ -6,11 +6,6 @@ import com.teamec2.paymentsystem.domain.product.entity.ProductStatus;
 
 import java.util.List;
 
-/**
- * 주문서 미리보기 응답 DTO입니다.
- *
- * 주문 스냅샷을 만들기 전이므로 상품의 현재 이름, 현재 가격, 현재 재고 상태를 그대로 내려줍니다.
- */
 public record OrderPreviewResponse(
         List<OrderPreviewItemResponse> items,
         int totalQuantity,

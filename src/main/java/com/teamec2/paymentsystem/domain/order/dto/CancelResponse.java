@@ -6,7 +6,7 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record CancelOrderResponse(
+public record CancelResponse(
         Long orderId,
         String orderNumber,
         OrderStatus previousOrderStatus,
