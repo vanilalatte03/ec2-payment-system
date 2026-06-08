@@ -571,7 +571,8 @@
       hint.innerHTML =
         "<strong>서버 확정 완료</strong> : 주문 " + payload.data.orderNumber +
         " / 결제 상태 " + payload.data.paymentStatus +
-        " / 적립 포인트 " + payload.data.rewardPointAmount + "P";
+        " / 적립 포인트 " + payload.data.rewardPointAmount + "P" +
+        "<br><a class=\"copy-btn\" href=\"/orders.html\" style=\"display:inline-block;text-decoration:none;margin-top:8px\">주문 내역 보기</a>";
     } catch (error) {
       const code = error && error.code ? error.code + ": " : "";
       const message = error && error.message ? error.message : "서버 결제 확정에 실패했습니다.";

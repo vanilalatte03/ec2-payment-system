@@ -56,8 +56,12 @@ public class SecurityConfig {
                                 "/",
                                 "/index.html",
                                 "/payment.html",
+                                "/orders.html",
+                                "/refund.html",
                                 "/styles.css",
                                 "/app.js",
+                                "/orders.js",
+                                "/refund.js",
                                 "/assets/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/portone").permitAll()
