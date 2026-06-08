@@ -384,8 +384,15 @@ public class PointService {
         }
     }
 
+    /**
+     * 결제 대기 주문 부분 취소 시 포인트 복구 요청값을 검증합니다.
+     */
     private void validateOrderCancelPointRequest(Payment payment, Long amount, List<String> orderCancelKeys) {
-        if (payment == null || amount == null || orderCancelKeys == null || orderCancelKeys.isEmpty()) {
+        if (payment == null
+                || payment.getId() == null
+                || amount == null
+                || orderCancelKeys == null
+                || orderCancelKeys.isEmpty()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 
