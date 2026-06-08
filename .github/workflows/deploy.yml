@@ -1,11 +1,9 @@
 name: ec2-payment-cd
 
 on:
-  pull_request:
+  push:
     branches:
       - develop
-    types:
-      - closed
 
 permissions:
   id-token: write
@@ -17,14 +15,13 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
       - name: Resolve source revision
         id: source
         run: |
-          echo "sha=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v4
