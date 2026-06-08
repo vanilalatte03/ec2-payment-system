@@ -64,7 +64,10 @@ public class RefundService {
 
         validateNoActiveRefund(payment);
 
+        // 주문 상품을 상품 정보와 함께 조회하여 환불 대상 검증, 환불 가능 수량 검증, 환불 금액 계산에 사용합니다.
         List<OrderItem> orderItems = orderItemRepository.findWithProductByOrderId(order.getId());
+
+        // 요청으로 들어온 orderItemId와 quantity가 실제 환불 가능한지 검증하고, 환불 대상 OrderItem 목록을 만듭니다.
         List<OrderItem> refundTargetItems = findPartialRefundItems(orderItems, request.items());
 
         Map<Long, Integer> quantityMap = toQuantityMap(request.items());
