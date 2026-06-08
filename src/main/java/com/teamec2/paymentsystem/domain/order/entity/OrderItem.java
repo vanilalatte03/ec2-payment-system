@@ -80,10 +80,6 @@ public class OrderItem extends BaseEntity {
         return (long) price * quantity;
     }
 
-    /**
-     * 아직 새 환불 요청에 사용할 수 있는 수량을 반환합니다.
-     * 주문 수량에서 이미 환불 완료된 수량과 현재 환불 처리 중으로 예약된 수량을 모두 제외합니다.
-     */
     public int getRemainingRefundableQuantity() {
         return quantity - refundedQuantity - refundReservedQuantity;
     }
@@ -92,15 +88,7 @@ public class OrderItem extends BaseEntity {
         return this.status == OrderItemStatus.CANCELED;
     }
 
-    public void cancel() {
-        cancel(this.product);
-    }
-
-    public void cancel(Product lockedProduct) {
-        cancelQuantity(this.quantity, lockedProduct);
-    }
-
-    public void cancelQuantity(int cancelQuantity, Product lockedProduct) {
+    public void cancel(int cancelQuantity, Product lockedProduct) {
         if (this.status == OrderItemStatus.CANCELED) {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
