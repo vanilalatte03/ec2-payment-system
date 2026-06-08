@@ -277,7 +277,7 @@ class PointServiceTest {
         pointService.reserveUsedPoints(payment);
 
         // when
-        pointService.restoreReservedPointsForOrderCancel(payment, 200L, List.of(1L));
+        pointService.restoreReservedPointsForOrderCancel(payment, 200L, List.of("1:1:1"));
 
         // then
         User foundUser = userRepository.findById(user.getId()).orElseThrow();
@@ -301,7 +301,7 @@ class PointServiceTest {
 
         // when
         // then
-        assertThatThrownBy(() -> pointService.restoreReservedPointsForOrderCancel(payment, 200L, List.of(1L)))
+        assertThatThrownBy(() -> pointService.restoreReservedPointsForOrderCancel(payment, 200L, List.of("1:1:1")))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.POINT_ERROR_EXCEPTION);

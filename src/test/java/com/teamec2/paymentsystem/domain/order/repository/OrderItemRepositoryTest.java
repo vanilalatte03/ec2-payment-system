@@ -43,8 +43,8 @@ class OrderItemRepositoryTest {
         entityManager.clear();
 
         // when
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
-        List<OrderItem> emptyOrderItems = orderItemRepository.findAllWithProductByOrderId(-1L);
+        List<OrderItem> orderItems = orderItemRepository.findWithProductByOrderId(order.getId());
+        List<OrderItem> emptyOrderItems = orderItemRepository.findWithProductByOrderId(-1L);
 
         // then
         assertThat(orderItems).hasSize(2);

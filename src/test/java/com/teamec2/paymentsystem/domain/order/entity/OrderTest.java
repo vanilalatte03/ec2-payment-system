@@ -16,7 +16,7 @@ class OrderTest {
         Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
 
         // when
-        order.cancelPendingPayment();
+        order.cancelBeforePayment();
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
@@ -30,7 +30,7 @@ class OrderTest {
 
         // when
         // then
-        assertThatThrownBy(order::cancelPendingPayment)
+        assertThatThrownBy(order::cancelBeforePayment)
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
@@ -40,7 +40,7 @@ class OrderTest {
     void 취소된주문_결제완료처리하면_INVALID_ORDER_STATUS가발생한다() {
         // given
         Order order = Order.create(회원_생성(), "ORDER-001", 1000L, 0L);
-        order.cancelPendingPayment();
+        order.cancelBeforePayment();
 
         // when
         // then
@@ -57,7 +57,7 @@ class OrderTest {
         order.complete();
 
         // when
-        order.cancelCompletedByRefund();
+        order.cancelByRefund();
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
@@ -70,7 +70,7 @@ class OrderTest {
 
         // when
         // then
-        assertThatThrownBy(order::cancelCompletedByRefund)
+        assertThatThrownBy(order::cancelByRefund)
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.REFUND_NOT_ALLOWED);

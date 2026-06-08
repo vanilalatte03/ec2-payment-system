@@ -53,6 +53,7 @@ public enum ErrorCode {
     ORDER_STOCK_SHORTAGE(HttpStatus.CONFLICT, "주문 생성 중 재고가 부족합니다."),
     INVALID_ORDER_STATUS(HttpStatus.BAD_REQUEST, "요청할 수 없는 주문 상태입니다."),
     ORDER_CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "결제대기 상태가 아니라 직접 취소할 수 없습니다."),
+    ORDER_CANCEL_QUANTITY_EXCEEDED(HttpStatus.BAD_REQUEST, "취소 가능 수량을 초과했습니다."),
     INVALID_ORDER_PRICE(HttpStatus.BAD_REQUEST, "가격은 0 이상이어야 합니다."),
     INVALID_ORDER_QUANTITY(HttpStatus.BAD_REQUEST, "주문 수량은 1 이상이어야 합니다."),
     INVALID_ORDER_STOCK(HttpStatus.BAD_REQUEST,"재고는 0 이상이어야 합니다."),

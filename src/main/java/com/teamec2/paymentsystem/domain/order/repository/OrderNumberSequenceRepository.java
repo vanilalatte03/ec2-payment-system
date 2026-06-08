@@ -14,5 +14,5 @@ public interface OrderNumberSequenceRepository extends JpaRepository<OrderNumber
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select sequence from OrderNumberSequence sequence where sequence.orderDate = :orderDate")
-    Optional<OrderNumberSequence> findByOrderDateForUpdate(@Param("orderDate") LocalDate orderDate);
+    Optional<OrderNumberSequence> findForUpdate(@Param("orderDate") LocalDate orderDate);
 }

@@ -68,7 +68,7 @@ public class Order extends BaseEntity {
         return new Order(user, orderNumber, totalAmount, usedPointAmount);
     }
 
-    public boolean isPaymentConfirmable() {
+    public boolean canConfirmPayment() {
         return status == OrderStatus.PAYMENT_PENDING || status == OrderStatus.PARTIAL_CANCELED;
     }
 
@@ -76,15 +76,11 @@ public class Order extends BaseEntity {
         return user.getId().equals(userId);
     }
 
-    public boolean isPendingPaymentCancelable() {
-        return isPaymentConfirmable();
-    }
-
     public void complete() {
         changeStatus(OrderStatus.COMPLETED, ErrorCode.INVALID_ORDER_STATUS);
     }
 
-    public void cancelPendingPayment() {
+    public void cancelBeforePayment() {
         if (this.status != OrderStatus.PAYMENT_PENDING && this.status != OrderStatus.PARTIAL_CANCELED) {
             throw new BusinessException(ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
         }
@@ -92,11 +88,11 @@ public class Order extends BaseEntity {
         changeStatus(OrderStatus.CANCELED, ErrorCode.ORDER_CANCEL_NOT_ALLOWED);
     }
 
-    public void cancelCompletedByRefund() {
+    public void cancelByRefund() {
         changeStatusFrom(OrderStatus.COMPLETED, OrderStatus.CANCELED, ErrorCode.REFUND_NOT_ALLOWED);
     }
 
-    public void changeToPartialCanceled() {
+    public void partialCancel() {
         if (this.status == OrderStatus.PARTIAL_CANCELED) {
             return;
         }

@@ -272,7 +272,9 @@ class PaymentServiceTest {
     void 웹훅결제확정_PortOne금액이다르면_보상취소후_PAYMENT_AMOUNT_MISMATCH가발생한다() {
         // given
         User user = 회원_저장(1000L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
         Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, cartFixture.orderedItem());
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
         pointService.reserveUsedPoints(payment);
         testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
@@ -424,7 +426,9 @@ class PaymentServiceTest {
     void 결제확정_PortOne금액이다르면_보상취소후_PAYMENT_AMOUNT_MISMATCH가발생한다() {
         // given
         User user = 회원_저장(1000L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
         Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, cartFixture.orderedItem());
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
         pointService.reserveUsedPoints(payment);
         testPaymentGateway.success(payment.getPortonePaymentId(), 700L, LocalDateTime.of(2026, 6, 1, 12, 30));
@@ -459,7 +463,9 @@ class PaymentServiceTest {
     void 결제확정_PortOne승인시각이없으면_EXTERNAL_API_FAILED가발생한다() {
         // given
         User user = 회원_저장(1000L);
+        CartFixture cartFixture = 장바구니상품_저장(user);
         Order order = 주문_저장(user, 1000L, 200L);
+        주문상품_저장(order, cartFixture.orderedItem());
         Payment payment = 결제_저장(order, 1000L, 200L, 800L);
         pointService.reserveUsedPoints(payment);
         testPaymentGateway.success(payment.getPortonePaymentId(), 800L, null);
