@@ -7,6 +7,7 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.refund.service.RefundProcessingTxService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import com.teamec2.paymentsystem.infra.portone.webhook.dto.PortoneWebhookReceiveResponse;
@@ -14,6 +15,8 @@ import com.teamec2.paymentsystem.infra.portone.webhook.entity.PortoneWebhookEven
 import com.teamec2.paymentsystem.infra.portone.webhook.entity.WebhookEventStatus;
 import com.teamec2.paymentsystem.infra.portone.webhook.repository.PortoneWebhookEventRepository;
 import io.portone.sdk.server.webhook.Webhook;
+import io.portone.sdk.server.webhook.WebhookTransactionCancelledDataPartialCancelled;
+import io.portone.sdk.server.webhook.WebhookTransactionCancelledPartialCancelled;
 import io.portone.sdk.server.webhook.WebhookTransactionDataFailed;
 import io.portone.sdk.server.webhook.WebhookTransactionDataPaid;
 import io.portone.sdk.server.webhook.WebhookTransactionFailed;
@@ -51,6 +54,15 @@ class PortoneWebhookEventServiceTest {
               }
             }
             """;
+    private static final String RAW_REFUND_PAYLOAD = """
+            {
+              "type": "Transaction.PartialCancelled",
+              "data": {
+                "paymentId": "pay_123",
+                "cancellationId": "cancel_123"
+              }
+            }
+            """;
 
     @Mock
     PortoneWebhookEventRepository webhookEventRepository;
@@ -60,6 +72,9 @@ class PortoneWebhookEventServiceTest {
 
     @Mock
     PaymentFacade paymentFacade;
+
+    @Mock
+    RefundProcessingTxService refundProcessingTxService;
 
     @InjectMocks
     PortoneWebhookEventService portoneWebhookEventService;
@@ -313,6 +328,60 @@ class PortoneWebhookEventServiceTest {
         );
 
         return new WebhookTransactionFailed(Instant.parse("2026-05-29T09:35:00Z"), data);
+    }
+
+    @Test
+    void receive_partial_cancelled_webhook_processes_refund_by_cancellation_id() {
+        // given
+        Payment payment = mock(Payment.class);
+        when(webhookEventRepository.findByWebhookId(WEBHOOK_ID)).thenReturn(Optional.empty());
+        when(webhookEventRepository.saveAndFlush(any(PortoneWebhookEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.findByPortonePaymentId("pay_123")).thenReturn(Optional.of(payment));
+
+        // when
+        PortoneWebhookReceiveResponse response = portoneWebhookEventService.receive(
+                WEBHOOK_ID,
+                partialCancelledWebhook("pay_123", "cancel_123"),
+                RAW_REFUND_PAYLOAD
+        );
+
+        // then
+        ArgumentCaptor<PortoneWebhookEvent> eventCaptor = ArgumentCaptor.forClass(PortoneWebhookEvent.class);
+        verify(webhookEventRepository, times(2)).saveAndFlush(eventCaptor.capture());
+        PortoneWebhookEvent savedEvent = eventCaptor.getValue();
+
+        assertThat(response.received()).isTrue();
+        assertThat(response.processed()).isTrue();
+        assertThat(response.portonePaymentId()).isEqualTo("pay_123");
+        assertThat(response.reason()).isEqualTo("PROCESSED");
+
+        assertThat(savedEvent.getWebhookId()).isEqualTo(WEBHOOK_ID);
+        assertThat(savedEvent.getStatus()).isEqualTo(WebhookEventStatus.PROCESSED);
+        assertThat(savedEvent.getPayment()).isSameAs(payment);
+        assertThat(savedEvent.getType()).isEqualTo("Transaction.PartialCancelled");
+        assertThat(savedEvent.getPortonePaymentId()).isEqualTo("pay_123");
+        assertThat(savedEvent.getRawPayload()).isEqualTo(RAW_REFUND_PAYLOAD);
+        assertThat(savedEvent.getFailureReason()).isNull();
+        assertThat(savedEvent.getProcessedAt()).isNotNull();
+
+        verify(refundProcessingTxService).completeByPortoneCancellationId("pay_123", "cancel_123");
+        verify(paymentRepository).findByPortonePaymentId("pay_123");
+        verify(paymentFacade, never()).confirmPaidWebhook(any());
+    }
+
+    private WebhookTransactionCancelledPartialCancelled partialCancelledWebhook(
+            String paymentId,
+            String cancellationId
+    ) {
+        WebhookTransactionCancelledDataPartialCancelled data = new WebhookTransactionCancelledDataPartialCancelled(
+                paymentId,
+                "store-123",
+                "transaction-123",
+                cancellationId
+        );
+
+        return new WebhookTransactionCancelledPartialCancelled(Instant.parse("2026-05-29T09:35:00Z"), data);
     }
 
     private static class UnsupportedWebhook implements Webhook {
