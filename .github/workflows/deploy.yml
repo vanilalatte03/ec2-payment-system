@@ -1,12 +1,11 @@
 name: ec2-payment-cd
 
 on:
-  workflow_run:
-    workflows:
-      - ec2-payment-ci
+  pull_request:
+    branches:
+      - develop
     types:
-      - completed
-  workflow_dispatch:
+      - closed
 
 permissions:
   id-token: write
@@ -14,23 +13,14 @@ permissions:
 
 jobs:
   deploy:
-    if: >
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref_name == 'develop') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'develop')
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
       - name: Resolve source revision
         id: source
         run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "sha=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v4
