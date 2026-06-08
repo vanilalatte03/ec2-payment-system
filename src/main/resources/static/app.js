@@ -204,7 +204,6 @@ function cacheElements() {
     "authUserId",
     "authPointBalance",
     "logoutButton",
-    "pointTransactions",
     "toast",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
@@ -243,7 +242,6 @@ async function handleClick(event) {
   if (actionTarget) {
     const action = actionTarget.dataset.action;
     if (action === "scroll-products") return scrollToSection("products");
-    if (action === "scroll-account") return scrollToSection("account");
     if (action === "focus-search") return focusSearch();
     if (action === "open-auth") return openAuthDialog();
     if (action === "open-cart") return openCart();
@@ -710,13 +708,13 @@ async function refreshAccount(showErrors = true) {
   }
 
   try {
-    const [balance, transactions] = await Promise.all([
-      api("/api/points/balance"),
-      api("/api/points/transactions?page=0&size=8"),
-    ]);
+    const balance = await api("/api/points/balance");
     state.pointBalance = Number(balance.balance || 0);
     renderAuthAccount(balance.userId);
-    renderTransactions(transactions.content || []);
+    if (els.pointTransactions) {
+      const transactions = await api("/api/points/transactions?page=0&size=8");
+      renderTransactions(transactions.content || []);
+    }
     updateCheckoutTotal();
   } catch (error) {
     if (showErrors) showToast(formatError(error), "error");
@@ -731,6 +729,8 @@ async function refreshAccount(showErrors = true) {
 }
 
 function renderTransactions(transactions) {
+  if (!els.pointTransactions) return;
+
   if (!transactions.length) {
     els.pointTransactions.innerHTML = `<div class="empty-state">거래 내역이 없습니다.</div>`;
     return;
@@ -797,7 +797,9 @@ function renderAuthAccount(fallbackUserId) {
 
 function renderLoggedOutAccount() {
   state.pointBalance = 0;
-  els.pointTransactions.innerHTML = `<div class="empty-state">로그인 후 거래 내역을 확인할 수 있습니다.</div>`;
+  if (els.pointTransactions) {
+    els.pointTransactions.innerHTML = `<div class="empty-state">로그인 후 거래 내역을 확인할 수 있습니다.</div>`;
+  }
   els.authUserName.textContent = "비로그인";
   els.authUserEmail.textContent = "-";
   els.authUserId.textContent = "-";
