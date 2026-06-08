@@ -47,6 +47,9 @@ public class Refund {
     @Column(name = "portone_payment_id", nullable = false, length = 100)
     private String portonePaymentId;
 
+    @Column(name = "portone_cancellation_id", unique = true, length = 100)
+    private String portoneCancellationId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
@@ -115,9 +118,6 @@ public class Refund {
     // 보유 포인트로도 회수하지 못해 PG 환불 금액에서 차감한 금액
     @Column(name = "deducted_from_pg_refund", nullable = false)
     private Long deductedFromPgRefund;
-
-    @Column(name = "portone_cancellation_id", unique = true, length = 100)
-    private String portoneCancellationId;
 
     private Refund(
             String idempotencyKey,
@@ -289,11 +289,7 @@ public class Refund {
             return;
         }
 
-        /*
-         * 이미 다른 cancellationId가 기록되어 있다면 위험한 상태입니다.
-         * 같은 Refund가 서로 다른 PortOne 취소 건과 연결되는 상황이므로 막아야 합니다.
-         */
-        throw new IllegalStateException("이미 다른 PortOne 취소 ID가 기록되어 있습니다.");
+        throw new BusinessException(ErrorCode.VALIDATION_FAILED);
     }
 
     private static void validateIdempotencyKey(String idempotencyKey) {

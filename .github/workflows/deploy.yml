@@ -37,6 +37,21 @@ jobs:
       - name: Build and test
         run: ./gradlew --no-daemon clean build
 
+      - name: Prepare deployment artifact
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p deployment
+          jar_file=$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' -print -quit)
+          cp "$jar_file" deployment/app.jar
+
+      - name: Upload deployment artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: deployment/app.jar
+          if-no-files-found: error
+
   deploy:
     if: github.event_name == 'push'
     needs: ci
@@ -52,6 +67,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.source.outputs.sha }}
+
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: deployment
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -130,8 +151,6 @@ jobs:
         run: |
           image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
           compose_base64=$(base64 -w 0 docker-compose.yml)
-          health_check_codes="200 301 302 401 403 404"
-
           cat > ssm-parameters.json <<EOF
           {
             "commands": [
@@ -142,7 +161,7 @@ jobs:
               "aws ecr get-login-password --region ${AWS_REGION} | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}",
               "sudo env APP_IMAGE=${image_uri} docker compose --env-file env/.env pull app-${NEXT_COLOR}",
               "sudo env APP_IMAGE=${image_uri} docker compose --env-file env/.env up -d --force-recreate app-${NEXT_COLOR}",
-              "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do code=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${NEXT_PORT}/ || true); for expected in ${health_check_codes}; do if [ \"\$code\" = \"\$expected\" ]; then exit 0; fi; done; sleep 5; done; exit 1"
+              "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do code=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${NEXT_PORT}/health || true); if [ \"\$code\" = \"200\" ]; then exit 0; fi; sleep 5; done; exit 1"
             ]
           }
           EOF
@@ -199,10 +218,21 @@ jobs:
           echo "EC2 deployment command timed out"
           exit 1
 
-      - name: Wait for target group health
+      - name: Switch ALB listener to new target group
         env:
           # GitHub Variables
-          # NEXT_TG_ARN은 직전 step에서 계산된 현재 배포 대상 그룹 ARN
+          # ALB_LISTENER_ARN: 실제 서비스 트래픽이 걸린 ALB 리스너 ARN
+          NEXT_TG_ARN: ${{ steps.color.outputs.next_tg_arn }}
+          ALB_LISTENER_ARN: ${{ vars.ALB_LISTENER_ARN }}
+        run: |
+          aws elbv2 modify-listener \
+            --listener-arn "$ALB_LISTENER_ARN" \
+            --default-actions Type=forward,TargetGroupArn="$NEXT_TG_ARN"
+
+      - name: Wait for target group health after cutover
+        env:
+          # GitHub Variables
+          # NEXT_TG_ARN은 ALB 전환 후 상태를 확인할 새 대상 그룹 ARN
           NEXT_TG_ARN: ${{ steps.color.outputs.next_tg_arn }}
         run: |
           for _ in $(seq 1 36); do
@@ -218,19 +248,12 @@ jobs:
             sleep 5
           done
 
-          echo "Target group did not become healthy in time"
+          echo "Target group did not become healthy after cutover"
+          aws elbv2 describe-target-health \
+            --target-group-arn "$NEXT_TG_ARN" \
+            --query "TargetHealthDescriptions[*].{Target:Target,State:TargetHealth.State,Reason:TargetHealth.Reason,Description:TargetHealth.Description}" \
+            --output table
           exit 1
-
-      - name: Switch ALB listener to new target group
-        env:
-          # GitHub Variables
-          # ALB_LISTENER_ARN: 실제 서비스 트래픽이 걸린 ALB 리스너 ARN
-          NEXT_TG_ARN: ${{ steps.color.outputs.next_tg_arn }}
-          ALB_LISTENER_ARN: ${{ vars.ALB_LISTENER_ARN }}
-        run: |
-          aws elbv2 modify-listener \
-            --listener-arn "$ALB_LISTENER_ARN" \
-            --default-actions Type=forward,TargetGroupArn="$NEXT_TG_ARN"
 
       - name: Stop previous color after cutover
         env:

@@ -130,6 +130,25 @@ public class RefundOutbox extends BaseEntity {
         this.processingStartedAt = now;
     }
 
+    /**
+     * PG 결과 불명확 상태에서 재시도 한도를 초과했지만,
+     * 이후 PortOne 취소 완료 웹훅으로 성공이 확인된 경우에만 호출합니다.
+     * FAILED -> PROCESSING
+     */
+    public void markProcessingForWebhookRecovery(LocalDateTime now) {
+        if (now == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (this.status != RefundOutboxStatus.FAILED) {
+            throw new BusinessException(ErrorCode.INVALID_REFUND_OUTBOX_STATUS);
+        }
+
+        this.status = RefundOutboxStatus.PROCESSING;
+        this.processingStartedAt = now;
+        this.lastErrorMessage = null;
+    }
+
 
     /**
      * PG 환불이 성공하고 내부 DB 반영까지 완료된 후 호출합니다.
