@@ -11,6 +11,7 @@ import com.teamec2.paymentsystem.domain.refund.entity.Refund;
 import com.teamec2.paymentsystem.domain.refund.entity.RefundItem;
 import com.teamec2.paymentsystem.domain.refund.entity.RefundOutbox;
 import com.teamec2.paymentsystem.domain.refund.enums.RefundOutboxStatus;
+import com.teamec2.paymentsystem.domain.refund.enums.RefundStatus;
 import com.teamec2.paymentsystem.domain.refund.repository.RefundItemRepository;
 import com.teamec2.paymentsystem.domain.refund.repository.RefundOutboxRepository;
 import com.teamec2.paymentsystem.domain.refund.repository.RefundRepository;
@@ -46,6 +47,12 @@ public class RefundProcessingTxService {
     private final OrderItemRepository orderItemRepository;
     private final PointService pointService;
     private final ProductRepository productRepository;
+
+    public record RefundWebhookProcessResult(
+            Payment payment,
+            Refund refund
+    ) {
+    }
 
     /**
      * PG 환불 API 호출 전에 Outbox를 PROCESSING 상태로 선점하고,
@@ -121,58 +128,113 @@ public class RefundProcessingTxService {
     @Transactional
     public void complete(Long outboxId, String portoneCancellationId) {
         RefundOutbox outbox = findOutboxForUpdate(outboxId);
-        Refund refund = outbox.getRefund();
-
-        /*
-         * PortOne 취소 ID를 Refund에 기록합니다.
-         * 이 값은 나중에 PortOne 기준 취소 건 추적이나 웹훅 매칭에 사용할 수 있습니다.
-         */
-        refund.recordPortoneCancellationId(portoneCancellationId);
-
+        outbox.getRefund().recordPortoneCancellationId(portoneCancellationId);
         completeOutbox(outbox);
     }
 
     /**
-     * PortOne 웹훅에서 cancellationId 기준으로 환불 완료 처리를 수행합니다.
-     * 같은 결제에서 여러 번 부분 환불이 발생하면 portonePaymentId만으로는
-     * 어떤 환불 건을 완료해야 하는지 구분할 수 없기 때문입니다.
+     * PortOne 취소 완료 웹훅을 기준으로 내부 환불 완료 상태를 확정합니다.
      */
     @Transactional
-    public void completeByPortoneCancellationId(String portonePaymentId, String portoneCancellationId) {
+    public RefundWebhookProcessResult completeByPortoneCancellationId(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        if (portonePaymentId == null || portonePaymentId.isBlank()) {
+            throw new BusinessException(ErrorCode.WEBHOOK_PAYMENT_ID_MISSING);
+        }
+
         if (portoneCancellationId == null || portoneCancellationId.isBlank()) {
-            return;
+            throw new BusinessException(ErrorCode.WEBHOOK_CANCELLATION_ID_MISSING);
         }
 
-        RefundOutbox outbox = refundOutboxRepository
-                .findByRefundPortoneCancellationIdForUpdate(portoneCancellationId)
-                .orElse(null);
+        Optional<RefundOutbox> processableOutbox =
+                refundOutboxRepository.findProcessableByPortoneCancellationIdForUpdate(
+                        portonePaymentId,
+                        portoneCancellationId
+                );
 
-        if (outbox == null) {
-            return;
+        if (processableOutbox.isPresent()) {
+            RefundOutbox outbox = processableOutbox.get();
+
+            if (outbox.getStatus() == RefundOutboxStatus.PENDING) {
+                outbox.markProcessing(LocalDateTime.now());
+            }
+
+            Refund refund = outbox.getRefund();
+            completeOutbox(outbox);
+            return new RefundWebhookProcessResult(refund.getPayment(), refund);
         }
 
+        Optional<RefundOutbox> recoverableFailedOutbox =
+                refundOutboxRepository.findRecoverableFailedByPortoneCancellationIdForUpdate(
+                        portonePaymentId,
+                        portoneCancellationId
+                );
+
+        if (recoverableFailedOutbox.isPresent()) {
+            RefundOutbox outbox = recoverableFailedOutbox.get();
+            outbox.markProcessingForWebhookRecovery(LocalDateTime.now());
+
+            Refund refund = outbox.getRefund();
+            completeOutbox(outbox);
+            return new RefundWebhookProcessResult(refund.getPayment(), refund);
+        }
+
+        Optional<Refund> alreadyCompletedRefund = refundRepository
+                .findByPortonePaymentIdAndPortoneCancellationId(portonePaymentId, portoneCancellationId);
+
+        if (alreadyCompletedRefund.isPresent() && alreadyCompletedRefund.get().isCompleted()) {
+            Refund refund = alreadyCompletedRefund.get();
+            return new RefundWebhookProcessResult(refund.getPayment(), refund);
+        }
+
+        Optional<RefundWebhookProcessResult> unidentifiedWebhookResult =
+                completeUnidentifiedWebhookCandidate(portonePaymentId, portoneCancellationId);
+
+        if (unidentifiedWebhookResult.isPresent()) {
+            return unidentifiedWebhookResult.get();
+        }
+
+        throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+    }
+
+    private Optional<RefundWebhookProcessResult> completeUnidentifiedWebhookCandidate(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        List<RefundOutbox> candidates =
+                refundOutboxRepository.findUnidentifiedWebhookCandidatesForUpdate(portonePaymentId);
+
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (candidates.size() != 1) {
+            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+        }
+
+        RefundOutbox outbox = candidates.get(0);
         Refund refund = outbox.getRefund();
 
-        /*
-         * cancellationId로 찾았더라도,
-         * 웹훅의 paymentId와 우리 Refund의 portonePaymentId가 맞는지 한 번 더 확인합니다.
-         */
-        if (!refund.getPortonePaymentId().equals(portonePaymentId)) {
-            return;
+        if (outbox.getStatus() == RefundOutboxStatus.FAILED && !refund.isPgResultUnknown()) {
+            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+        }
+
+        refund.recordPortoneCancellationId(portoneCancellationId);
+
+        if (outbox.getStatus() == RefundOutboxStatus.PENDING) {
+            outbox.markProcessing(LocalDateTime.now());
+        }
+
+        if (outbox.getStatus() == RefundOutboxStatus.FAILED) {
+            outbox.markProcessingForWebhookRecovery(LocalDateTime.now());
         }
 
         completeOutbox(outbox);
+        return Optional.of(new RefundWebhookProcessResult(refund.getPayment(), refund));
     }
 
-    /**
-     * 실제 환불 완료 처리 공통 로직입니다.
-     * complete(outboxId)
-     * - cancellationId 없이 완료 처리
-     * complete(outboxId, portoneCancellationId)
-     * - cancellationId 기록 후 완료 처리
-     * completeByPortoneCancellationId(portonePaymentId, portoneCancellationId)
-     * - 웹훅에서 cancellationId로 환불 건을 찾아 완료 처리
-     */
     private void completeOutbox(RefundOutbox outbox) {
         Refund refund = outbox.getRefund();
         Payment payment = refund.getPayment();
@@ -262,10 +324,12 @@ public class RefundProcessingTxService {
     @Transactional
     public void retryAsPgResultUnknown(Long outboxId, String portoneCancellationId, String reason) {
         RefundOutbox outbox = findOutboxForUpdate(outboxId);
-        Refund refund = outbox.getRefund();
+        outbox.getRefund().recordPortoneCancellationId(portoneCancellationId);
+        retryAsPgResultUnknown(outbox, reason);
+    }
 
-        // 결과 미확정 상태에서도 cancellationId가 내려올 수 있습니다.
-        refund.recordPortoneCancellationId(portoneCancellationId);
+    private void retryAsPgResultUnknown(RefundOutbox outbox, String reason) {
+        Refund refund = outbox.getRefund();
 
         String message = reason == null || reason.isBlank()
                 ? "PG 취소 결과를 확정하지 못했습니다."
@@ -294,7 +358,8 @@ public class RefundProcessingTxService {
      */
     @Transactional
     public void retryAsPgResultUnknown(Long outboxId, String reason) {
-        retryAsPgResultUnknown(outboxId, null, reason);
+        RefundOutbox outbox = findOutboxForUpdate(outboxId);
+        retryAsPgResultUnknown(outbox, reason);
     }
 
     private RefundOutbox findOutboxForUpdate(Long outboxId) {

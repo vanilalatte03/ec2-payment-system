@@ -1,6 +1,7 @@
 package com.teamec2.paymentsystem.infra.portone.webhook.entity;
 
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.refund.entity.Refund;
 import com.teamec2.paymentsystem.global.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -24,10 +25,9 @@ public class PortoneWebhookEvent extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // TODO: 환불 도메인 구현 후 연결한다.
-    // @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    // @JoinColumn(name = "refund_id")
-    // private Refund refund;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "refund_id")
+    private Refund refund;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_id")
@@ -45,6 +45,9 @@ public class PortoneWebhookEvent extends BaseEntity {
 
     @Column(name = "portone_payment_id", length = 100)
     private String portonePaymentId;
+
+    @Column(name = "portone_cancellation_id", length = 100)
+    private String portoneCancellationId;
 
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
@@ -71,11 +74,22 @@ public class PortoneWebhookEvent extends BaseEntity {
             String portonePaymentId,
             String rawPayload
     ) {
+        return received(webhookId, type, portonePaymentId, null, rawPayload);
+    }
+
+    public static PortoneWebhookEvent received(
+            String webhookId,
+            String type,
+            String portonePaymentId,
+            String portoneCancellationId,
+            String rawPayload
+    ) {
         PortoneWebhookEvent event = new PortoneWebhookEvent();
         event.webhookId = webhookId;
         event.status = WebhookEventStatus.RECEIVED;
         event.type = type;
         event.portonePaymentId = portonePaymentId;
+        event.portoneCancellationId = portoneCancellationId;
         event.rawPayload = rawPayload;
         return event;
     }
@@ -112,7 +126,18 @@ public class PortoneWebhookEvent extends BaseEntity {
      * @param payment 웹훅으로 확정 처리된 내부 결제
      */
     public void markProcessed(Payment payment) {
+        markProcessed(payment, null);
+    }
+
+    /**
+     * 웹훅 이벤트를 환불 처리 완료 상태로 변경한다.
+     *
+     * @param payment 웹훅으로 환불 처리된 내부 결제
+     * @param refund 웹훅으로 완료 처리된 내부 환불
+     */
+    public void markProcessed(Payment payment, Refund refund) {
         this.payment = payment;
+        this.refund = refund;
         this.status = WebhookEventStatus.PROCESSED;
         this.failureReason = null;
         this.processedAt = LocalDateTime.now();
