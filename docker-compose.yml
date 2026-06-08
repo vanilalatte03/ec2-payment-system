@@ -1,0 +1,81 @@
+services:
+  app-blue:
+    image: ${APP_IMAGE:-ec2-payment-system:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ec2-payment-app-blue
+    restart: unless-stopped
+    env_file:
+      - ./env/.env
+    environment:
+      DB_URL: ${COMPOSE_DB_URL:-jdbc:mysql://mysql:3306/ec2_payment_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul}
+      DB_USERNAME: ${COMPOSE_DB_USERNAME:-ec2_payment}
+      DB_PASSWORD: ${COMPOSE_DB_PASSWORD:-ec2_payment_password}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      SERVER_PORT: 8080
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m}
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - payment-private
+
+  app-green:
+    image: ${APP_IMAGE:-ec2-payment-system:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ec2-payment-app-green
+    restart: unless-stopped
+    env_file:
+      - ./env/.env
+    environment:
+      DB_URL: ${COMPOSE_DB_URL:-jdbc:mysql://mysql:3306/ec2_payment_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul}
+      DB_USERNAME: ${COMPOSE_DB_USERNAME:-ec2_payment}
+      DB_PASSWORD: ${COMPOSE_DB_PASSWORD:-ec2_payment_password}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      SERVER_PORT: 8080
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m}
+    ports:
+      - "8082:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - payment-private
+
+  mysql:
+    image: mysql:8.4
+    container_name: ec2-payment-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${COMPOSE_MYSQL_DATABASE:-ec2_payment_system}
+      MYSQL_USER: ${COMPOSE_DB_USERNAME:-ec2_payment}
+      MYSQL_PASSWORD: ${COMPOSE_DB_PASSWORD:-ec2_payment_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - payment-private
+
+volumes:
+  mysql-data:
+
+networks:
+  payment-private:
+    driver: bridge
