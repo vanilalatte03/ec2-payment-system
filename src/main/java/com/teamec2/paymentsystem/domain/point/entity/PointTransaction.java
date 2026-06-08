@@ -32,6 +32,7 @@ public class PointTransaction {
 
     private static final String PAYMENT_KEY_PREFIX = "PAYMENT";
     private static final String REFUND_KEY_PREFIX = "REFUND";
+    private static final String SIGNUP_BONUS_KEY_PREFIX = "SIGNUP_BONUS";
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -40,8 +41,8 @@ public class PointTransaction {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "payment_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_id")
     private Payment payment;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -166,6 +167,28 @@ public class PointTransaction {
     }
 
     /**
+     * 신규 회원가입 축하 포인트 원장을 생성합니다.
+     * 결제나 환불에 속하지 않는 계정 단위 원장이므로 payment/refund 없이 userId 기준 멱등 키를 사용합니다.
+     */
+    public static PointTransaction createForSignupBonus(
+            User user,
+            Long amount
+    ) {
+        validateAccountType(PointTransactionType.SIGNUP_BONUS);
+
+        String idempotencyKey = signupBonusIdempotencyKey(user);
+
+        return new PointTransaction(
+                user,
+                null,
+                null,
+                PointTransactionType.SIGNUP_BONUS,
+                amount,
+                idempotencyKey
+        );
+    }
+
+    /**
      * 예약 포인트 사용 원장을 최종 사용 원장으로 확정합니다.
      * 주문 생성 시점에 이미 잔액은 차감되었으므로 추가 잔액 변경 없이 타입과 멱등 키만 USE 기준으로 변경합니다.
      */
@@ -221,7 +244,18 @@ public class PointTransaction {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 
-        return "REFUND:%d:%s".formatted(refund.getId(), type.name());
+        return "%s:%d:%s".formatted(REFUND_KEY_PREFIX, refund.getId(), type.name());
+    }
+
+    /**
+     * 회원가입 축하 포인트 원장의 멱등 키를 생성합니다.
+     */
+    public static String signupBonusIdempotencyKey(User user) {
+        if (user == null || user.getId() == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        return "%s:%d".formatted(SIGNUP_BONUS_KEY_PREFIX, user.getId());
     }
 
     /**
@@ -241,7 +275,11 @@ public class PointTransaction {
             PointTransactionType type,
             Long amount
     ) {
-        if (user == null || payment == null || type == null || amount == null) {
+        if (user == null || type == null || amount == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (payment == null && !type.isAccountType()) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
 
@@ -263,6 +301,12 @@ public class PointTransaction {
 
     private static void validateRefundType(PointTransactionType type) {
         if (type == null || !type.isRefundType()) {
+            throw new BusinessException(ErrorCode.INVALID_POINT_TRANSACTION_TYPE);
+        }
+    }
+
+    private static void validateAccountType(PointTransactionType type) {
+        if (type == null || !type.isAccountType()) {
             throw new BusinessException(ErrorCode.INVALID_POINT_TRANSACTION_TYPE);
         }
     }

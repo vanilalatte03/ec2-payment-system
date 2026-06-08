@@ -20,7 +20,7 @@ public class PointTransactionResponse {
     public static PointTransactionResponse from(PointTransaction transaction) {
         return new PointTransactionResponse(
                 transaction.getId(),
-                transaction.getPayment().getId(),
+                transaction.getPayment() == null ? null : transaction.getPayment().getId(),
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getCreatedAt()
