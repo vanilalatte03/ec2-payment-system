@@ -1,9 +1,13 @@
 package com.teamec2.paymentsystem.infra.portone.webhook.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
+import com.teamec2.paymentsystem.domain.refund.service.RefundProcessingTxService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
 import com.teamec2.paymentsystem.infra.portone.webhook.dto.PortoneWebhookReceiveResponse;
@@ -30,11 +34,19 @@ public class PortoneWebhookEventService {
     private static final String TYPE_TRANSACTION_CANCELLED = "Transaction.Cancelled";
     private static final String TYPE_TRANSACTION_PARTIAL_CANCELLED = "Transaction.PartialCancelled";
     private static final String TYPE_TRANSACTION_CANCEL_PENDING = "Transaction.CancelPending";
+
     private static final String REASON_UNSUPPORTED_EVENT_TYPE = "UNSUPPORTED_EVENT_TYPE";
+    private static final String REASON_CANCELLATION_ID_MISSING = "WEBHOOK_CANCELLATION_ID_MISSING";
+    private static final String REASON_WEBHOOK_PAYLOAD_PARSE_FAILED = "WEBHOOK_PAYLOAD_PARSE_FAILED";
 
     private final PortoneWebhookEventRepository webhookEventRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentFacade paymentFacade;
+    private final RefundProcessingTxService refundProcessingTxService;
+
+    // Spring Bean으로 등록된 ObjectMapper가 없는 환경에서도 rawPayload JSON 파싱이 가능하도록 직접 생성합니다.
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
 
     /**
      * 검증이 끝난 PortOne 웹훅을 수신 이력으로 저장하고 처리 대상이면 결제를 확정한다.
@@ -87,7 +99,15 @@ public class PortoneWebhookEventService {
             return handleConcurrentDuplicateWebhook(webhookId);
         }
 
-        return processPaidEvent(event, portonePaymentId);
+        if (webhook instanceof WebhookTransactionPaid) {
+            return processPaidEvent(event, portonePaymentId);
+        }
+
+        if (isRefundCompletedEvent(webhook)) {
+            return processRefundCompletedEvent(event, portonePaymentId, rawPayload);
+        }
+
+        return saveIgnoredEvent(webhookId, type, portonePaymentId, rawPayload);
     }
 
     /**
@@ -119,7 +139,16 @@ public class PortoneWebhookEventService {
      * 현재 단계에서 처리하지 않는 웹훅 이벤트인지 확인한다.
      */
     private boolean isUnsupportedEvent(Webhook webhook) {
-        return !(webhook instanceof WebhookTransactionPaid);
+        return !(webhook instanceof WebhookTransactionPaid)
+                && !isRefundCompletedEvent(webhook);
+    }
+
+    /**
+     * 환불 완료로 볼 수 있는 웹훅인지 확인합니다.
+     */
+    private boolean isRefundCompletedEvent(Webhook webhook) {
+        return webhook instanceof WebhookTransactionCancelledCancelled
+                || webhook instanceof WebhookTransactionCancelledPartialCancelled;
     }
 
     /**
@@ -139,6 +168,41 @@ public class PortoneWebhookEventService {
         try {
             ConfirmPaymentResponse confirmPaymentResponse = paymentFacade.confirmPaidWebhook(portonePaymentId);
             Payment payment = paymentRepository.findById(confirmPaymentResponse.paymentId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+
+            event.markProcessed(payment);
+            webhookEventRepository.saveAndFlush(event);
+
+            return PortoneWebhookReceiveResponse.processed(portonePaymentId);
+        } catch (RuntimeException e) {
+            event.markFailed(resolveFailureReason(e));
+            webhookEventRepository.saveAndFlush(event);
+            throw e;
+        }
+    }
+
+    /**
+     * 취소 완료 또는 부분 취소 완료 웹훅을 처리합니다.
+     * 처리 흐름:
+     * 1. rawPayload에서 PortOne cancellationId를 추출합니다.
+     * 2. cancellationId 기준으로 RefundOutbox를 찾아 내부 환불 완료 처리를 수행합니다.
+     * 3. 웹훅 이벤트를 PROCESSED 상태로 변경합니다.
+     */
+    private PortoneWebhookReceiveResponse processRefundCompletedEvent(
+            PortoneWebhookEvent event,
+            String portonePaymentId,
+            String rawPayload
+    ) {
+        try {
+            String portoneCancellationId = resolvePortoneCancellationId(rawPayload);
+            validatePortoneCancellationId(portoneCancellationId);
+
+            refundProcessingTxService.completeByPortoneCancellationId(
+                    portonePaymentId,
+                    portoneCancellationId
+            );
+
+            Payment payment = paymentRepository.findByPortonePaymentId(portonePaymentId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
 
             event.markProcessed(payment);
@@ -239,6 +303,44 @@ public class PortoneWebhookEventService {
     }
 
     /**
+     * rawPayload에서 PortOne cancellationId를 추출합니다.
+     *
+     * PortOne SDK 웹훅 객체에서 cancellationId를 바로 꺼내는 메서드명이 프로젝트 SDK 버전에 따라
+     * 다를 수 있기 때문에, 현재는 서명 검증에 사용한 원본 payload에서 JSON 경로로 추출합니다.
+     */
+    private String resolvePortoneCancellationId(String rawPayload) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(rawPayload);
+
+            return firstTextValue(
+                    root.at("/data/cancellationId"),
+                    root.at("/data/cancellation/id"),
+                    root.at("/data/cancelId"),
+                    root.at("/cancellationId"),
+                    root.at("/cancellation/id")
+            );
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException(REASON_WEBHOOK_PAYLOAD_PARSE_FAILED, e);
+        }
+    }
+
+    private String firstTextValue(JsonNode... nodes) {
+        for (JsonNode node : nodes) {
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                continue;
+            }
+
+            String value = node.asText();
+
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * 처리 대상 웹훅에 PortOne 결제 ID가 포함되어 있는지 확인한다.
      *
      * @param portonePaymentId 웹훅에서 추출한 PortOne 결제 ID
@@ -246,6 +348,15 @@ public class PortoneWebhookEventService {
     private void validatePortonePaymentId(String portonePaymentId) {
         if (portonePaymentId == null || portonePaymentId.isBlank()) {
             throw new BusinessException(ErrorCode.WEBHOOK_PAYMENT_ID_MISSING);
+        }
+    }
+
+    /**
+     * 처리 대상 취소 웹훅에 PortOne 취소 ID가 포함되어 있는지 확인합니다.
+     */
+    private void validatePortoneCancellationId(String portoneCancellationId) {
+        if (portoneCancellationId == null || portoneCancellationId.isBlank()) {
+            throw new IllegalArgumentException(REASON_CANCELLATION_ID_MISSING);
         }
     }
 
@@ -263,7 +374,11 @@ public class PortoneWebhookEventService {
             return businessException.getErrorCode().name();
         }
 
+        if (exception.getMessage() != null && !exception.getMessage().isBlank()) {
+            return exception.getMessage();
+        }
+
         return exception.getClass().getSimpleName();
     }
-
 }
+
