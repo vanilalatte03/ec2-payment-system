@@ -42,10 +42,6 @@ public class RefundIdempotencyService {
      */
     public void validateSameIdempotentRequest(Refund existingRefund, String requestHash) {
         if (!existingRefund.getRequestHash().equals(requestHash)) {
-            /*
-             * 같은 Idempotency-Key인데 요청 내용이 다르면 재시도가 아니라 충돌입니다.
-             * 기존 환불을 그대로 반환하면 사용자는 다른 요청이 성공한 것처럼 오해할 수 있습니다.
-             */
             throw new BusinessException(ErrorCode.CONFLICT);
         }
     }
