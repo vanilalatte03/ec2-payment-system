@@ -595,13 +595,13 @@ async function createOrder() {
     return;
   }
 
-  const usePointAmount = normalizeUsePoint();
+  const usedPointAmount = normalizeUsePoint();
   const cartItemIds = state.cart.items.map((item) => item.cartItemId);
 
   try {
     const orderResult = await api("/api/orders", {
       method: "POST",
-      body: { cartItemIds, usePointAmount },
+      body: { cartItemIds, usedPointAmount },
     });
 
     if (orderResult.nextAction === "CONFIRM_POINT_ONLY") {

@@ -9,13 +9,7 @@ import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
 
 import java.util.List;
 
-/**
- * 주문 생성 결과 DTO입니다.
- *
- * 클라이언트는 pgAmount와 nextAction을 보고 PortOne 결제창을 열지,
- * 포인트 전액 결제 확정 API로 바로 넘어갈지 판단할 수 있습니다.
- */
-public record CreateOrderResponse(
+public record CreateResponse(
         OrderData order,
         PaymentData payment,
         String nextAction,
@@ -34,16 +28,16 @@ public record CreateOrderResponse(
      * @param orderItems 주문에 포함된 상품 목록
      * @return 주문 생성 응답 DTO
      */
-    public static CreateOrderResponse from(Order order, Payment payment, List<OrderItem> orderItems) {
-        List<CreateOrderItemResponse> itemResponses = orderItems.stream()
-                .map(CreateOrderItemResponse::from)
+    public static CreateResponse from(Order order, Payment payment, List<OrderItem> orderItems) {
+        List<OrderItemResponse> itemResponses = orderItems.stream()
+                .map(OrderItemResponse::from)
                 .toList();
 
         String nextAction = payment.getPgAmount() == 0
                 ? CONFIRM_POINT_ONLY
                 : OPEN_PORTONE_PAYMENT;
 
-        return new CreateOrderResponse(
+        return new CreateResponse(
                 new OrderData(
                         order.getId(),
                         order.getOrderNumber(),
@@ -69,7 +63,7 @@ public record CreateOrderResponse(
             String orderNumber,
             OrderStatus status,
             Long totalAmount,
-            List<CreateOrderItemResponse> items
+            List<OrderItemResponse> items
     ) {
     }
 

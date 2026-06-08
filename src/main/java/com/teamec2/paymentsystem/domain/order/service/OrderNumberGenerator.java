@@ -56,12 +56,12 @@ public class OrderNumberGenerator {
     public String generate() {
         LocalDate today = LocalDate.now(clock);
         String date = today.format(DATE_FORMATTER);
-        int sequenceNumber = nextSequence(today);
+        int sequenceNumber = nextNumber(today);
 
         return ORDER_NUMBER_FORMAT.formatted(date, sequenceNumber);
     }
 
-    private int nextSequence(LocalDate orderDate) {
+    private int nextNumber(LocalDate orderDate) {
         try {
             return increaseOrCreate(orderDate);
         } catch (DataIntegrityViolationException exception) {
@@ -70,23 +70,23 @@ public class OrderNumberGenerator {
     }
 
     private int increaseOrCreate(LocalDate orderDate) {
-        return requiresNewTransaction.execute(status -> {
-            return orderNumberSequenceRepository.findByOrderDateForUpdate(orderDate)
-                    .map(OrderNumberSequence::increaseAndGet)
-                    .orElseGet(() -> createFirstSequence(orderDate));
-        });
+        return requiresNewTransaction.execute(status ->
+                orderNumberSequenceRepository.findForUpdate(orderDate)
+                        .map(OrderNumberSequence::increaseAndGet)
+                        .orElseGet(() -> createFirst(orderDate))
+        );
     }
 
     private int increaseExisting(LocalDate orderDate) {
         return requiresNewTransaction.execute(status -> {
-            OrderNumberSequence sequence = orderNumberSequenceRepository.findByOrderDateForUpdate(orderDate)
+            OrderNumberSequence sequence = orderNumberSequenceRepository.findForUpdate(orderDate)
                     .orElseThrow(() -> new IllegalStateException("Order number sequence was not created."));
 
             return sequence.increaseAndGet();
         });
     }
 
-    private int createFirstSequence(LocalDate orderDate) {
+    private int createFirst(LocalDate orderDate) {
         OrderNumberSequence sequence = OrderNumberSequence.create(orderDate);
         int sequenceNumber = sequence.increaseAndGet();
         orderNumberSequenceRepository.saveAndFlush(sequence);

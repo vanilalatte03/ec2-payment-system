@@ -1,6 +1,12 @@
 # 주문 API
 
-주문은 결제와 주문 상태 변경의 기준 단위입니다. 현재 구현된 API는 주문서 미리보기, 내 주문 내역 조회, 주문 상세 조회, 주문/결제 생성, 결제대기 주문 취소를 제공합니다.
+주문은 결제와 주문 상태 변경의 기준 단위입니다. 현재 구현된 API는 주문서 미리보기, 주문/결제 생성, 내 주문 내역 조회, 주문 상세 조회, 결제대기 주문 취소를 제공합니다.
+
+성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
+
+아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
+HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
 
 ## 주문서 미리보기
 
@@ -120,28 +126,34 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 }
 ```
 
-`payment.pgAmount`가 `0`이면 `payment.type`은 `POINT_ONLY`, `nextAction`은 `CONFIRM_POINT_ONLY`로 내려갑니다. 이 경우 클라이언트는 PortOne 결제창을 열지 않고 결제 확정 API를 호출합니다.
+`payment.type`은 금액 구성에 따라 `CARD`, `POINT_ONLY`, `POINT_CARD` 중 하나로 내려갑니다. `payment.pgAmount`가 `0`이면 `payment.type`은 `POINT_ONLY`, `nextAction`은 `CONFIRM_POINT_ONLY`입니다. 이 경우 클라이언트는 PortOne 결제창을 열지 않고 결제 확정 API를 호출합니다.
 
 ### 처리 규칙
 
 - 주문 상품에는 주문 생성 시점의 상품명과 가격 스냅샷을 저장합니다.
 - 결제 레코드는 `PENDING` 상태로 함께 생성합니다.
 - 서버가 PortOne에 전달할 `portonePaymentId`를 `pay_` + UUID 형식으로 미리 생성하고 결제 레코드에 저장합니다.
+- `cartItemIds`가 없으면 장바구니 전체 상품을 주문 대상으로 봅니다.
+- `cartItemIds`가 있으면 선택된 장바구니 상품만 주문 대상으로 봅니다.
+- 같은 장바구니 상품 ID가 여러 번 들어와도 한 번만 주문 대상으로 처리합니다.
 - 주문 생성 시점에 재고를 먼저 차감합니다.
+- 재고 검증과 차감은 상품 row를 잠근 뒤 최신 상품 정보 기준으로 처리합니다.
 - 포인트를 사용하는 주문은 주문 생성 시점에 포인트를 예약 차감하고 `USE_RESERVE` 원장을 생성합니다.
 - 주문 생성 시점에는 장바구니 상품을 삭제하지 않습니다.
 
 ### Errors
 
-| 코드 | HTTP | 발생 조건 |
-| --- | --- | --- |
-| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
-| `INVALID_USED_POINT` | 400 | 사용할 포인트가 음수이거나 주문 금액 초과 |
-| `CART_EMPTY` | 400 | 주문 대상 장바구니 상품 없음 |
-| `CART_ITEM_NOT_FOUND` | 404 | 선택한 장바구니 상품 없음 |
-| `PRODUCT_NOT_ON_SALE` | 400 | 판매중 상품이 아님 |
-| `ORDER_STOCK_SHORTAGE` | 409 | 재고 검증/차감 중 재고 부족 |
-| `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
+| 코드 | HTTP | 발생 조건                               |
+| --- | --- |-------------------------------------|
+| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패                      |
+| `VALIDATION_FAILED` | 400 | 요청 본문 형식 오류 또는 `usedPointAmount` 누락 |
+| `USER_NOT_FOUND` | 404 | 인증 사용자를 찾을 수 없음                     |
+| `INVALID_USED_POINT` | 400 | 사용할 포인트가 음수이거나 주문 금액 초과             |
+| `CART_EMPTY` | 400 | 주문 대상 장바구니 상품 없음                    |
+| `CART_ITEM_NOT_FOUND` | 404 | 선택한 장바구니 상품을 찾을 수 없음                |
+| `PRODUCT_NOT_ON_SALE` | 400 | 판매중인 상품이 아님                         |
+| `ORDER_STOCK_SHORTAGE` | 409 | 재고 검증/차감 중 재고 부족                    |
+| `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족                           |
 
 ## 내 주문 내역 조회
 
@@ -264,7 +276,7 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 
 ## 주문 상태 변경
 
-회원이 결제대기 주문을 취소하거나, 결제대기 주문의 일부 주문상품을 취소합니다. 프로젝트 문서에서는 이 기능을 주문 상태 변경으로 부르며, 현재 구현된 실제 경로는 `/api/orders/{orderId}/status`입니다.
+회원이 결제대기 주문을 전체 취소하거나, 결제대기 주문의 일부 주문상품 또는 일부 수량을 취소합니다. 프로젝트 문서에서는 이 기능을 주문 상태 변경으로 부르며, 현재 구현된 실제 경로는 `/api/orders/{orderId}/status`입니다.
 
 - Method: `PATCH`
 - Path: `/api/orders/{orderId}/status`
@@ -283,13 +295,31 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `orderItemIds` | Long[] | N | 취소할 주문상품 ID 목록. `null` 또는 빈 배열이면 아직 취소되지 않은 모든 주문상품 취소 |
+| `items` | Object[] | N | 취소할 주문상품과 수량 목록. 값이 있으면 `orderItemIds`보다 우선 처리 |
+| `items[].orderItemId` | Long | Y | 취소할 주문상품 ID |
+| `items[].quantity` | Integer | Y | 취소할 수량. 1 이상, 해당 주문상품의 현재 주문 수량 이하 |
+| `orderItemIds` | Long[] | N | 기존 요청 호환용 필드. `items`가 없고 값이 있으면 해당 주문상품의 남은 수량 전체를 취소 |
+
+```json
+{
+  "items": [
+    {
+      "orderItemId": 400,
+      "quantity": 1
+    }
+  ]
+}
+```
+
+기존 방식도 사용할 수 있지만, 수량 선택 없이 해당 주문상품의 남은 수량 전체가 취소됩니다.
 
 ```json
 {
   "orderItemIds": [400, 401]
 }
 ```
+
+본문을 생략하거나 `{}`를 보내면 아직 취소되지 않은 모든 주문상품의 남은 수량 전체를 취소합니다.
 
 ### Response Data
 
@@ -316,17 +346,23 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 }
 ```
 
-전체 취소라면 `currentOrderStatus`는 `CANCELED`, `paymentStatus`는 `FAILED`, `remainingTotalAmount`는 `0`입니다.
+전체 취소라면 `currentOrderStatus`는 `CANCELED`, `paymentStatus`는 `FAILED`, `remainingTotalAmount`, `remainingUsedPointAmount`, `remainingPgAmount`는 모두 `0`입니다.
 
 ### 처리 규칙
 
 - 주문 소유자만 취소할 수 있습니다.
 - 내부 결제 상태가 `PENDING`이고 주문 상태가 `PAYMENT_PENDING` 또는 `PARTIAL_CANCELED`인 경우만 직접 취소할 수 있습니다.
-- `orderItemIds`가 없으면 아직 취소되지 않은 모든 주문상품을 취소합니다.
-- 선택한 주문상품만 취소하면 주문 상태는 `PARTIAL_CANCELED`가 되고 결제 금액은 남은 주문 금액 기준으로 다시 계산됩니다.
+- `items`가 있으면 주문상품별로 지정한 수량만 취소합니다. 같은 `orderItemId`가 중복되면 실패합니다.
+- `items` 내부의 `orderItemId` 또는 `quantity`가 누락되면 실패합니다.
+- `items`가 없고 `orderItemIds`가 있으면 선택한 주문상품의 남은 수량 전체를 취소합니다. `orderItemIds`의 중복 ID는 한 번만 처리합니다.
+- `items`와 `orderItemIds`가 모두 없거나 비어 있으면 아직 취소되지 않은 모든 주문상품의 남은 수량 전체를 취소합니다.
+- 주문상품 수량 일부만 취소하면 해당 주문상품은 `ORDERED` 상태로 남고, 수량만 취소 후 남은 수량으로 줄어듭니다.
+- 주문상품의 전체 수량이 취소되면 해당 주문상품 상태는 `CANCELED`가 됩니다.
+- 선택한 주문상품 또는 수량만 취소하고 남은 주문 금액이 있으면 주문 상태는 `PARTIAL_CANCELED`가 되고 결제 금액은 남은 주문 금액 기준으로 다시 계산됩니다.
 - 전체 취소하면 주문 상태는 `CANCELED`, 결제 상태는 `FAILED`로 변경됩니다.
 - 취소된 주문상품의 재고는 즉시 복구됩니다.
-- 예약 차감된 포인트 중 취소 금액에 해당하는 금액은 `USE_CANCEL` 원장으로 복구됩니다.
+- 예약 차감된 포인트 중 남은 주문 금액에 더 이상 사용할 수 없는 금액은 `USE_CANCEL` 원장으로 복구됩니다.
+- 부분 취소 후 남은 결제 금액에 따라 결제 타입은 `CARD`, `POINT_ONLY`, `POINT_CARD` 중 하나로 다시 계산됩니다.
 - 주문 취소 API는 결제 전 `PENDING` 주문을 내부 상태 기준으로 정리하는 API입니다.
 - 주문 도메인에서는 PortOne 결제 조회나 PG 취소를 호출하지 않습니다. 외부 결제가 완료된 주문은 결제 확정 또는 환불 흐름에서 처리합니다.
 
@@ -335,10 +371,15 @@ GET /api/orders/preview?cartItemIds=100&cartItemIds=101
 | 코드 | HTTP | 발생 조건 |
 | --- | --- | --- |
 | `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
+| `VALIDATION_FAILED` | 400 | 요청 본문 형식 오류 또는 `items[].quantity`가 1보다 작은 경우 |
+| `MISSING_REQUIRED_FIELD` | 400 | `items` 내부의 `orderItemId` 또는 `quantity` 누락 |
+| `DUPLICATE_REQUEST` | 409 | `items` 안에 같은 `orderItemId`가 중복됨 |
 | `USER_NOT_FOUND` | 404 | 인증 사용자를 찾을 수 없음 |
 | `ORDER_NOT_FOUND` | 404 | 주문 없음 |
 | `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
 | `PAYMENT_NOT_FOUND` | 404 | 주문에 연결된 결제 없음 |
 | `ORDER_ITEM_NOT_FOUND` | 404 | 주문상품 없음 또는 취소할 수 있는 주문상품 없음 |
 | `INVALID_ORDER_STATUS` | 400 | 이미 취소된 주문상품을 다시 취소하려는 경우 |
+| `INVALID_ORDER_QUANTITY` | 400 | 취소 수량이 1보다 작은 경우 |
+| `ORDER_CANCEL_QUANTITY_EXCEEDED` | 400 | 취소 수량이 해당 주문상품의 현재 주문 수량보다 큰 경우 |
 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 직접 취소할 수 없는 주문/결제 상태 |

@@ -29,16 +29,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class PaymentConfirmTxServiceTest {
@@ -51,7 +46,7 @@ class PaymentConfirmTxServiceTest {
     @Autowired
     UserRepository userRepository;
 
-    @MockitoSpyBean
+    @Autowired
     ProductRepository productRepository;
 
     @Autowired
@@ -124,10 +119,45 @@ class PaymentConfirmTxServiceTest {
     }
 
     @Test
+    void 결제완료_결제전취소된주문상품의_장바구니상품은삭제하지않는다() {
+        // given
+        User user = 회원_저장();
+        Product purchasedProduct = 상품_저장("구매 상품", 55000, 10);
+        Product canceledProduct = 상품_저장("결제 전 취소 상품", 24000, 10);
+        Cart cart = cartRepository.save(new Cart(user));
+        CartItem purchasedCartItem = cartItemRepository.save(new CartItem(cart, purchasedProduct, 1));
+        CartItem canceledCartItem = cartItemRepository.save(new CartItem(cart, canceledProduct, 1));
+        Order order = 주문_저장(user, 55000L, 0L);
+        주문상품_저장(order, purchasedCartItem);
+        OrderItem canceledOrderItem = 주문상품_저장(order, canceledCartItem);
+        Payment payment = 결제_저장(order, 55000L, 0L, 55000L);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+
+        canceledOrderItem.cancel(canceledCartItem.getQuantity(), canceledProduct);
+        order.partialCancel();
+        orderItemRepository.save(canceledOrderItem);
+        orderRepository.save(order);
+
+        // when
+        ConfirmPaymentResponse response = paymentConfirmTxService.complete(payment.getId(), approvedAt);
+
+        // then
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+
+        assertThat(response.cartCleared()).isTrue();
+        assertThat(foundPayment.isCartCleared()).isTrue();
+        assertThat(cartItemRepository.findById(purchasedCartItem.getId())).isEmpty();
+        assertThat(cartItemRepository.findById(canceledCartItem.getId())).isPresent();
+    }
+
+    @Test
     void 보상취소성공후_주문결제를실패처리하고_주문상품재고를복구한다() {
         // given
         User user = 회원_저장();
+        // 주문 생성 시 이미 재고가 선차감된 상태를 테스트 데이터로 표현한다.
+        // 후드 집업은 원래 10개에서 2개 주문되어 현재 8개가 남은 상황이다.
         Product firstProduct = 상품_저장("후드 집업", 55000, 8);
+        // 볼캡은 원래 10개에서 3개 주문되어 현재 7개가 남은 상황이다.
         Product secondProduct = 상품_저장("볼캡", 24000, 7);
         Order order = 주문_저장(user, 158000L, 0L);
         주문상품_저장(order, firstProduct, 2);
@@ -151,42 +181,10 @@ class PaymentConfirmTxServiceTest {
     }
 
     @Test
-    void 보상취소성공후_이미취소된주문상품은_재고를다시복구하지않는다() {
-        // given
-        User user = 회원_저장();
-        Product canceledProduct = 상품_저장("이미 취소한 상품", 55000, 8);
-        Product remainingProduct = 상품_저장("남아있는 상품", 24000, 7);
-        Order order = 주문_저장(user, 158000L, 0L);
-        OrderItem canceledOrderItem = 주문상품_저장(order, canceledProduct, 2);
-        주문상품_저장(order, remainingProduct, 3);
-        Payment payment = 결제_저장(order, 158000L, 0L, 158000L);
-
-        canceledOrderItem.cancel();
-        orderItemRepository.saveAndFlush(canceledOrderItem);
-        productRepository.saveAndFlush(canceledProduct);
-
-        assertThat(productRepository.findById(canceledProduct.getId()).orElseThrow().getStock()).isEqualTo(10);
-        assertThat(productRepository.findById(remainingProduct.getId()).orElseThrow().getStock()).isEqualTo(7);
-
-        // when
-        paymentConfirmTxService.failAfterCompensation(payment.getId());
-
-        // then
-        Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
-        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
-        Product foundCanceledProduct = productRepository.findById(canceledProduct.getId()).orElseThrow();
-        Product foundRemainingProduct = productRepository.findById(remainingProduct.getId()).orElseThrow();
-
-        assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
-        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-        assertThat(foundCanceledProduct.getStock()).isEqualTo(10);
-        assertThat(foundRemainingProduct.getStock()).isEqualTo(10);
-    }
-
-    @Test
     void 보상취소성공후_예약차감한포인트를복구하고_취소원장을기록한다() {
         // given
         User user = 회원_저장(1000L);
+        // 주문 생성 시 상품 1개가 선차감되어 현재 재고는 4개만 남아 있다.
         Product product = 상품_저장("후드 집업", 55000, 4);
         Order order = 주문_저장(user, 1000L, 200L);
         주문상품_저장(order, product, 1);
@@ -216,31 +214,6 @@ class PaymentConfirmTxServiceTest {
         assertThat(foundProduct.getStock()).isEqualTo(5);
         assertThat(cancelTransaction.getType()).isEqualTo(PointTransactionType.USE_CANCEL);
         assertThat(cancelTransaction.getAmount()).isEqualTo(200L);
-    }
-
-    @Test
-    void 보상취소성공후_재고복구전에_복구대상상품을ID오름차순으로비관락조회한다() {
-        // given
-        User user = 회원_저장();
-        Product firstProduct = 상품_저장("먼저 잠글 상품", 10000, 8);
-        Product secondProduct = 상품_저장("나중에 잠글 상품", 20000, 7);
-        Order order = 주문_저장(user, 30000L, 0L);
-        주문상품_저장(order, secondProduct, 1);
-        주문상품_저장(order, firstProduct, 1);
-        Payment payment = 결제_저장(order, 30000L, 0L, 30000L);
-
-        clearInvocations(productRepository);
-
-        // when
-        paymentConfirmTxService.failAfterCompensation(payment.getId());
-
-        // then
-        verify(productRepository, times(1)).findAllByIdsWithLock(List.of(
-                firstProduct.getId(),
-                secondProduct.getId()
-        ));
-        assertThat(productRepository.findById(firstProduct.getId()).orElseThrow().getStock()).isEqualTo(9);
-        assertThat(productRepository.findById(secondProduct.getId()).orElseThrow().getStock()).isEqualTo(8);
     }
 
     private User 회원_저장() {

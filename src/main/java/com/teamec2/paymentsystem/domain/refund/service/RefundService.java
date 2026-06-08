@@ -88,7 +88,7 @@ public class RefundService {
          */
         validateNoActiveRefund(payment);
 
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
+        List<OrderItem> orderItems = orderItemRepository.findWithProductByOrderId(order.getId());
 
         // 환불 대상 상품과 수량을 결정합니다.
         RefundTarget refundTarget = refundTargetResolver.resolvePartial(orderItems, request.items());
@@ -153,7 +153,7 @@ public class RefundService {
 
         validateNoActiveRefund(payment);
 
-        List<OrderItem> orderItems = orderItemRepository.findAllWithProductByOrderId(order.getId());
+        List<OrderItem> orderItems = orderItemRepository.findWithProductByOrderId(order.getId());
 
         // 전체 환불은 남아 있는 모든 환불 가능 상품 수량을 대상으로 환불 금액을 계산합니다.
         RefundTarget refundTarget = refundTargetResolver.resolveFull(orderItems);
