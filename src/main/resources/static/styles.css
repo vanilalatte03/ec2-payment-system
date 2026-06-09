@@ -927,7 +927,7 @@ img {
 }
 
 .auth-dialog {
-  width: min(100% - 32px, 430px);
+  width: min(100% - 32px, 560px);
   border: 0;
   padding: 0;
   background: transparent;
@@ -941,6 +941,8 @@ img {
   position: relative;
   display: grid;
   gap: 18px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   padding: 32px;
   background: var(--canvas);
   box-shadow: var(--shadow);
@@ -971,6 +973,26 @@ img {
   color: var(--canvas);
 }
 
+.account-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border: 1px solid var(--line);
+}
+
+.account-tab {
+  height: 42px;
+  border: 0;
+  background: var(--canvas);
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.account-tab.is-active {
+  background: var(--ink);
+  color: var(--canvas);
+}
+
 .auth-pane {
   display: none;
   gap: 14px;
@@ -983,6 +1005,15 @@ img {
 .auth-account {
   display: grid;
   gap: 16px;
+}
+
+.account-pane {
+  display: none;
+  gap: 16px;
+}
+
+.account-pane.is-active {
+  display: grid;
 }
 
 .auth-account-header {
@@ -1015,6 +1046,9 @@ img {
 .auth-account-grid > div {
   min-height: 96px;
   padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
   border: 1px solid var(--line);
   background: var(--surface);
 }
@@ -1032,6 +1066,102 @@ img {
   gap: 6px;
   color: var(--ink-muted);
   font-size: 13px;
+}
+
+.inline-action {
+  justify-self: start;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: var(--ink);
+  padding: 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.point-ledger-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 14px;
+  align-items: end;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.point-ledger-toolbar .label {
+  margin-bottom: 4px;
+}
+
+.point-ledger-toolbar strong {
+  display: block;
+  font-size: 18px;
+}
+
+.point-ledger-toolbar select {
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  padding: 0 12px;
+  outline: none;
+}
+
+.point-ledger-toolbar select:focus {
+  border-color: var(--ink);
+}
+
+.point-transaction-list {
+  display: grid;
+  min-height: 168px;
+}
+
+.transaction-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.transaction-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.transaction-main strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.transaction-main span {
+  color: var(--ink-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.transaction-amount {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.transaction-amount.is-increase {
+  color: var(--success);
+}
+
+.transaction-amount.is-decrease {
+  color: var(--danger);
+}
+
+.point-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 4px;
 }
 
 .empty-state,
@@ -1219,6 +1349,15 @@ img {
   }
 
   .refund-quantity {
+    justify-self: start;
+  }
+
+  .point-ledger-toolbar,
+  .transaction-row {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-amount {
     justify-self: start;
   }
 }
