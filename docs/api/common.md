@@ -234,3 +234,4 @@ Authorization: Bearer {accessToken}
 | `WEBHOOK_SIGNATURE_INVALID` | 400 | 웹훅 서명 검증 실패 |
 | `WEBHOOK_PAYLOAD_INVALID` | 400 | 웹훅 본문 파싱 실패 |
 | `WEBHOOK_PAYMENT_ID_MISSING` | 400 | 웹훅에서 paymentId 추출 실패 |
+| `WEBHOOK_CANCELLATION_ID_MISSING` | 400 | 웹훅에서 cancellationId 추출 실패 |

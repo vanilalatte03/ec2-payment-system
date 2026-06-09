@@ -98,9 +98,10 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 
 - 서명 검증 실패 시 400을 반환합니다.
 - `Transaction.Paid`는 결제 확정 API와 동일한 결제 확정 도메인 서비스를 호출합니다.
-- `Transaction.Paid` 외 이벤트는 현재 단계에서 처리하지 않고 `IGNORE` 상태로 저장한 뒤 200을 반환합니다. 예를 들어 `Transaction.Failed`, `Transaction.Cancelled`, `Transaction.PartialCancelled`, `Transaction.CancelPending`은 결제 확정 대상으로 처리하지 않습니다.
+- `Transaction.Cancelled`, `Transaction.PartialCancelled`는 환불 완료 웹훅으로 보고 `cancellationId` 기준으로 환불 완료 처리를 수행합니다.
+- `Transaction.Failed`, `Transaction.CancelPending` 등 현재 처리 대상이 아닌 이벤트는 `IGNORE` 상태로 저장한 뒤 200을 반환합니다.
 - 같은 `webhook-id`가 이미 `PROCESSED` 또는 `IGNORE` 상태면 중복 수신으로 보고 추가 처리를 하지 않습니다.
-- 같은 `webhook-id`의 `Transaction.Paid` 이벤트가 `FAILED` 또는 `RECEIVED` 상태로 남아 있으면 재전송 시 결제 확정을 다시 시도합니다.
+- 같은 `webhook-id`의 처리 대상 이벤트가 `FAILED` 또는 `RECEIVED` 상태로 남아 있으면 재전송 시 처리를 다시 시도합니다.
 - 본문 금액이나 상태는 최종 신뢰하지 않고 PortOne API 조회 결과만 사용합니다.
 - PortOne 웹훅은 재전송될 수 있으므로 항상 멱등하게 처리합니다.
 
@@ -111,6 +112,7 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 | `WEBHOOK_SIGNATURE_INVALID` | 400 | 필수 웹훅 헤더 누락 또는 서명 검증 실패 |
 | `WEBHOOK_PAYLOAD_INVALID` | 400 | 본문 누락, 빈 본문 또는 JSON 파싱 실패 |
 | `WEBHOOK_PAYMENT_ID_MISSING` | 400 | 결제 이벤트인데 `paymentId` 없음 |
+| `WEBHOOK_CANCELLATION_ID_MISSING` | 400 | 환불 완료 이벤트인데 `cancellationId` 없음 |
 | `PAYMENT_NOT_FOUND` | 404 | 내부 결제 레코드 없음 |
 | `PAYMENT_PORTONE_ID_MISMATCH` | 400 | PortOne 결제 조회 결과의 결제 식별자가 내부 결제 식별자와 다름 |
 | `PAYMENT_STATUS_NOT_PAID` | 400 | PortOne 결제 상태가 성공 상태가 아님 |

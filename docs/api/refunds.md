@@ -212,18 +212,18 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 ## Errors
 
 | 코드 | HTTP | 발생 조건 |
-| --- | --- | --- |
-| `UNAUTHORIZED` | 401 | 토큰 누락 또는 인증 실패 |
-| `VALIDATION_FAILED` | 400 | 요청 본문 형식 오류, 환불 금액 계산 검증 실패 |
-| `MISSING_REQUIRED_FIELD` | 400 | `Idempotency-Key` 빈 값, 환불 사유 누락 |
-| `REFUND_ITEM_REQUIRED` | 400 | 환불할 주문 상품 목록 없음 |
-| `INVALID_REFUND_QUANTITY` | 400 | 환불 수량이 1 미만 |
-| `DUPLICATE_REQUEST` | 400 | 부분 환불 요청에서 같은 `orderItemId`가 중복됨 |
-| `ORDER_ACCESS_DENIED` | 403 | 타인의 주문 |
-| `ORDER_ITEM_NOT_FOUND` | 404 | 주문 상품 없음 |
-| `PAYMENT_NOT_FOUND` | 404 | 결제 없음 |
-| `REFUND_NOT_ALLOWED` | 409 | 결제가 환불 가능한 상태가 아님 |
-| `REFUND_QUANTITY_EXCEEDED` | 400 | 남은 환불 가능 수량 초과 |
-| `REFUND_IN_PROGRESS` | 409 | 동일 결제의 환불 처리 진행 중 |
-| `CONFLICT` | 409 | 같은 `Idempotency-Key`지만 요청 내용이 다름 |
-| `PRODUCT_NOT_FOUND` | 404 | 환불 확정 처리 중 상품 없음 |
+| --- |------| --- |
+| `UNAUTHORIZED` | 401  | 토큰 누락 또는 인증 실패 |
+| `VALIDATION_FAILED` | 400  | 요청 본문 형식 오류, 환불 금액 계산 검증 실패 |
+| `MISSING_REQUIRED_FIELD` | 400  | `Idempotency-Key` 빈 값, 환불 사유 누락 |
+| `REFUND_ITEM_REQUIRED` | 400  | 환불할 주문 상품 목록 없음 |
+| `INVALID_REFUND_QUANTITY` | 400  | 환불 수량이 1 미만 |
+| `DUPLICATE_REQUEST` | 409  | 부분 환불 요청에서 같은 `orderItemId`가 중복됨 |
+| `ORDER_ACCESS_DENIED` | 403  | 타인의 주문 |
+| `ORDER_ITEM_NOT_FOUND` | 404  | 주문 상품 없음 |
+| `PAYMENT_NOT_FOUND` | 404  | 결제 없음 |
+| `REFUND_NOT_ALLOWED` | 409  | 결제가 환불 가능한 상태가 아님 |
+| `REFUND_QUANTITY_EXCEEDED` | 400  | 남은 환불 가능 수량 초과 |
+| `REFUND_IN_PROGRESS` | 409  | 동일 결제의 환불 처리 진행 중 |
+| `CONFLICT` | 409  | 같은 `Idempotency-Key`지만 요청 내용이 다름 |
+| `PRODUCT_NOT_FOUND` | 404  | 환불 확정 처리 중 상품 없음 |
