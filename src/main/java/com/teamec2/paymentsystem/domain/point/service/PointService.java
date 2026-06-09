@@ -20,6 +20,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class PointService {
 
+    public static final long SIGNUP_BONUS_POINT_AMOUNT = 1_000L;
+
     private final PointTransactionRepository pointTransactionRepository;
     private final UserRepository userRepository;
 
@@ -57,6 +59,30 @@ public class PointService {
                 payment,
                 PointTransactionType.EARN,
                 rewardPointAmount
+        );
+
+        pointTransactionRepository.save(pointTransaction);
+    }
+
+    /**
+     * 신규 회원가입 축하 포인트를 지급하고 원장을 기록합니다.
+     * 멱등키: SIGNUP_BONUS:{userId}
+     */
+    @Transactional
+    public void grantSignupBonus(User user) {
+        validateSignupBonusRequest(user);
+
+        String idempotencyKey = PointTransaction.signupBonusIdempotencyKey(user);
+
+        if (pointTransactionRepository.existsByIdempotencyKey(idempotencyKey)) {
+            return;
+        }
+
+        user.increasePointBalance(SIGNUP_BONUS_POINT_AMOUNT);
+
+        PointTransaction pointTransaction = PointTransaction.createForSignupBonus(
+                user,
+                SIGNUP_BONUS_POINT_AMOUNT
         );
 
         pointTransactionRepository.save(pointTransaction);
@@ -449,6 +475,12 @@ public class PointService {
 
         if (payment.getRewardPointAmount() < 0) {
             throw new BusinessException(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
+        }
+    }
+
+    private void validateSignupBonusRequest(User user) {
+        if (user == null || user.getId() == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
     }
 

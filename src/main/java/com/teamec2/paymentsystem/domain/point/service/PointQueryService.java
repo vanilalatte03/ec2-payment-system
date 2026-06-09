@@ -85,6 +85,7 @@ public class PointQueryService {
      */
     private static final Set<PointTransactionType> INCREASE_TYPES =
             Set.of(
+                    PointTransactionType.SIGNUP_BONUS,
                     PointTransactionType.EARN,
                     PointTransactionType.USE_RESTORE,
                     PointTransactionType.USE_CANCEL,
