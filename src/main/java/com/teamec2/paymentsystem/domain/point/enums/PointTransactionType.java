@@ -2,6 +2,8 @@ package com.teamec2.paymentsystem.domain.point.enums;
 
 public enum PointTransactionType {
 
+    SIGNUP_BONUS, // 신규 회원가입 축하 포인트
+
     USE_RESERVE, // 결제 PENDING 중 포인트 예약
     USE, // 포인트 사용
     USE_CANCEL, // 주문 CANCELED 혹은 결제 FAILED 로 예약 해제
@@ -43,5 +45,11 @@ public enum PointTransactionType {
                 || this == EARN_RECOVERY_RELEASE;
     }
 
+    /**
+     * 결제나 환불이 아닌 회원 계정 자체에서 발생하는 포인트 거래 유형인지 확인합니다.
+     */
+    public boolean isAccountType() {
+        return this == SIGNUP_BONUS;
+    }
 
 }

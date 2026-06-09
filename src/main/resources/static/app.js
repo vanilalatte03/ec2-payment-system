@@ -150,6 +150,8 @@ const state = {
   productPage: null,
   cart: null,
   pointBalance: 0,
+  pointTransactionPage: null,
+  pointTransactionsLoaded: false,
   currentPage: 0,
   loading: false,
 };
@@ -199,10 +201,19 @@ function cacheElements() {
     "loginPane",
     "signupPane",
     "authAccountPane",
+    "accountTabs",
+    "accountSummaryPane",
+    "pointLedgerPane",
     "authUserName",
     "authUserEmail",
     "authUserId",
     "authPointBalance",
+    "pointTransactionTypeFilter",
+    "pointTransactions",
+    "pointHistoryMeta",
+    "pointPageMeta",
+    "prevPointTransactionsBtn",
+    "nextPointTransactionsBtn",
     "logoutButton",
     "toast",
   ].forEach((id) => {
@@ -223,6 +234,8 @@ function bindEvents() {
   [els.statusFilter, els.sortFilter].forEach((el) => {
     el.addEventListener("change", () => loadProducts(0));
   });
+
+  els.pointTransactionTypeFilter.addEventListener("change", () => loadPointTransactions(0));
 
   els.searchInput.addEventListener("input", () => renderProducts());
   els.prevPageBtn.addEventListener("click", () => loadProducts(state.currentPage - 1));
@@ -251,6 +264,8 @@ async function handleClick(event) {
     if (action === "login") return login();
     if (action === "signup") return signup();
     if (action === "logout") return logout();
+    if (action === "prev-point-transactions") return loadPointTransactions((state.pointTransactionPage?.page || 0) - 1);
+    if (action === "next-point-transactions") return loadPointTransactions((state.pointTransactionPage?.page || 0) + 1);
     if (action === "detail-qty-minus") return adjustDetailQuantity(-1);
     if (action === "detail-qty-plus") return adjustDetailQuantity(1);
     if (action === "add-detail-cart") return addDetailProductToCart();
@@ -277,6 +292,11 @@ async function handleClick(event) {
   const authTab = event.target.closest("[data-auth-tab]");
   if (authTab) {
     return switchAuthTab(authTab.dataset.authTab);
+  }
+
+  const accountTab = event.target.closest("[data-account-tab]");
+  if (accountTab) {
+    return switchAccountTab(accountTab.dataset.accountTab);
   }
 }
 
@@ -711,9 +731,8 @@ async function refreshAccount(showErrors = true) {
     const balance = await api("/api/points/balance");
     state.pointBalance = Number(balance.balance || 0);
     renderAuthAccount(balance.userId);
-    if (els.pointTransactions) {
-      const transactions = await api("/api/points/transactions?page=0&size=8");
-      renderTransactions(transactions.content || []);
+    if (state.pointTransactionsLoaded || isAccountTabActive("ledger")) {
+      await loadPointTransactions(state.pointTransactionPage?.page || 0, false);
     }
     updateCheckoutTotal();
   } catch (error) {
@@ -728,21 +747,102 @@ async function refreshAccount(showErrors = true) {
   }
 }
 
-function renderTransactions(transactions) {
-  if (!els.pointTransactions) return;
+async function loadPointTransactions(page = 0, showErrors = true) {
+  if (!state.token) {
+    renderLoggedOutAccount();
+    return;
+  }
+  if (page < 0) return;
+
+  const params = new URLSearchParams({
+    page: String(page),
+    size: "8",
+  });
+  appendParam(params, "type", els.pointTransactionTypeFilter.value);
+
+  els.pointTransactions.innerHTML = `<div class="empty-state">원장 내역을 불러오는 중입니다.</div>`;
+  updatePointTransactionMeta({ page, totalPages: 1, totalElements: 0, hasNext: false }, true);
+
+  try {
+    const transactionPage = await api(`/api/points/transactions?${params.toString()}`);
+    state.pointTransactionPage = transactionPage;
+    state.pointTransactionsLoaded = true;
+    renderPointTransactions(transactionPage);
+  } catch (error) {
+    els.pointTransactions.innerHTML = `<div class="error-state">${escapeHtml(formatError(error))}</div>`;
+    updatePointTransactionMeta({ page: 0, totalPages: 1, totalElements: 0, hasNext: false }, false);
+    if (showErrors) showToast(formatError(error), "error");
+  }
+}
+
+function renderPointTransactions(transactionPage) {
+  const transactions = transactionPage?.content || [];
+  updatePointTransactionMeta(transactionPage, false);
 
   if (!transactions.length) {
-    els.pointTransactions.innerHTML = `<div class="empty-state">거래 내역이 없습니다.</div>`;
+    els.pointTransactions.innerHTML = `<div class="empty-state">원장 내역이 없습니다.</div>`;
     return;
   }
 
-  els.pointTransactions.innerHTML = transactions.map((tx) => `
-    <div class="transaction-row">
-      <strong>${escapeHtml(pointTypeLabel(tx.type))}</strong>
-      <span>${formatNumber(tx.amount)} P</span>
-      <span>${formatDate(tx.createdAt)}</span>
-    </div>
-  `).join("");
+  els.pointTransactions.innerHTML = transactions.map(renderPointTransaction).join("");
+}
+
+function renderPointTransaction(tx) {
+  const direction = pointAmountDirection(tx.type);
+  const sign = direction === "increase" ? "+" : direction === "decrease" ? "-" : "";
+  const paymentLabel = tx.paymentId ? `결제 #${tx.paymentId}` : pointTransactionSourceLabel(tx.type);
+  const amountClass = direction === "increase" ? "is-increase" : direction === "decrease" ? "is-decrease" : "";
+
+  return `
+    <article class="transaction-row">
+      <div class="transaction-main">
+        <strong>${escapeHtml(pointTypeLabel(tx.type))}</strong>
+        <span>${escapeHtml(formatDate(tx.createdAt))} · ${escapeHtml(paymentLabel)}</span>
+      </div>
+      <strong class="transaction-amount ${amountClass}">${sign}${formatNumber(tx.amount)} P</strong>
+    </article>
+  `;
+}
+
+function pointTransactionSourceLabel(type) {
+  return type === "SIGNUP_BONUS" ? "회원가입" : "결제 정보 없음";
+}
+
+function updatePointTransactionMeta(page, loading) {
+  const totalPages = Math.max(page?.totalPages || 1, 1);
+  const currentPage = Math.min((page?.page || 0) + 1, totalPages);
+  const typeLabel = els.pointTransactionTypeFilter.value
+    ? pointTypeLabel(els.pointTransactionTypeFilter.value)
+    : "전체";
+
+  els.pointHistoryMeta.textContent = loading
+    ? "불러오는 중"
+    : `${typeLabel} ${formatNumber(page?.totalElements || 0)}건`;
+  els.pointPageMeta.textContent = `${currentPage} / ${totalPages}`;
+  els.prevPointTransactionsBtn.disabled = loading || (page?.page || 0) <= 0;
+  els.nextPointTransactionsBtn.disabled = loading || !page?.hasNext;
+}
+
+function switchAccountTab(tab) {
+  const selectedTab = tab === "ledger" ? "ledger" : "summary";
+
+  document.querySelectorAll(".account-tab").forEach((button) => {
+    const active = button.dataset.accountTab === selectedTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+
+  els.accountSummaryPane.classList.toggle("is-active", selectedTab === "summary");
+  els.pointLedgerPane.classList.toggle("is-active", selectedTab === "ledger");
+
+  if (selectedTab === "ledger" && state.token && !state.pointTransactionsLoaded) {
+    loadPointTransactions(0, false);
+  }
+}
+
+function isAccountTabActive(tab) {
+  if (tab === "ledger") return els.pointLedgerPane.classList.contains("is-active");
+  return els.accountSummaryPane.classList.contains("is-active");
 }
 
 function updateCheckoutTotal() {
@@ -797,9 +897,9 @@ function renderAuthAccount(fallbackUserId) {
 
 function renderLoggedOutAccount() {
   state.pointBalance = 0;
-  if (els.pointTransactions) {
-    els.pointTransactions.innerHTML = `<div class="empty-state">로그인 후 거래 내역을 확인할 수 있습니다.</div>`;
-  }
+  resetPointTransactionState();
+  els.pointTransactions.innerHTML = `<div class="empty-state">로그인 후 원장 내역을 확인할 수 있습니다.</div>`;
+  updatePointTransactionMeta({ page: 0, totalPages: 1, totalElements: 0, hasNext: false }, false);
   els.authUserName.textContent = "비로그인";
   els.authUserEmail.textContent = "-";
   els.authUserId.textContent = "-";
@@ -812,8 +912,17 @@ function clearSession() {
   state.user = null;
   state.cart = null;
   state.pointBalance = 0;
+  resetPointTransactionState();
   localStorage.removeItem(STORAGE.token);
   localStorage.removeItem(STORAGE.user);
+}
+
+function resetPointTransactionState() {
+  state.pointTransactionPage = null;
+  state.pointTransactionsLoaded = false;
+  if (els.pointTransactionTypeFilter) {
+    els.pointTransactionTypeFilter.value = "";
+  }
 }
 
 function requireLogin() {
@@ -981,12 +1090,26 @@ function formatDate(value) {
 
 function pointTypeLabel(type) {
   return {
+    SIGNUP_BONUS: "가입 축하",
+    USE_RESERVE: "사용 예약",
     USE: "사용",
     EARN: "적립",
     USE_CANCEL: "사용 취소",
     USE_RESTORE: "사용 복구",
     EARN_CANCEL: "적립 취소",
+    EARN_RECOVERY_RESERVE: "적립 회수 예약",
+    EARN_RECOVERY_RELEASE: "적립 회수 해제",
   }[type] || type;
+}
+
+function pointAmountDirection(type) {
+  if (["SIGNUP_BONUS", "EARN", "USE_CANCEL", "USE_RESTORE", "EARN_RECOVERY_RELEASE"].includes(type)) {
+    return "increase";
+  }
+  if (["USE", "USE_RESERVE", "EARN_CANCEL", "EARN_RECOVERY_RESERVE"].includes(type)) {
+    return "decrease";
+  }
+  return "neutral";
 }
 
 function formatError(error) {

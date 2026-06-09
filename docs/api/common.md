@@ -128,15 +128,15 @@ Authorization: Bearer {accessToken}
 
 ### PointTransactionType
 
-| 값              | 설명 |
-|----------------| --- |
+| 값 | 설명 |
+| --- | --- |
 | `SIGNUP_BONUS` | 회원가입 시 가입 축하 포인트 지급 |
-| `USE_RESERVE`  | 주문 생성 시 사용 포인트 예약 |
-| `USE`          | 결제 확정 시 예약 포인트 최종 사용 처리 |
-| `USE_CANCEL`   | 결제 실패 또는 주문 취소 시 예약 포인트 취소/복구 |
-| `EARN`         | 결제 완료 후 PG 실결제 금액 기준 포인트 적립 |
-| `USE_RESTORE`  | 환불에 따른 사용 포인트 복구 |
-| `EARN_CANCEL`  | 환불에 따른 적립 포인트 회수 |
+| `USE_RESERVE` | 주문 생성 시 사용 포인트 예약 |
+| `USE` | 결제 확정 시 예약 포인트 최종 사용 처리 |
+| `USE_CANCEL` | 결제 실패 또는 주문 취소 시 예약 포인트 취소/복구 |
+| `EARN` | 결제 완료 후 PG 실결제 금액 기준 포인트 적립 |
+| `USE_RESTORE` | 환불에 따른 사용 포인트 복구 |
+| `EARN_CANCEL` | 환불에 따른 적립 포인트 회수 |
 | `EARN_RECOVERY_RESERVE` | 환불 요청 시 적립 포인트 회수 예약 |
 | `EARN_RECOVERY_RELEASE` | PG 환불 실패 시 적립 포인트 회수 예약 해제 |
 
