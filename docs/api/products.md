@@ -5,7 +5,9 @@
 생성, 수정, 삭제는 관리자 기능으로 보고 이번 범위에서 제외합니다.
 
 성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
+
 아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
 HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
 
 ## 상품 목록 조회
@@ -22,14 +24,26 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 | 이름 | 타입     | 필수 | 기본값 | 설명                           |
 | --- |--------| --- | --- |------------------------------|
 | `category` | String | N | 없음      | 카테고리                         |
-| `minPrice` | int    | N | 없음      | 최소 판매가                       |
-| `maxPrice` | int    | N | 없음      | 최대 판매가                       |
+| `minPrice` | Integer | N | 없음      | 최소 판매가                       |
+| `maxPrice` | Integer | N | 없음      | 최대 판매가                       |
 | `status` | String | N | 없음      | `ON_SALE`, `SOLD_OUT`, `DISCONTINUED` |
 | `sort` | String | N | `LATEST` | `LATEST`, `PRICE_ASC`, `PRICE_DESC` |
 | `page` | int    | N | `0`     | 페이지 번호                       |
 | `size` | int    | N | `10`    | 페이지 크기. 1 이상 100 이하          |
 
 ### Response Data
+
+#### ProductListResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `productId` | `Long` | 상품 ID |
+| `name` | `String` | 상품명 |
+| `price` | `Integer` | 판매가 |
+| `stock` | `Integer` | 조회 시점 재고 |
+| `category` | `String` | 카테고리 |
+| `status` | `String` | 조회 시점 판매 상태 |
+| `createdAt` | `LocalDateTime` | 상품 생성 시각 |
 
 ```json
 {
@@ -56,7 +70,7 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 
 | 코드 | HTTP | 발생 조건                              |
 | --- | --- |------------------------------------|
-| `VALIDATION_FAILED` | 400 | 가격 범위가 음수이거나 `minPrice > maxPrice` |
+| `VALIDATION_FAILED` | 400 | 쿼리 파라미터 타입 오류, 가격 범위가 음수이거나 `minPrice > maxPrice` |
 | `INVALID_ENUM_VALUE` | 400 | 잘못된 `category`, `status`, `sort`   |
 | `INVALID_PAGINATION` | 400 | 페이지 번호 또는 크기 오류                    |
 
@@ -76,6 +90,20 @@ HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `st
 | `productId` | Long | 상품 ID |
 
 ### Response Data
+
+#### ProductDetailResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `productId` | `Long` | 상품 ID |
+| `name` | `String` | 상품명 |
+| `price` | `Integer` | 판매가 |
+| `stock` | `Integer` | 조회 시점 재고 |
+| `description` | `String` | 상품 설명 |
+| `category` | `String` | 카테고리 |
+| `status` | `String` | 조회 시점 판매 상태 |
+| `createdAt` | `LocalDateTime` | 상품 생성 시각 |
+| `updatedAt` | `LocalDateTime` | 상품 수정 시각 |
 
 ```json
 {

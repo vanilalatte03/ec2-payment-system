@@ -9,6 +9,12 @@
 적립 포인트 회수는 PG 환불 성공 전 `EARN_RECOVERY_RESERVE`로 먼저 예약 차감합니다. PG 환불이 최종 실패하면 `EARN_RECOVERY_RELEASE`로 예약 차감분을 돌려줍니다.
 또한 결제 시 포인트 사용 금액은 현재 보유 포인트와 주문 금액을 초과할 수 없으며, 최소 사용 단위는 1원입니다.
 
+성공/실패 응답은 모두 [공통 응답 wrapper](./common.md#공통-응답)를 사용합니다.
+
+아래 `Response Data` 예시는 wrapper의 `data` 안에 들어가는 값만 보여줍니다.
+
+HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
+
 ## 포인트 원장 타입
 
 | 타입 | 발생 시점 | 잔액 영향 | 멱등 키 기준 |
@@ -19,6 +25,7 @@
 | `USE_CANCEL` | 결제 실패 또는 주문 취소 시 예약 포인트 복구 | 증가 | `PAYMENT:{paymentId}:USE_CANCEL` |
 | `EARN` | 결제 완료 후 PG 실결제 금액의 1% 적립 | 증가 | `PAYMENT:{paymentId}:EARN` |
 | `USE_RESTORE` | 환불 시 결제에 사용한 포인트 복구 | 증가 | `REFUND:{refundId}:USE_RESTORE` |
+| `EARN_CANCEL` | 환불 시 결제 완료 때 적립한 포인트 회수 | 감소 | `REFUND:{refundId}:EARN_CANCEL` |
 | `EARN_RECOVERY_RESERVE` | 환불 요청 시 적립 포인트 회수 예약 | 감소 | `REFUND:{refundId}:EARN_RECOVERY_RESERVE` |
 | `EARN_RECOVERY_RELEASE` | PG 환불 실패 시 적립 포인트 회수 예약 해제 | 증가 | `REFUND:{refundId}:EARN_RECOVERY_RELEASE` |
 
@@ -75,14 +82,14 @@
       "paymentId": 300,
       "type": "EARN",
       "amount": 730,
-      "createdAt": "2026-05-29T18:35:00+09:00"
+      "createdAt": "2026-05-29T18:35:00"
     },
     {
       "pointTransactionId": 899,
       "paymentId": 300,
       "type": "USE",
       "amount": 5000,
-      "createdAt": "2026-05-29T18:35:00+09:00"
+      "createdAt": "2026-05-29T18:35:00"
     }
   ],
   "page": 0,

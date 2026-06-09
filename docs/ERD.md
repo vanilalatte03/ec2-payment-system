@@ -228,8 +228,8 @@ erDiagram
 | 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
 | --- | --- | --- | --- | --- |
 | 장바구니 상품 ID | id | BIGINT | NOT NULL | PK |
-| 상품 ID | product_id | BIGINT | NOT NULL | FK: products.id, UNIQUE(cart_id, product_id) |
 | 장바구니 ID | cart_id | BIGINT | NOT NULL | FK: carts.id, UNIQUE(cart_id, product_id) |
+| 상품 ID | product_id | BIGINT | NOT NULL | FK: products.id, UNIQUE(cart_id, product_id) |
 | 수량 | quantity | INT | NOT NULL |  |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NULL |  |
@@ -312,42 +312,42 @@ erDiagram
 제약 조건:
 - `UNIQUE (idempotency_key)`
 
-| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
-| --- | --- | --- | --- | --- |
+| 논리명    | 컬럼명 | 타입 | NULL | 제약/비고 |
+|--------| --- | --- | --- | --- |
 | 포인트거래ID | id         | BIGINT | NOT NULL | PK                                  |
-| 결제ID    | payment_id | BIGINT | NULL | FK: payments.id. `SIGNUP_BONUS`는 결제 없이 생성 |
-| 유저 ID   | user_id    | BIGINT | NOT NULL | FK: users.id                        |
-| 환불ID | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`, `EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`인 경우 저장 |
+| 유저 ID  | user_id    | BIGINT | NOT NULL | FK: users.id                        |
+| 결제ID   | payment_id | BIGINT | NULL | FK: payments.id. `SIGNUP_BONUS`는 결제 없이 생성 |
+| 환불ID   | refund_id | BIGINT | NULL | FK: refunds.id. `USE_RESTORE`, `EARN_CANCEL`, `EARN_RECOVERY_RESERVE`, `EARN_RECOVERY_RELEASE`인 경우 저장 |
 | 거래타입    | type       | VARCHAR | NOT NULL | SIGNUP_BONUS, USE_RESERVE, USE, USE_CANCEL, EARN, USE_RESTORE, EARN_CANCEL, EARN_RECOVERY_RESERVE, EARN_RECOVERY_RELEASE |
 | 멱등 키 | idempotency_key | VARCHAR | NOT NULL | UNIQUE. 가입 보너스는 `SIGNUP_BONUS:{userId}`, 결제성 거래는 `PAYMENT:{paymentId}:{type}`, 환불성 거래는 `REFUND:{refundId}:{type}` |
-| 거래금액    | amount     | BIGINT | NOT NULL | `EARN_CANCEL`은 멱등 기록을 위해 0 허용, 그 외 타입은 1 이상 |
-| 생성일시    | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
+| 거래금액   | amount     | BIGINT | NOT NULL | `EARN_CANCEL`은 멱등 기록을 위해 0 허용, 그 외 타입은 1 이상 |
+| 생성일시   | created_at | DATETIME | NOT NULL | 포인트 거래 발생 시각                        |
 
 ### refunds
 
-| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
-| --- | --- | --- | --- | --- |
-| 환불ID | id | BIGINT | NOT NULL | PK                            |
-| 멱등 키 | idempotency_key | VARCHAR(100) | NOT NULL | 같은 결제 안에서 중복 환불 생성을 막기 위해 `UNIQUE(payment_id, idempotency_key)` 적용 |
-| 요청 해시 | request_hash | VARCHAR(64) | NOT NULL | 같은 `Idempotency-Key` 재요청 시 요청 내용이 같은지 비교하기 위한 SHA-256 해시 |
-| 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | 환불 생성 시점의 `payment.portone_payment_id` 스냅샷 |
-| 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id                 |
-| 결제ID | payment_id | BIGINT | NOT NULL | FK: payments.id               |
-| 환불사유 | reason | VARCHAR(255) | NOT NULL |                               |
-| 실제 최종 환불 금액 | refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 후 고객에게 실제 반환되는 금액. `point_refund_amount + pg_refund_amount` |
-| 실제 포인트 환불 금액 | point_refund_amount | BIGINT | NOT NULL | 고객에게 실제 복구되는 사용 포인트 금액 |
-| 실제 PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL | PG사를 통해 실제 환불되는 금액 |
-| 회수 전 포인트 환불 예정액 | gross_point_refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 전 원래 반환 예정이던 사용 포인트 금액 |
-| 회수 전 PG 환불 예정액 | gross_pg_refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 전 원래 PG로 환불하려던 금액 |
-| 적립 포인트 회수 대상액 | earned_point_recovery_amount | BIGINT | NOT NULL | 이번 환불에서 회수해야 하는 적립 포인트 총액 |
-| 사용 포인트 회수액 | recovered_from_used_point | BIGINT | NOT NULL | 반환 예정 사용 포인트에서 회수한 적립 포인트 금액 |
-| 보유 포인트 회수액 | recovered_from_balance | BIGINT | NOT NULL | 고객의 현재 보유 포인트에서 차감한 적립 포인트 금액 |
-| PG 환불 차감액 | deducted_from_pg_refund | BIGINT | NOT NULL | 보유 포인트로 회수하지 못해 PG 환불 금액에서 차감한 금액 |
-| 환불 상태 | status | VARCHAR(30) | NOT NULL | PROCESSING, COMPLETED, FAILED, PG_RESULT_UNKNOWN |
-| 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각                 |
-| 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각              |
-| 실패 사유 | failed_reason | VARCHAR(500) | NULL | 실패 확정 시 저장 |
-| PG 결과 미확정 사유 | pg_result_unknown_reason | VARCHAR(500) | NULL | 타임아웃 등으로 PG 취소 성공 여부를 모를 때 저장 |
+| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고                                                                   |
+| --- | --- | --- | --- |-------------------------------------------------------------------------|
+| 환불ID | id | BIGINT | NOT NULL | PK                                                                      |
+| 멱등 키 | idempotency_key | VARCHAR(100) | NOT NULL | 같은 결제 안에서 중복 환불 생성을 막기 위해 `UNIQUE(payment_id, idempotency_key)` 적용      |
+| 요청 해시 | request_hash | VARCHAR(64) | NOT NULL | 같은 `Idempotency-Key` 재요청 시 요청 내용이 같은지 비교하기 위한 SHA-256 해시                |
+| 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | 환불 생성 시점의 `payment.portone_payment_id` 스냅샷                              |
+| 주문ID | order_id | BIGINT | NOT NULL | FK: orders.id                                                           |
+| 결제ID | payment_id | BIGINT | NOT NULL | FK: payments.id                                                         |
+| 환불사유 | reason | VARCHAR(255) | NOT NULL |                                                                         |
+| 실제 최종 환불 금액 | refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 후 고객에게 실제 반환되는 금액. `point_refund_amount + pg_refund_amount`   |
+| 실제 포인트 환불 금액 | point_refund_amount | BIGINT | NOT NULL | 고객에게 실제 복구되는 사용 포인트 금액                                                  |
+| 실제 PG 환불 금액 | pg_refund_amount | BIGINT | NOT NULL | PG사를 통해 실제 환불되는 금액                                                      |
+| 회수 전 포인트 환불 예정액 | gross_point_refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 전 원래 반환 예정인 사용 포인트 금액                                         |
+| 회수 전 PG 환불 예정액 | gross_pg_refund_amount | BIGINT | NOT NULL | 적립 포인트 회수 전 원래 PG로 환불하려던 금액                                             |
+| 적립 포인트 회수 대상액 | earned_point_recovery_amount | BIGINT | NOT NULL | 이번 환불에서 회수해야 하는 적립 포인트 총액                                               |
+| 사용 포인트 회수액 | recovered_from_used_point | BIGINT | NOT NULL | 반환 예정 사용 포인트에서 회수한 적립 포인트 금액                                            |
+| 보유 포인트 회수액 | recovered_from_balance | BIGINT | NOT NULL | 고객의 현재 보유 포인트에서 차감한 적립 포인트 금액                                           |
+| PG 환불 차감액 | deducted_from_pg_refund | BIGINT | NOT NULL | 보유 포인트로 회수하지 못해 PG 환불 금액에서 차감한 금액                                       |
+| 환불 상태 | status | VARCHAR(30) | NOT NULL | PROCESSING, COMPLETED, FAILED, PG_RESULT_UNKNOWN                        |
+| 생성일시 | created_at | DATETIME | NOT NULL | 환불 요청이 생성된 시각                                                           |
+| 환불완료일시 | refunded_at | DATETIME | NULL | 실제 PG 환불이 완료된 시각                                                        |
+| 실패 사유 | failed_reason | VARCHAR(500) | NULL | 실패 확정 시 저장                                                              |
+| PG 결과 미확정 사유 | pg_result_unknown_reason | VARCHAR(500) | NULL | 타임아웃 등으로 PG 취소 성공 여부를 모를 때 저장                                           |
 
 ### webhook_events
 제약 조건:
