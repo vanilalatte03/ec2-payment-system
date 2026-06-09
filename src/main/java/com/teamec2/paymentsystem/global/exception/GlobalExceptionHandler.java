@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -80,9 +81,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorCode.VALIDATION_FAILED, errors));
     }
 
-    // 필수 쿼리 파라미터가 누락됐을 때 사용하는 에러
-    @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMissingServletRequestParameterException() {
+    // 필수 쿼리 파라미터나 헤더가 누락됐을 때 사용하는 에러
+    @ExceptionHandler({
+            MissingServletRequestParameterException.class,
+            MissingRequestHeaderException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleMissingRequiredRequestValueException() {
         return ResponseEntity
                 .status(ErrorCode.MISSING_REQUIRED_FIELD.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.MISSING_REQUIRED_FIELD));
