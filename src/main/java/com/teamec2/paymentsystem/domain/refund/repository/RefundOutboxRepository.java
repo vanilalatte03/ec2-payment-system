@@ -2,6 +2,7 @@ package com.teamec2.paymentsystem.domain.refund.repository;
 
 import com.teamec2.paymentsystem.domain.refund.entity.RefundOutbox;
 import com.teamec2.paymentsystem.domain.refund.enums.RefundOutboxStatus;
+import com.teamec2.paymentsystem.domain.refund.enums.RefundStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -59,8 +60,25 @@ public interface RefundOutboxRepository extends JpaRepository<RefundOutbox, Long
     Optional<RefundOutbox> findByIdForUpdate(@Param("id") Long id);
 
     /**
+     * PortOne cancellationId 기준으로 RefundOutbox를 조회합니다.
+     * 같은 결제에서 여러 번 부분 환불이 발생할 수 있으므로,
+     * 웹훅 완료 처리는 portonePaymentId가 아니라 cancellationId 기준으로 매칭해야 합니다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ro
+            from RefundOutbox ro
+            join fetch ro.refund r
+            join fetch r.payment p
+            join fetch r.order o
+            where r.portoneCancellationId = :portoneCancellationId
+            """)
+    Optional<RefundOutbox> findByRefundPortoneCancellationIdForUpdate(
+            @Param("portoneCancellationId") String portoneCancellationId
+    );
+
+    /**
      * PROCESSING 고착 작업 상태를 처리
-     *
      * PROCESSING 상태로 오래 남아 있는 Outbox ID 목록을 조회합니다.
      * 서버가 PROCESSING으로 변경한 뒤 PG 호출 직전/직후에 죽으면 해당 작업이 영구히 PROCESSING에 갇힐 수 있기 때문에 필요한 작업입니다.
      */
@@ -85,6 +103,80 @@ public interface RefundOutboxRepository extends JpaRepository<RefundOutbox, Long
                 RefundOutboxStatus.PROCESSING,
                 threshold,
                 pageable
+        );
+    }
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ro
+            from RefundOutbox ro
+            join fetch ro.refund r
+            join fetch r.payment p
+            join fetch r.order o
+            where r.portonePaymentId = :portonePaymentId
+              and r.portoneCancellationId = :portoneCancellationId
+              and r.status in :refundStatuses
+              and ro.status in :outboxStatuses
+            """)
+    Optional<RefundOutbox> findByPortoneCancellationIdForUpdate(
+            @Param("portonePaymentId") String portonePaymentId,
+            @Param("portoneCancellationId") String portoneCancellationId,
+            @Param("refundStatuses") List<RefundStatus> refundStatuses,
+            @Param("outboxStatuses") List<RefundOutboxStatus> outboxStatuses
+    );
+
+    default Optional<RefundOutbox> findProcessableByPortoneCancellationIdForUpdate(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        return findByPortoneCancellationIdForUpdate(
+                portonePaymentId,
+                portoneCancellationId,
+                List.of(RefundStatus.PROCESSING, RefundStatus.PG_RESULT_UNKNOWN),
+                List.of(RefundOutboxStatus.PENDING, RefundOutboxStatus.PROCESSING)
+        );
+    }
+
+    default Optional<RefundOutbox> findRecoverableFailedByPortoneCancellationIdForUpdate(
+            String portonePaymentId,
+            String portoneCancellationId
+    ) {
+        return findByPortoneCancellationIdForUpdate(
+                portonePaymentId,
+                portoneCancellationId,
+                List.of(RefundStatus.PG_RESULT_UNKNOWN),
+                List.of(RefundOutboxStatus.FAILED)
+        );
+    }
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ro
+            from RefundOutbox ro
+            join fetch ro.refund r
+            join fetch r.payment p
+            join fetch r.order o
+            where r.portonePaymentId = :portonePaymentId
+              and r.portoneCancellationId is null
+              and r.status in :refundStatuses
+              and ro.status in :outboxStatuses
+            order by ro.id
+            """)
+    List<RefundOutbox> findUnidentifiedByPortonePaymentIdForUpdate(
+            @Param("portonePaymentId") String portonePaymentId,
+            @Param("refundStatuses") List<RefundStatus> refundStatuses,
+            @Param("outboxStatuses") List<RefundOutboxStatus> outboxStatuses
+    );
+
+    default List<RefundOutbox> findUnidentifiedWebhookCandidatesForUpdate(String portonePaymentId) {
+        return findUnidentifiedByPortonePaymentIdForUpdate(
+                portonePaymentId,
+                List.of(RefundStatus.PROCESSING, RefundStatus.PG_RESULT_UNKNOWN),
+                List.of(
+                        RefundOutboxStatus.PENDING,
+                        RefundOutboxStatus.PROCESSING,
+                        RefundOutboxStatus.FAILED
+                )
         );
     }
 }

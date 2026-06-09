@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="icon" href="data:," />
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Libre+Caslon+Text:wght@400;700&family=Material+Symbols+Outlined:wght@300;400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260606-detail-status-cleanup" />
-  <script defer src="app.js?v=20260606-cart-price-only"></script>
+  <link rel="stylesheet" href="styles.css?v=20260608-refund-pages" />
+  <script defer src="app.js?v=20260608-refund-pages"></script>
 </head>
 <body>
 <header class="site-header">
@@ -31,6 +31,9 @@
       <button class="icon-button" type="button" data-action="focus-search" aria-label="검색">
         <span class="material-symbols-outlined">search</span>
       </button>
+      <a class="icon-button" href="/orders.html" aria-label="주문 내역">
+        <span class="material-symbols-outlined">receipt_long</span>
+      </a>
       <button class="icon-button" type="button" data-action="open-auth" aria-label="계정">
         <span class="material-symbols-outlined">person</span>
       </button>
@@ -90,11 +93,6 @@
     </div>
   </section>
 
-  <section class="content-band account-band" id="account" aria-label="포인트 거래 내역">
-    <div class="account-layout">
-      <div class="transaction-list" id="pointTransactions"></div>
-    </div>
-  </section>
 </main>
 
 <aside class="drawer" id="productDrawer" aria-hidden="true">

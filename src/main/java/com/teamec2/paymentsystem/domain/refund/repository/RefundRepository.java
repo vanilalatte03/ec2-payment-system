@@ -16,6 +16,11 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
      */
     Optional<Refund> findByPayment_IdAndIdempotencyKey(Long paymentId, String idempotencyKey);
 
+    Optional<Refund> findByPortonePaymentIdAndPortoneCancellationId(
+            String portonePaymentId,
+            String portoneCancellationId
+    );
+
     /**
      * 특정 결제에 특정 상태의 환불이 존재하는지 확인합니다.
      *

@@ -8,6 +8,30 @@
 
 HTTP 상태 코드는 엔드포인트별 값을 따르지만, 응답 body의 `status`는 공통 wrapper 규칙에 따라 `200`으로 고정됩니다.
 
+## PortOne 브라우저 설정 조회
+
+결제창 페이지가 PortOne 브라우저 SDK를 호출하기 전에 필요한 공개 식별자를 조회합니다.
+
+- Method: `GET`
+- Path: `/api/payments/portone-config`
+- 인증: 불필요
+- HTTP Status: `200 OK`
+
+### Response Data
+
+```json
+{
+  "storeId": "store-xxxxxxxx",
+  "channelKey": "channel-key-xxxxxxxx"
+}
+```
+
+### 처리 규칙
+
+- `storeId`와 `channelKey`는 서버 환경변수의 PortOne 설정에서 내려줍니다.
+- 브라우저 SDK 호출에 필요한 공개 식별자만 응답합니다.
+- 서버 인증에 사용하는 `apiSecret`과 웹훅 검증에 사용하는 `webhookSecret`은 응답하지 않습니다.
+
 ## 결제 확정
 
 PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요청합니다. 포인트 전액 결제(`pgAmount = 0`)도 이 API를 호출하되 PortOne 조회는 생략합니다.

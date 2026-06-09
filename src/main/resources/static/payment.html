@@ -6,12 +6,6 @@
   <title>PortOne 결제창 : EC2샵</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.portone.io/v2/browser-sdk.js"></script>
-  <script>
-    const CONFIG = {
-      storeId: "여기에-스토어-키",
-      channelKey: "channel-key-여기에-채널-키",
-    };
-  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -442,8 +436,43 @@
 <script>
   const paymentParams = new URLSearchParams(window.location.search);
   const shopOrderId = paymentParams.get("orderId");
+  let portoneConfigPromise = null;
 
   document.addEventListener("DOMContentLoaded", hydratePaymentForm);
+
+  function loadPortoneConfig() {
+    if (!portoneConfigPromise) {
+      portoneConfigPromise = fetch("/api/payments/portone-config", {
+        headers: { "Accept": "application/json" },
+        cache: "no-store",
+      })
+        .then(async response => {
+          const payload = await response.json().catch(() => null);
+
+          if (!response.ok || !payload || payload.code) {
+            throw {
+              code: payload && payload.code ? payload.code : "PORTONE_CONFIG_LOAD_FAILED",
+              message: payload && payload.message ? payload.message : "PortOne 설정 조회에 실패했습니다.",
+            };
+          }
+
+          if (!payload.data || !payload.data.storeId || !payload.data.channelKey) {
+            throw {
+              code: "PORTONE_CONFIG_INVALID",
+              message: "PortOne storeId 또는 channelKey 설정이 비어 있습니다.",
+            };
+          }
+
+          return payload.data;
+        })
+        .catch(error => {
+          portoneConfigPromise = null;
+          throw error;
+        });
+    }
+
+    return portoneConfigPromise;
+  }
 
   function hydratePaymentForm() {
     const paymentId = paymentParams.get("paymentId") || paymentParams.get("portonePaymentId");
@@ -493,9 +522,10 @@
     hideResult();
 
     try {
+      const portoneConfig = await loadPortoneConfig();
       const response = await PortOne.requestPayment({
-        storeId:     CONFIG.storeId,
-        channelKey:  CONFIG.channelKey,
+        storeId:     portoneConfig.storeId,
+        channelKey:  portoneConfig.channelKey,
         paymentId:   portonePaymentId,   // PortOne SDK 파라미터 이름은 paymentId
         orderName,
         totalAmount: amount,
@@ -571,7 +601,8 @@
       hint.innerHTML =
         "<strong>서버 확정 완료</strong> : 주문 " + payload.data.orderNumber +
         " / 결제 상태 " + payload.data.paymentStatus +
-        " / 적립 포인트 " + payload.data.rewardPointAmount + "P";
+        " / 적립 포인트 " + payload.data.rewardPointAmount + "P" +
+        "<br><a class=\"copy-btn\" href=\"/orders.html\" style=\"display:inline-block;text-decoration:none;margin-top:8px\">주문 내역 보기</a>";
     } catch (error) {
       const code = error && error.code ? error.code + ": " : "";
       const message = error && error.message ? error.message : "서버 결제 확정에 실패했습니다.";

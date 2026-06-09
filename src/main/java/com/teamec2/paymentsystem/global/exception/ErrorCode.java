@@ -96,7 +96,8 @@ public enum ErrorCode {
     // Webhook
     WEBHOOK_SIGNATURE_INVALID(HttpStatus.BAD_REQUEST, "웹훅 서명 검증에 실패했습니다."),
     WEBHOOK_PAYLOAD_INVALID(HttpStatus.BAD_REQUEST, "웹훅 본문 파싱에 실패했습니다."),
-    WEBHOOK_PAYMENT_ID_MISSING(HttpStatus.BAD_REQUEST, "웹훅에서 paymentId를 추출하지 못했습니다.");
+    WEBHOOK_PAYMENT_ID_MISSING(HttpStatus.BAD_REQUEST, "웹훅에서 paymentId를 추출하지 못했습니다."),
+    WEBHOOK_CANCELLATION_ID_MISSING(HttpStatus.BAD_REQUEST, "웹훅에서 cancellationId를 추출하지 못했습니다.");
 
     private final HttpStatus httpStatus;
     private final String message;
