@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
 import java.util.List;
@@ -34,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 class PointServiceTest {
@@ -387,6 +390,116 @@ class PointServiceTest {
     }
 
     @Test
+    void 포인트적립_적립금액이0원이면_잔액과원장을변경하지않는다() {
+        // given
+        User user = 회원_저장(100L);
+        Order order = 주문_저장(user, 1_000L, 1_000L);
+        Payment payment = 결제_저장(order, 1_000L, 1_000L, 0L);
+
+        // when
+        pointService.earnPoints(payment);
+
+        // then
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(100L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 포인트적립_요청값이없거나금액이음수이면_예외가발생한다() {
+        // given
+        Payment rewardNullPayment = mock(Payment.class);
+        Payment rewardNegativePayment = mock(Payment.class);
+
+        when(rewardNullPayment.getId()).thenReturn(1L);
+        when(rewardNullPayment.getRewardPointAmount()).thenReturn(null);
+        when(rewardNegativePayment.getId()).thenReturn(2L);
+        when(rewardNegativePayment.getRewardPointAmount()).thenReturn(-1L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.earnPoints(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> pointService.earnPoints(rewardNullPayment))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> pointService.earnPoints(rewardNegativePayment))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
+    }
+
+    @Test
+    void 포인트적립_결제회원이없으면_USER_NOT_FOUND가발생한다() {
+        // given
+        User unsavedUser = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
+        ReflectionTestUtils.setField(unsavedUser, "id", 999_999L);
+        Order order = Order.create(unsavedUser, uniqueOrderNumber(), 1_000L, 200L);
+        Payment payment = Payment.createPending(order, 1_000L, 200L, 800L, 8L);
+        ReflectionTestUtils.setField(payment, "id", 1L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.earnPoints(payment))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 회원가입보너스_정상요청이면_잔액을증가하고_SIGNUP_BONUS원장을생성한다() {
+        // given
+        User user = 회원_저장(0L);
+
+        // when
+        pointService.grantSignupBonus(user);
+
+        // then
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+
+        assertThat(user.getPointBalance()).isEqualTo(PointService.SIGNUP_BONUS_POINT_AMOUNT);
+        assertThat(pointTransactions).hasSize(1);
+        assertThat(pointTransactions.get(0).getType()).isEqualTo(PointTransactionType.SIGNUP_BONUS);
+        assertThat(pointTransactions.get(0).getAmount()).isEqualTo(PointService.SIGNUP_BONUS_POINT_AMOUNT);
+        assertThat(pointTransactions.get(0).getIdempotencyKey())
+                .isEqualTo("SIGNUP_BONUS:%d".formatted(user.getId()));
+    }
+
+    @Test
+    void 회원가입보너스_같은회원에게두번지급해도_한번만적립한다() {
+        // given
+        User user = 회원_저장(0L);
+
+        // when
+        pointService.grantSignupBonus(user);
+        pointService.grantSignupBonus(user);
+
+        // then
+        assertThat(user.getPointBalance()).isEqualTo(PointService.SIGNUP_BONUS_POINT_AMOUNT);
+        assertThat(pointTransactionRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 회원가입보너스_회원이없거나ID가없으면_MISSING_REQUIRED_FIELD가발생한다() {
+        // given
+        User unsavedUser = User.create(uniqueEmail(), "Password123!", "홍길동", "010-1234-5678");
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.grantSignupBonus(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> pointService.grantSignupBonus(unsavedUser))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+    }
+
+    @Test
     void 예약포인트취소_예약원장이있으면_잔액을복구하고_USE_CANCEL원장을생성한다() {
         // given
         User user = 회원_저장(1000L);
@@ -415,6 +528,70 @@ class PointServiceTest {
     }
 
     @Test
+    void 예약포인트취소_같은결제를두번취소해도_한번만복구한다() {
+        // given
+        User user = 회원_저장(1_000L);
+        Order order = 주문_저장(user, 1_000L, 200L);
+        Payment payment = 결제_저장(order, 1_000L, 200L, 800L);
+        pointService.reserveUsedPoints(payment);
+
+        // when
+        pointService.cancelReservedPoints(payment);
+        pointService.cancelReservedPoints(payment);
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(1_000L);
+        assertThat(pointTransactionRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void 예약포인트취소_예약원장이없으면_POINT_ERROR_EXCEPTION이발생한다() {
+        // given
+        User user = 회원_저장(1_000L);
+        Order order = 주문_저장(user, 1_000L, 200L);
+        Payment payment = 결제_저장(order, 1_000L, 200L, 800L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.cancelReservedPoints(payment))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.POINT_ERROR_EXCEPTION);
+
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(1_000L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 포인트예약_요청값이없거나금액이음수이면_예외가발생한다() {
+        // given
+        Payment usedPointNullPayment = mock(Payment.class);
+        Payment usedPointNegativePayment = mock(Payment.class);
+
+        when(usedPointNullPayment.getId()).thenReturn(1L);
+        when(usedPointNullPayment.getUsedPointAmount()).thenReturn(null);
+        when(usedPointNegativePayment.getId()).thenReturn(2L);
+        when(usedPointNegativePayment.getUsedPointAmount()).thenReturn(-1L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.reserveUsedPoints(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> pointService.reserveUsedPoints(usedPointNullPayment))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> pointService.reserveUsedPoints(usedPointNegativePayment))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
+    }
+
+    @Test
     void 사용포인트복구_환불요청이면_잔액을증가하고_USE_RESTORE원장을생성한다() {
         // given
         User user = 회원_저장(0L);
@@ -435,6 +612,75 @@ class PointServiceTest {
         assertThat(pointTransactions.get(0).getAmount()).isEqualTo(200L);
         assertThat(pointTransactions.get(0).getIdempotencyKey())
                 .isEqualTo("REFUND:%d:USE_RESTORE".formatted(refund.getId()));
+    }
+
+    @Test
+    void 사용포인트복구_복구금액이0원이면_잔액과원장을변경하지않는다() {
+        // given
+        User user = 회원_저장(0L);
+        Order order = 주문_저장(user, 1_000L, 200L);
+        Payment payment = 결제_저장(order, 1_000L, 200L, 800L);
+        Refund refund = 환불_저장(payment);
+
+        // when
+        pointService.restoreUsedPoints(payment, refund, 0L);
+
+        // then
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isZero();
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 사용포인트복구_같은환불을두번처리해도_한번만복구한다() {
+        // given
+        User user = 회원_저장(0L);
+        Order order = 주문_저장(user, 1_000L, 200L);
+        Payment payment = 결제_저장(order, 1_000L, 200L, 800L);
+        Refund refund = 환불_저장(payment);
+
+        // when
+        pointService.restoreUsedPoints(payment, refund, 200L);
+        pointService.restoreUsedPoints(payment, refund, 200L);
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(200L);
+        assertThat(pointTransactionRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 사용포인트복구_환불의결제와요청결제가다르면_VALIDATION_FAILED가발생한다() {
+        // given
+        User user = 회원_저장(0L);
+        Order firstOrder = 주문_저장(user, 1_000L, 200L);
+        Order secondOrder = 주문_저장(user, 1_000L, 200L);
+        Payment firstPayment = 결제_저장(firstOrder, 1_000L, 200L, 800L);
+        Payment secondPayment = 결제_저장(secondOrder, 1_000L, 200L, 800L);
+        Refund refund = 환불_저장(firstPayment);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.restoreUsedPoints(secondPayment, refund, 200L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    void 사용포인트복구_복구금액이음수이면_INVALID_POINT_TRANSACTION_AMOUNT가발생한다() {
+        // given
+        User user = 회원_저장(0L);
+        Order order = 주문_저장(user, 1_000L, 200L);
+        Payment payment = 결제_저장(order, 1_000L, 200L, 800L);
+        Refund refund = 환불_저장(payment);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.restoreUsedPoints(payment, refund, -1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
     }
 
     @Test
@@ -496,6 +742,140 @@ class PointServiceTest {
         assertThat(pointTransactionRepository.count()).isZero();
     }
 
+    @Test
+    void 예약회수해제_예약원장이있으면_잔액을복구하고_RELEASE원장을생성한다() {
+        // given
+        User user = 회원_저장(100L);
+        Order order = 주문_저장(user, 1_000L, 0L);
+        Payment payment = 결제_저장(order, 1_000L, 0L, 1_000L);
+        Refund refund = 환불_저장(payment, 10L);
+
+        pointService.reserveEarnedPointRecoveryFromBalance(payment, refund, 10L);
+
+        // when
+        pointService.releaseReservedEarnedPointRecovery(payment, refund);
+
+        // then
+        User foundUser = userRepository.findById(user.getId()).orElseThrow();
+        List<PointTransaction> pointTransactions = pointTransactionRepository.findAll();
+
+        assertThat(foundUser.getPointBalance()).isEqualTo(100L);
+        assertThat(pointTransactions)
+                .extracting(PointTransaction::getType)
+                .containsExactlyInAnyOrder(
+                        PointTransactionType.EARN_RECOVERY_RESERVE,
+                        PointTransactionType.EARN_RECOVERY_RELEASE
+                );
+    }
+
+    @Test
+    void 예약회수해제_같은환불을두번해제해도_한번만복구한다() {
+        // given
+        User user = 회원_저장(100L);
+        Order order = 주문_저장(user, 1_000L, 0L);
+        Payment payment = 결제_저장(order, 1_000L, 0L, 1_000L);
+        Refund refund = 환불_저장(payment, 10L);
+
+        pointService.reserveEarnedPointRecoveryFromBalance(payment, refund, 10L);
+
+        // when
+        pointService.releaseReservedEarnedPointRecovery(payment, refund);
+        pointService.releaseReservedEarnedPointRecovery(payment, refund);
+
+        // then
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(100L);
+        assertThat(pointTransactionRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void 예약회수해제_회수금액이0원이면_예약원장이없어도_잔액과원장을변경하지않는다() {
+        // given
+        User user = 회원_저장(100L);
+        Order order = 주문_저장(user, 1_000L, 0L);
+        Payment payment = 결제_저장(order, 1_000L, 0L, 1_000L);
+        Refund refund = 환불_저장(payment, 0L);
+
+        // when
+        pointService.releaseReservedEarnedPointRecovery(payment, refund);
+
+        // then
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(100L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 예약회수해제_예약원장이없으면_POINT_ERROR_EXCEPTION이발생한다() {
+        // given
+        User user = 회원_저장(100L);
+        Order order = 주문_저장(user, 1_000L, 0L);
+        Payment payment = 결제_저장(order, 1_000L, 0L, 1_000L);
+        Refund refund = 환불_저장(payment, 10L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.releaseReservedEarnedPointRecovery(payment, refund))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.POINT_ERROR_EXCEPTION);
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(100L);
+    }
+
+    @Test
+    void 예약회수해제_환불의결제와요청결제가다르면_VALIDATION_FAILED가발생한다() {
+        // given
+        User user = 회원_저장(100L);
+        Order firstOrder = 주문_저장(user, 1_000L, 0L);
+        Order secondOrder = 주문_저장(user, 1_000L, 0L);
+        Payment firstPayment = 결제_저장(firstOrder, 1_000L, 0L, 1_000L);
+        Payment secondPayment = 결제_저장(secondOrder, 1_000L, 0L, 1_000L);
+        Refund refund = 환불_저장(firstPayment, 10L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.releaseReservedEarnedPointRecovery(secondPayment, refund))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    void 주문취소포인트복구_복구금액이0이면_예약원장이없어도원장을만들지않는다() {
+        // given
+        User user = 회원_저장(1_000L);
+        Order order = 주문_저장(user, 1_000L, 500L);
+        Payment payment = 결제_저장(order, 1_000L, 500L, 500L);
+
+        // when
+        pointService.restoreReservedPointsForOrderCancel(payment, 0L, List.of("1:1:1"));
+
+        // then
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getPointBalance()).isEqualTo(1_000L);
+        assertThat(pointTransactionRepository.count()).isZero();
+    }
+
+    @Test
+    void 주문취소포인트복구_요청값이없거나금액이음수이면_예외가발생한다() {
+        // given
+        User user = 회원_저장(1_000L);
+        Order order = 주문_저장(user, 1_000L, 500L);
+        Payment payment = 결제_저장(order, 1_000L, 500L, 500L);
+
+        // when
+        // then
+        assertThatThrownBy(() -> pointService.restoreReservedPointsForOrderCancel(payment, null, List.of("1:1:1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> pointService.restoreReservedPointsForOrderCancel(payment, -1L, List.of("1:1:1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
+        assertThatThrownBy(() -> pointService.restoreReservedPointsForOrderCancel(payment, 1L, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+    }
+
     private ErrorCode 포인트예약_실행결과(Payment payment, CountDownLatch startLatch) {
         try {
             startLatch.await();
@@ -528,6 +908,10 @@ class PointServiceTest {
     }
 
     private Refund 환불_저장(Payment payment) {
+        return 환불_저장(payment, 0L);
+    }
+
+    private Refund 환불_저장(Payment payment, Long recoveredFromBalance) {
         return refundTestRepository.save(Refund.createRefund(
                 "REFUND-" + UUID.randomUUID(),
                 UUID.randomUUID().toString().replace("-", ""),
@@ -539,9 +923,9 @@ class PointServiceTest {
                 payment.getPgAmount(),
                 payment.getUsedPointAmount(),
                 payment.getPgAmount(),
+                recoveredFromBalance,
                 0L,
-                0L,
-                0L,
+                recoveredFromBalance,
                 0L
         ));
     }
