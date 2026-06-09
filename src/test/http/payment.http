@@ -1,0 +1,161 @@
+@baseUrl = http://localhost:8080
+# 같은 이메일로 재실행하면 중복 오류가 납니다. 재테스트할 때 숫자만 바꿔주세요.
+@email = payment-customer-manual-001@example.com
+@password = Password123!
+@productId = 10001
+
+### 결제 테스트용 회원가입
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "010-1234-5678"
+}
+
+### 결제 테스트용 로그인
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("로그인 성공", function () {
+        client.assert(response.status === 200, "로그인 응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data !== null, "로그인 응답 data가 있어야 합니다.");
+        client.assert(response.body.data.accessToken !== null, "accessToken이 있어야 합니다.");
+    });
+    client.global.set("accessToken", response.body.data.accessToken);
+%}
+
+### 결제 테스트용 장바구니 상품 담기
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{productId}},
+  "quantity": 1
+}
+
+> {%
+    client.test("장바구니 상품 담기 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.cartItemId !== null, "cartItemId가 있어야 합니다.");
+    });
+    client.global.set("paymentCartItemId", response.body.data.cartItemId);
+%}
+
+### 결제 확정 테스트용 주문 생성
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "cartItemIds": [{{paymentCartItemId}}],
+  "usedPointAmount": 0
+}
+
+> {%
+    client.test("결제 대기 주문 생성 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.order.status === "PAYMENT_PENDING", "주문 상태는 PAYMENT_PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.status === "PENDING", "결제 상태는 PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.portonePaymentId !== null, "portonePaymentId가 있어야 합니다.");
+    });
+    client.global.set("paymentOrderId", response.body.data.order.orderId);
+    client.global.set("portonePaymentId", response.body.data.payment.portonePaymentId);
+%}
+
+### 결제 확정 성공 - PortOne 테스트 결제를 완료한 뒤 실행
+# 위 주문 생성 응답의 portonePaymentId로 PortOne 결제창 테스트 결제를 성공시킨 뒤 실행합니다.
+POST {{baseUrl}}/api/payments/confirm
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "orderId": {{paymentOrderId}},
+  "portonePaymentId": "{{portonePaymentId}}"
+}
+
+> {%
+    client.test("결제 확정 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.orderStatus === "COMPLETED", "주문 상태는 COMPLETED여야 합니다.");
+        client.assert(response.body.data.paymentStatus === "COMPLETED", "결제 상태는 COMPLETED여야 합니다.");
+        client.assert(response.body.data.portonePaymentId === client.global.get("portonePaymentId"), "portonePaymentId가 같아야 합니다.");
+        client.assert(response.body.data.approvedAt !== null, "approvedAt이 있어야 합니다.");
+    });
+%}
+
+### 결제 확정 멱등성 - 같은 요청을 다시 보내도 성공 응답
+POST {{baseUrl}}/api/payments/confirm
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "orderId": {{paymentOrderId}},
+  "portonePaymentId": "{{portonePaymentId}}"
+}
+
+> {%
+    client.test("이미 완료된 결제 확정은 성공 응답을 반환한다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.orderStatus === "COMPLETED", "주문 상태는 COMPLETED여야 합니다.");
+        client.assert(response.body.data.paymentStatus === "COMPLETED", "결제 상태는 COMPLETED여야 합니다.");
+    });
+%}
+
+### 결제 확정 실패 - PortOne 결제 ID 불일치
+POST {{baseUrl}}/api/payments/confirm
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "orderId": {{paymentOrderId}},
+  "portonePaymentId": "pay_mismatch"
+}
+
+> {%
+    client.test("PortOne 결제 ID가 다르면 실패한다", function () {
+        client.assert(response.status === 400, "응답 상태는 400이어야 합니다.");
+        client.assert(response.body.code === "PAYMENT_PORTONE_ID_MISMATCH", "PAYMENT_PORTONE_ID_MISMATCH를 반환해야 합니다.");
+    });
+%}
+
+### 결제 확정 실패 - 요청값 누락
+POST {{baseUrl}}/api/payments/confirm
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "portonePaymentId": ""
+}
+
+> {%
+    client.test("요청값이 없으면 검증 실패한다", function () {
+        client.assert(response.status === 400, "응답 상태는 400이어야 합니다.");
+        client.assert(response.body.code === "VALIDATION_FAILED", "VALIDATION_FAILED를 반환해야 합니다.");
+    });
+%}
+
+### 결제 확정 실패 - 토큰 없음
+POST {{baseUrl}}/api/payments/confirm
+Content-Type: application/json
+
+{
+  "orderId": {{paymentOrderId}},
+  "portonePaymentId": "{{portonePaymentId}}"
+}
+
+> {%
+    client.test("토큰이 없으면 인증 실패한다", function () {
+        client.assert(response.status === 401, "응답 상태는 401이어야 합니다.");
+        client.assert(response.body.code === "UNAUTHORIZED", "UNAUTHORIZED를 반환해야 합니다.");
+    });
+%}

@@ -1,0 +1,89 @@
+package com.teamec2.paymentsystem.domain.auth.service;
+
+import com.teamec2.paymentsystem.domain.auth.dto.LoginRequest;
+import com.teamec2.paymentsystem.domain.auth.dto.LoginResponse;
+import com.teamec2.paymentsystem.domain.auth.dto.LogoutResponse;
+import com.teamec2.paymentsystem.domain.auth.dto.SignupRequest;
+import com.teamec2.paymentsystem.domain.auth.dto.SignupResponse;
+import com.teamec2.paymentsystem.domain.cart.entity.Cart;
+import com.teamec2.paymentsystem.domain.cart.repository.CartRepository;
+import com.teamec2.paymentsystem.domain.point.service.PointService;
+import com.teamec2.paymentsystem.domain.user.entity.User;
+import com.teamec2.paymentsystem.domain.user.repository.UserRepository;
+import com.teamec2.paymentsystem.global.exception.BusinessException;
+import com.teamec2.paymentsystem.global.exception.ErrorCode;
+import com.teamec2.paymentsystem.global.security.jwt.JwtTokenProvider;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final CartRepository cartRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final PointService pointService;
+
+    @Transactional
+    public SignupResponse signup(SignupRequest request) {
+        if (userRepository.existsByEmail(request.email())) {
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+
+        User user = User.create(
+                request.email(),
+                passwordEncoder.encode(request.password()),
+                request.name(),
+                request.phone()
+        );
+
+        User savedUser = userRepository.save(user);
+
+        pointService.grantSignupBonus(savedUser);
+
+        cartRepository.save(new Cart(savedUser));
+
+        return new SignupResponse(
+                savedUser.getId(),
+                savedUser.getEmail(),
+                savedUser.getName(),
+                savedUser.getPhone(),
+                savedUser.getCreatedAt()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public LoginResponse login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(this::invalidLoginCredentials);
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw invalidLoginCredentials();
+        }
+
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId());
+
+        return new LoginResponse(
+                "Bearer",
+                accessToken,
+                jwtTokenProvider.getAccessTokenExpiresInSeconds(),
+                new LoginResponse.UserSummary(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getName()
+                )
+        );
+    }
+
+    public LogoutResponse logout() {
+        return new LogoutResponse(true);
+    }
+
+    private BusinessException invalidLoginCredentials() {
+        return new BusinessException(ErrorCode.INVALID_LOGIN_CREDENTIALS);
+    }
+}

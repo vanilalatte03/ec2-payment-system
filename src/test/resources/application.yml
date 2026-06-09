@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:${random.uuid};MODE=MySQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+jwt:
+  secret: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+  access-token-expiration-millis: 3600000
+portone:
+  base-url: https://api.portone.io
+  api-secret: test-api-secret
+  store-id: test-store-id
+  channel-key: test-channel-key
+  webhook-secret: whsec_MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=

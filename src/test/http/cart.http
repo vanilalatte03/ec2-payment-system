@@ -1,0 +1,273 @@
+@baseUrl = http://localhost:8080
+@email = cart-customer-{{$timestamp}}@example.com
+@password = Password123!
+
+### 참고 - 장바구니 동시 수정 충돌
+# 장바구니 상품 담기/수량 변경/삭제/전체 비우기는 Cart 버전으로 낙관락을 사용합니다.
+# 이 HTTP 파일은 요청을 순서대로 실행하므로 충돌을 안정적으로 재현하지 않습니다.
+# 실제로 같은 장바구니를 동시에 수정하면 일부 요청은 409 CONFLICT를 받을 수 있습니다.
+
+### 장바구니 테스트용 판매중 상품 자동 선택
+GET {{baseUrl}}/api/products?status=ON_SALE&size=20
+
+> {%
+    client.test("판매중 상품 2개 이상을 준비한다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.content.length >= 2, "판매중 상품이 2개 이상 필요합니다.");
+    });
+
+    const products = response.body.data.content;
+    const firstProduct = products.find(product => product.stock >= 3);
+    const secondProduct = products.find(product => product.stock >= 2 && product.productId !== firstProduct?.productId);
+
+    client.test("장바구니 시나리오에 필요한 재고가 있는 상품을 고른다", function () {
+        client.assert(firstProduct !== undefined, "첫 번째 상품은 재고가 3개 이상이어야 합니다.");
+        client.assert(secondProduct !== undefined, "두 번째 상품은 재고가 2개 이상이어야 합니다.");
+    });
+
+    if (firstProduct && secondProduct) {
+        client.global.set("productId", firstProduct.productId);
+        client.global.set("productName", firstProduct.name);
+        client.global.set("secondProductId", secondProduct.productId);
+        client.global.set("secondProductName", secondProduct.name);
+    }
+%}
+
+### 장바구니 테스트용 회원가입
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "010-1234-5678"
+}
+
+> {%
+    client.test("회원가입 성공 시 장바구니를 함께 준비한다", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.userId !== null, "userId가 있어야 합니다.");
+    });
+    client.global.set("cartEmail", response.body.data.email);
+%}
+
+### 장바구니 테스트용 로그인
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{cartEmail}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("로그인 성공 시 accessToken을 저장한다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.accessToken !== null, "accessToken이 있어야 합니다.");
+    });
+    client.global.set("accessToken", response.body.data.accessToken);
+%}
+
+### 빈 장바구니 조회 - 회원가입 때 생성된 장바구니 식별자와 빈 합계를 확인
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("빈 장바구니 조회 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.cartId !== null, "회원가입 후 cartId가 있어야 합니다.");
+        client.assert(Array.isArray(response.body.data.items), "data.items는 배열이어야 합니다.");
+        client.assert(response.body.data.items.length === 0, "data.items는 빈 배열이어야 합니다.");
+        client.assert(response.body.data.totalQuantity === 0, "totalQuantity는 0이어야 합니다.");
+        client.assert(response.body.data.totalAmount === 0, "totalAmount는 0이어야 합니다.");
+    });
+%}
+
+### 장바구니 상품 담기 - 생성된 cartItemId 저장
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{productId}},
+  "quantity": 2
+}
+
+> {%
+    client.test("장바구니 상품 담기 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.cartItemId !== null, "cartItemId가 있어야 합니다.");
+        client.assert(response.body.data.productId === Number(client.global.get("productId")), "productId가 일치해야 합니다.");
+        client.assert(response.body.data.quantity === 2, "수량은 2여야 합니다.");
+        client.assert(response.body.data.lineAmount === response.body.data.unitPrice * 2, "lineAmount가 수량과 단가로 계산되어야 합니다.");
+    });
+    client.global.set("cartItemId", response.body.data.cartItemId);
+%}
+
+### 장바구니 같은 상품 다시 담기 - 기존 항목 수량 합산
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{productId}},
+  "quantity": 1
+}
+
+> {%
+    client.test("같은 상품이면 수량을 합산한다", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.cartItemId === Number(client.global.get("cartItemId")), "기존 cartItemId가 유지되어야 합니다.");
+        client.assert(response.body.data.quantity === 3, "합산 수량은 3이어야 합니다.");
+    });
+%}
+
+### 장바구니 두 번째 상품 담기 - 합계 금액 검증용
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{secondProductId}},
+  "quantity": 2
+}
+
+> {%
+    client.test("두 번째 상품 담기 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.cartTotalAmount > response.body.data.lineAmount, "전체 합계에는 기존 상품 금액도 포함되어야 합니다.");
+    });
+    client.global.set("secondCartItemId", response.body.data.cartItemId);
+%}
+
+### 장바구니 상품 담기 실패 - 수량이 1 미만
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "productId": {{productId}},
+  "quantity": 0
+}
+
+> {%
+    client.test("수량이 1 미만이면 검증 실패", function () {
+        client.assert(response.status === 400, "응답 상태는 400이어야 합니다.");
+        client.assert(response.body.code === "VALIDATION_FAILED", "VALIDATION_FAILED를 반환해야 합니다.");
+    });
+%}
+
+### 장바구니 조회 - 두 상품과 합계 확인
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("장바구니 조회 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length === 2, "상품은 2개여야 합니다.");
+        client.assert(response.body.data.totalQuantity === 5, "총 수량은 5여야 합니다.");
+        client.assert(response.body.data.totalAmount > 0, "총 금액은 0보다 커야 합니다.");
+    });
+%}
+
+### 장바구니 조회 실패 - 토큰 없음
+GET {{baseUrl}}/api/carts
+
+> {%
+    client.test("토큰이 없으면 인증 실패", function () {
+        client.assert(response.status === 401, "응답 상태는 401이어야 합니다.");
+        client.assert(response.body.code === "UNAUTHORIZED", "UNAUTHORIZED를 반환해야 합니다.");
+    });
+%}
+
+### 장바구니 수량 변경 - 첫 번째 상품 수량만 줄이고 두 번째 상품은 유지
+PATCH {{baseUrl}}/api/carts/items/{{cartItemId}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "quantity": 1
+}
+
+> {%
+    client.test("첫 번째 상품 수량만 줄인다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.cartItemId === Number(client.global.get("cartItemId")), "cartItemId가 일치해야 합니다.");
+        client.assert(response.body.data.quantity === 1, "변경 수량은 1이어야 합니다.");
+        client.assert(response.body.data.cartTotalAmount >= response.body.data.lineAmount, "전체 합계가 함께 반환되어야 합니다.");
+    });
+%}
+
+### 장바구니 수량 변경 후 조회 - 다른 상품은 그대로 유지
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("첫 번째 상품만 1개로 줄고 두 번째 상품은 유지된다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length === 2, "상품은 계속 2개여야 합니다.");
+        client.assert(response.body.data.totalQuantity === 3, "총 수량은 첫 번째 상품 1개와 두 번째 상품 2개를 더해 3이어야 합니다.");
+
+        const firstItem = response.body.data.items.find(item => item.cartItemId === Number(client.global.get("cartItemId")));
+        const secondItem = response.body.data.items.find(item => item.cartItemId === Number(client.global.get("secondCartItemId")));
+
+        client.assert(firstItem !== undefined, "첫 번째 상품이 장바구니에 남아 있어야 합니다.");
+        client.assert(secondItem !== undefined, "두 번째 상품이 장바구니에 남아 있어야 합니다.");
+        client.assert(firstItem.quantity === 1, "첫 번째 상품 수량은 1이어야 합니다.");
+        client.assert(secondItem.quantity === 2, "두 번째 상품 수량은 2로 유지되어야 합니다.");
+    });
+%}
+
+### 장바구니 수량 변경 실패 - 수량이 1 미만
+PATCH {{baseUrl}}/api/carts/items/{{cartItemId}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "quantity": 0
+}
+
+> {%
+    client.test("변경 수량이 1 미만이면 검증 실패", function () {
+        client.assert(response.status === 400, "응답 상태는 400이어야 합니다.");
+        client.assert(response.body.code === "VALIDATION_FAILED", "VALIDATION_FAILED를 반환해야 합니다.");
+    });
+%}
+
+### 장바구니 상품 개별 삭제 - 삭제 후 남은 상품 합계 반환
+DELETE {{baseUrl}}/api/carts/items/{{secondCartItemId}}
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("장바구니 상품 개별 삭제 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.deleted === true, "deleted는 true여야 합니다.");
+        client.assert(response.body.data.cartItemId === Number(client.global.get("secondCartItemId")), "삭제한 cartItemId가 반환되어야 합니다.");
+        client.assert(response.body.data.cartTotalAmount > 0, "남은 상품 합계가 반환되어야 합니다.");
+    });
+%}
+
+### 장바구니 전체 비우기 - 남은 상품 삭제
+DELETE {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("장바구니 전체 비우기 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.deletedCount === 1, "남은 상품 1개가 삭제되어야 합니다.");
+    });
+%}
+
+### 장바구니 전체 비운 뒤 조회
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{accessToken}}
+
+> {%
+    client.test("전체 비우기 후 장바구니는 빈 상태다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length === 0, "items는 빈 배열이어야 합니다.");
+        client.assert(response.body.data.totalQuantity === 0, "totalQuantity는 0이어야 합니다.");
+        client.assert(response.body.data.totalAmount === 0, "totalAmount는 0이어야 합니다.");
+    });
+%}

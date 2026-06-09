@@ -1,0 +1,329 @@
+@baseUrl = http://localhost:8080
+@password = Password123!
+
+### 실행 순서
+# 주문 생성 성공만 빠르게 확인하려면 1번부터 5번까지 순서대로 실행합니다.
+# 1번에서 상품을 고르고, 2~3번에서 새 회원으로 로그인하고, 4번에서 장바구니에 담은 뒤, 5번에서 주문을 생성합니다.
+
+### 1. 주문 테스트 준비 - 새 회원 이메일과 주문 가능 상품 선택
+GET {{baseUrl}}/api/products?status=ON_SALE&size=20
+
+> {%
+    client.global.clear("orderEmail");
+    client.global.clear("orderPhone");
+    client.global.clear("orderAccessToken");
+    client.global.clear("orderProductId");
+    client.global.clear("orderCartItemId");
+    client.global.clear("orderPreviewTotalAmount");
+    client.global.clear("orderPreviewCartItemId");
+    client.global.clear("orderId");
+
+    client.test("판매중 상품 목록 조회 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.content.length >= 1, "판매중 상품이 1개 이상 필요합니다.");
+    });
+
+    const product = response.body.data.content.find(product => product.stock >= 2);
+
+    client.test("주문 수량만큼 재고가 있는 상품 선택", function () {
+        client.assert(product !== undefined, "재고가 2개 이상인 판매중 상품이 필요합니다.");
+    });
+
+    if (product) {
+        client.global.set("orderProductId", product.productId);
+    }
+%}
+
+### 2. 주문 테스트용 회원가입
+< {%
+    const suffix = Date.now() + "-" + Math.floor(Math.random() * 1000000);
+    const phoneMiddle = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+    const phoneLast = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+
+    client.global.set("orderEmail", "ord-" + suffix + "@example.com");
+    client.global.set("orderPhone", "010-" + phoneMiddle + "-" + phoneLast);
+%}
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{orderEmail}}",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "{{orderPhone}}"
+}
+
+> {%
+    client.test("회원가입 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.email === client.global.get("orderEmail"), "가입 이메일이 일치해야 합니다.");
+    });
+%}
+
+### 3. 주문 테스트용 로그인
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{orderEmail}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("로그인 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.accessToken !== null, "accessToken이 있어야 합니다.");
+    });
+
+    if (response.status === 200) {
+        client.global.set("orderAccessToken", response.body.data.accessToken);
+    }
+%}
+
+### 4. 주문할 장바구니 상품 담기
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{orderAccessToken}}
+
+{
+  "productId": {{orderProductId}},
+  "quantity": 2
+}
+
+> {%
+    client.test("장바구니 상품 담기 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.cartItemId !== null, "cartItemId가 있어야 합니다.");
+        client.assert(response.body.data.productId === Number(client.global.get("orderProductId")), "선택한 상품이 담겨야 합니다.");
+        client.assert(response.body.data.quantity === 2, "수량은 2개여야 합니다.");
+    });
+
+    if (response.status === 201) {
+        client.global.set("orderCartItemId", response.body.data.cartItemId);
+    }
+%}
+
+### 5. 주문 생성 성공 - 선택한 장바구니 상품으로 주문/결제 대기 생성
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{orderAccessToken}}
+
+{
+  "cartItemIds": [{{orderCartItemId}}],
+  "usedPointAmount": 0
+}
+
+> {%
+    client.test("주문 생성 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.order.status === "PAYMENT_PENDING", "주문 상태는 PAYMENT_PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.status === "PENDING", "결제 상태는 PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.type === "CARD", "포인트를 쓰지 않으면 CARD 결제 타입이어야 합니다.");
+        client.assert(response.body.data.payment.pgAmount === response.body.data.order.totalAmount, "PG 결제 금액은 주문 총액과 같아야 합니다.");
+        client.assert(response.body.data.nextAction === "OPEN_PORTONE_PAYMENT", "PortOne 결제창을 열어야 합니다.");
+        client.assert(response.body.data.payment.portonePaymentId !== null, "portonePaymentId가 있어야 합니다.");
+        client.assert(response.body.data.order.items.length === 1, "주문 상품은 1개여야 합니다.");
+        client.assert(response.body.data.order.items[0].quantity === 2, "주문 수량은 장바구니에 담은 2개여야 합니다.");
+        client.assert(response.body.data.order.totalAmount === response.body.data.order.items[0].lineAmount, "주문 총액은 주문 상품 금액과 같아야 합니다.");
+    });
+
+    if (response.status === 201) {
+        client.global.set("orderId", response.body.data.order.orderId);
+    }
+%}
+
+### 6. 주문서 미리보기 - 결제 완료 전에는 장바구니가 유지되므로 조회 가능
+GET {{baseUrl}}/api/orders/preview?cartItemIds={{orderCartItemId}}
+Authorization: Bearer {{orderAccessToken}}
+
+> {%
+    client.test("주문 생성 후에도 주문서 미리보기를 조회할 수 있다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length === 1, "미리보기 상품은 1개여야 합니다.");
+        client.assert(response.body.data.items[0].cartItemId === Number(client.global.get("orderCartItemId")), "선택한 장바구니 상품이어야 합니다.");
+        client.assert(response.body.data.totalQuantity === 2, "총 수량은 2개여야 합니다.");
+        client.assert(response.body.data.totalAmount === response.body.data.items[0].lineAmount, "합계 금액은 상품 금액 합계와 같아야 합니다.");
+    });
+
+    if (response.status === 200) {
+        client.global.set("orderPreviewCartItemId", response.body.data.items[0].cartItemId);
+        client.global.set("orderPreviewTotalAmount", response.body.data.totalAmount);
+    }
+%}
+
+### 7. 내 주문 내역 조회 - 최신 주문부터 목록 조회
+GET {{baseUrl}}/api/orders
+Authorization: Bearer {{orderAccessToken}}
+
+> {%
+    client.test("내 주문 내역 조회 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.orders.length >= 1, "주문 내역이 1건 이상이어야 합니다.");
+        client.assert(response.body.data.orders[0].orderId === Number(client.global.get("orderId")), "방금 생성한 주문이 최신 주문이어야 합니다.");
+    });
+%}
+
+### 8. 주문 상세 조회 - 주문/주문상품/결제/포인트 요약 확인
+GET {{baseUrl}}/api/orders/{{orderId}}
+Authorization: Bearer {{orderAccessToken}}
+
+> {%
+    client.test("주문 상세 조회 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.order.orderId === Number(client.global.get("orderId")), "주문 ID가 일치해야 합니다.");
+        client.assert(response.body.data.items.length === 1, "주문 상품은 1개여야 합니다.");
+        client.assert(response.body.data.payment.status === "PENDING", "결제 상태는 PENDING이어야 합니다.");
+        client.assert(response.body.data.pointSummary.usedPointAmount === 0, "사용 포인트는 0이어야 합니다.");
+    });
+%}
+
+### 9. 주문 생성 후 장바구니 조회 - 결제 완료 전 장바구니 유지 확인
+GET {{baseUrl}}/api/carts
+Authorization: Bearer {{orderAccessToken}}
+
+> {%
+    client.test("주문 생성 후에도 장바구니는 유지된다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length >= 1, "결제 완료 전에는 장바구니 상품이 남아 있어야 합니다.");
+    });
+%}
+
+### 10. 중복 장바구니 상품 ID 주문 테스트 준비 - 별도 회원과 상품 선택
+GET {{baseUrl}}/api/products?status=ON_SALE&size=20
+
+> {%
+    client.global.clear("duplicateOrderEmail");
+    client.global.clear("duplicateOrderPhone");
+    client.global.clear("duplicateOrderAccessToken");
+    client.global.clear("duplicateOrderProductId");
+    client.global.clear("duplicateOrderCartItemId");
+    client.global.clear("duplicateOrderPreviewTotalAmount");
+    client.global.clear("duplicateOrderId");
+
+    client.test("중복 ID 주문 테스트용 판매중 상품 목록 조회 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.content.length >= 1, "판매중 상품이 1개 이상 필요합니다.");
+    });
+
+    const product = response.body.data.content.find(product => product.stock >= 2);
+
+    client.test("중복 ID 주문에 필요한 재고가 있는 상품 선택", function () {
+        client.assert(product !== undefined, "재고가 2개 이상인 판매중 상품이 필요합니다.");
+    });
+
+    if (product) {
+        client.global.set("duplicateOrderProductId", product.productId);
+    }
+%}
+
+### 11. 중복 ID 주문 테스트용 회원가입
+< {%
+    const suffix = Date.now() + "-" + Math.floor(Math.random() * 1000000);
+    const phoneMiddle = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+    const phoneLast = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+
+    client.global.set("duplicateOrderEmail", "dup-ord-" + suffix + "@example.com");
+    client.global.set("duplicateOrderPhone", "010-" + phoneMiddle + "-" + phoneLast);
+%}
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "{{duplicateOrderEmail}}",
+  "password": "{{password}}",
+  "name": "홍길동",
+  "phone": "{{duplicateOrderPhone}}"
+}
+
+> {%
+    client.test("중복 ID 주문 테스트용 회원가입 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.email === client.global.get("duplicateOrderEmail"), "가입 이메일이 일치해야 합니다.");
+    });
+%}
+
+### 12. 중복 ID 주문 테스트용 로그인
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{duplicateOrderEmail}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("중복 ID 주문 테스트용 로그인 성공", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.accessToken !== null, "accessToken이 있어야 합니다.");
+    });
+
+    if (response.status === 200) {
+        client.global.set("duplicateOrderAccessToken", response.body.data.accessToken);
+    }
+%}
+
+### 13. 중복 ID 주문 테스트용 장바구니 상품 담기
+POST {{baseUrl}}/api/carts/items
+Content-Type: application/json
+Authorization: Bearer {{duplicateOrderAccessToken}}
+
+{
+  "productId": {{duplicateOrderProductId}},
+  "quantity": 2
+}
+
+> {%
+    client.test("중복 ID 주문 테스트용 장바구니 상품 담기 성공", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.cartItemId !== null, "cartItemId가 있어야 합니다.");
+        client.assert(response.body.data.quantity === 2, "수량은 2개여야 합니다.");
+    });
+
+    if (response.status === 201) {
+        client.global.set("duplicateOrderCartItemId", response.body.data.cartItemId);
+    }
+%}
+
+### 14. 주문서 미리보기 - 같은 장바구니 상품 ID가 중복되어도 한 번만 반영
+GET {{baseUrl}}/api/orders/preview?cartItemIds={{duplicateOrderCartItemId}}&cartItemIds={{duplicateOrderCartItemId}}
+Authorization: Bearer {{duplicateOrderAccessToken}}
+
+> {%
+    client.test("중복 장바구니 상품 ID 미리보기는 한 번만 반영한다", function () {
+        client.assert(response.status === 200, "응답 상태는 200이어야 합니다.");
+        client.assert(response.body.data.items.length === 1, "중복 ID여도 미리보기 상품은 1개여야 합니다.");
+        client.assert(response.body.data.items[0].cartItemId === Number(client.global.get("duplicateOrderCartItemId")), "선택한 장바구니 상품이어야 합니다.");
+        client.assert(response.body.data.totalQuantity === 2, "중복 ID여도 총 수량은 장바구니 수량인 2개여야 합니다.");
+        client.assert(response.body.data.totalAmount === response.body.data.items[0].lineAmount, "합계 금액은 한 상품 금액만 반영되어야 합니다.");
+    });
+
+    if (response.status === 200) {
+        client.global.set("duplicateOrderPreviewTotalAmount", response.body.data.totalAmount);
+    }
+%}
+
+### 15. 주문 생성 - 같은 장바구니 상품 ID가 중복되어도 주문상품은 한 번만 생성
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{duplicateOrderAccessToken}}
+
+{
+  "cartItemIds": [{{duplicateOrderCartItemId}}, {{duplicateOrderCartItemId}}],
+  "usedPointAmount": 0
+}
+
+> {%
+    client.test("중복 장바구니 상품 ID 주문 생성은 한 번만 반영한다", function () {
+        client.assert(response.status === 201, "응답 상태는 201이어야 합니다.");
+        client.assert(response.body.data.order.status === "PAYMENT_PENDING", "주문 상태는 PAYMENT_PENDING이어야 합니다.");
+        client.assert(response.body.data.payment.status === "PENDING", "결제 상태는 PENDING이어야 합니다.");
+        client.assert(response.body.data.order.items.length === 1, "중복 ID여도 주문 상품은 1개여야 합니다.");
+        client.assert(response.body.data.order.items[0].quantity === 2, "주문 수량은 장바구니 수량인 2개여야 합니다.");
+        client.assert(response.body.data.order.totalAmount === Number(client.global.get("duplicateOrderPreviewTotalAmount")), "주문 금액은 중복 ID 미리보기 금액과 같아야 합니다.");
+        client.assert(response.body.data.payment.pgAmount === response.body.data.order.totalAmount, "PG 결제 금액은 주문 총액과 같아야 합니다.");
+    });
+
+    if (response.status === 201) {
+        client.global.set("duplicateOrderId", response.body.data.order.orderId);
+    }
+%}
