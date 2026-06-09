@@ -1,5 +1,8 @@
 package com.teamec2.paymentsystem.infra.portone.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
@@ -15,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.time.ZoneId;
 import java.util.Locale;
@@ -29,6 +33,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 @Slf4j
 public class PortoneClient implements PaymentGateway {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient portoneRestClient;
     private final PortoneProperties portoneProperties;
@@ -133,6 +139,27 @@ public class PortoneClient implements PaymentGateway {
                     rawStatus,
                     mapCancelStatus(rawStatus)
             );
+        } catch (RestClientResponseException e) {
+            String cancelErrorStatus = resolveCancelErrorStatus(e);
+
+            log.warn(
+                    "PortOne 결제 취소 요청 거절. paymentId={}, cancelAmount={}, currentCancellableAmount={}, reason={}",
+                    paymentId,
+                    cancelAmount,
+                    currentCancellableAmount,
+                    cancelErrorStatus,
+                    e
+            );
+
+            if (cancelErrorStatus == null) {
+                throw new BusinessException(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
+            }
+
+            return new PaymentCancelResponse(
+                    null,
+                    cancelErrorStatus,
+                    PaymentCancelStatus.FAILED
+            );
         } catch (RestClientException e) {
             log.warn(
                     "PortOne 결제 취소 요청 실패. paymentId={}, cancelAmount={}, currentCancellableAmount={}",
@@ -144,6 +171,70 @@ public class PortoneClient implements PaymentGateway {
 
             throw new BusinessException(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
         }
+    }
+
+    private String resolveCancelErrorStatus(RestClientResponseException exception) {
+        String responseBody = exception.getResponseBodyAsString();
+
+        if (responseBody == null || responseBody.isBlank()) {
+            return null;
+        }
+
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(responseBody);
+            String type = textValue(root, "type");
+            String pgCode = textValue(root, "pgCode");
+            String pgMessage = textValue(root, "pgMessage");
+            String message = textValue(root, "message");
+
+            return compactCancelErrorStatus(type, pgCode, pgMessage, message);
+        } catch (JsonProcessingException e) {
+            return responseBody;
+        }
+    }
+
+    private String textValue(JsonNode root, String fieldName) {
+        JsonNode value = root.get(fieldName);
+
+        if (value == null || value.isNull()) {
+            return null;
+        }
+
+        String text = value.asText();
+        return text == null || text.isBlank() ? null : text;
+    }
+
+    private String compactCancelErrorStatus(
+            String type,
+            String pgCode,
+            String pgMessage,
+            String message
+    ) {
+        StringBuilder status = new StringBuilder();
+
+        if (type != null) {
+            status.append(type);
+        }
+
+        if (pgCode != null) {
+            appendStatusPart(status, pgCode);
+        }
+
+        if (pgMessage != null) {
+            appendStatusPart(status, pgMessage);
+        } else if (message != null) {
+            appendStatusPart(status, message);
+        }
+
+        return status.isEmpty() ? null : status.toString();
+    }
+
+    private void appendStatusPart(StringBuilder status, String value) {
+        if (!status.isEmpty()) {
+            status.append(": ");
+        }
+
+        status.append(value);
     }
 
     /**

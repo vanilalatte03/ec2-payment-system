@@ -1,6 +1,7 @@
 package com.teamec2.paymentsystem.infra.portone.client;
 
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
+import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
 import com.teamec2.paymentsystem.global.exception.ErrorCode;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -21,6 +23,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -204,6 +207,32 @@ class PortoneClientTest {
     }
 
     @Test
+    void 결제조회_paidAt이null이면_approvedAt도null이다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123?storeId=" + STORE_ID))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {
+                          "id": "pay_123",
+                          "status": "PAID",
+                          "amount": {
+                            "total": 73000
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        PaymentGatewayResponse response = portoneClient.getPayment("pay_123");
+
+        // then
+        assertThat(response.paymentId()).isEqualTo("pay_123");
+        assertThat(response.status()).isEqualTo("PAID");
+        assertThat(response.paidAmount()).isEqualTo(73000L);
+        assertThat(response.approvedAt()).isNull();
+        server.verify();
+    }
+
+    @Test
     void 결제취소_정상응답이면_PaymentCancelResponse로_변환한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
@@ -242,6 +271,95 @@ class PortoneClientTest {
         // then
         assertThat(response.cancellationId()).isEqualTo("cancel_123");
         assertThat(response.rawStatus()).isEqualTo("SUCCEEDED");
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.SUCCEEDED);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_REQUESTED상태이면_RESULT_UNKNOWN으로변환한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {
+                          "cancellation": {
+                            "id": "cancel_123",
+                            "status": "REQUESTED"
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        PaymentCancelResponse response = portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        );
+
+        // then
+        assertThat(response.cancellationId()).isEqualTo("cancel_123");
+        assertThat(response.rawStatus()).isEqualTo("REQUESTED");
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.RESULT_UNKNOWN);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_알수없는상태이면_RESULT_UNKNOWN으로변환한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {
+                          "cancellation": {
+                            "id": "cancel_123",
+                            "status": "PENDING_REVIEW"
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        PaymentCancelResponse response = portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        );
+
+        // then
+        assertThat(response.rawStatus()).isEqualTo("PENDING_REVIEW");
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.RESULT_UNKNOWN);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_상태값이공백이면_RESULT_UNKNOWN으로변환한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {
+                          "cancellation": {
+                            "id": "cancel_123",
+                            "status": "   "
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        PaymentCancelResponse response = portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        );
+
+        // then
+        assertThat(response.rawStatus()).isBlank();
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.RESULT_UNKNOWN);
         server.verify();
     }
 
@@ -283,6 +401,100 @@ class PortoneClientTest {
     }
 
     @Test
+    void 결제취소_필수값누락이면_요청을보내지않고_MISSING_REQUIRED_FIELD가발생한다() {
+        // when
+        // then
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                " ",
+                1_000L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                null,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                null,
+                "partial refund",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                1_000L,
+                " ",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                1_000L,
+                "partial refund",
+                " "
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MISSING_REQUIRED_FIELD);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_금액범위오류면_요청을보내지않고_VALIDATION_FAILED가발생한다() {
+        // when
+        // then
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                0L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                1_000L,
+                -1L,
+                "partial refund",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                1_001L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+        server.verify();
+    }
+
+    @Test
     void 결제취소_PortOne서버오류면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
@@ -305,11 +517,173 @@ class PortoneClientTest {
     }
 
     @Test
+    void 결제취소_PortOne거절응답이면_FAILED로변환한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "type": "PG_PROVIDER",
+                                  "pgCode": "50053",
+                                  "pgMessage": "간편결제 부분취소 제한 가맹점"
+                                }
+                                """));
+
+        // when
+        PaymentCancelResponse response = portoneClient.cancelPayment(
+                "pay_123",
+                600L,
+                1000L,
+                "partial refund",
+                "refund-cancel-request-9"
+        );
+
+        // then
+        assertThat(response.cancellationId()).isNull();
+        assertThat(response.rawStatus()).isEqualTo("PG_PROVIDER: 50053: 간편결제 부분취소 제한 가맹점");
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.FAILED);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_PortOne거절응답에_pgMessage가없으면_message로_FAILED상태를만든다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "type": "PG_PROVIDER",
+                                  "message": "부분 취소가 불가능한 결제입니다."
+                                }
+                                """));
+
+        // when
+        PaymentCancelResponse response = portoneClient.cancelPayment(
+                "pay_123",
+                600L,
+                1000L,
+                "partial refund",
+                "refund-cancel-request-9"
+        );
+
+        // then
+        assertThat(response.cancellationId()).isNull();
+        assertThat(response.rawStatus()).isEqualTo("PG_PROVIDER: 부분 취소가 불가능한 결제입니다.");
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.FAILED);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_PortOne거절응답본문이JSON이아니면_원문으로_FAILED상태를만든다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body("plain portone cancel error"));
+
+        // when
+        PaymentCancelResponse response = portoneClient.cancelPayment(
+                "pay_123",
+                600L,
+                1000L,
+                "partial refund",
+                "refund-cancel-request-9"
+        );
+
+        // then
+        assertThat(response.cancellationId()).isNull();
+        assertThat(response.rawStatus()).isEqualTo("plain portone cancel error");
+        assertThat(response.cancelStatus()).isEqualTo(PaymentCancelStatus.FAILED);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_PortOne거절응답본문이빈JSON이면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{}"));
+
+        // when
+        // then
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                600L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-9"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_PortOne거절응답본문이공백이면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body(" "));
+
+        // when
+        // then
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                600L,
+                1_000L,
+                "partial refund",
+                "refund-cancel-request-9"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
+        server.verify();
+    }
+
+    @Test
     void 결제취소_응답본문이없으면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
         // given
         server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
+
+        // when
+        // then
+        assertThatThrownBy(() -> portoneClient.cancelPayment(
+                "pay_123",
+                73000L,
+                73000L,
+                "PAYMENT_CONFIRM_INTERNAL_FAILURE",
+                "payment-confirm-compensation-1"
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PAYMENT_CANCEL_REQUEST_FAILED);
+        server.verify();
+    }
+
+    @Test
+    void 결제취소_취소ID가없으면_PAYMENT_CANCEL_REQUEST_FAILED가발생한다() {
+        // given
+        server.expect(requestTo(BASE_URL + "/payments/pay_123/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {
+                          "cancellation": {
+                            "status": "SUCCEEDED"
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
 
         // when
         // then
