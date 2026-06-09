@@ -49,45 +49,76 @@ public class RefundAmountCalculator {
         long grossPgRefundAmount;
         long earnedPointRecoveryAmount;
 
+        /*
+         * PG 우선 환불 정책에서는 부분 환불에서도 이미 완료된 gross 환불 누적액을 조회해야 합니다.
+         * 그래야 PG 환불 가능 금액을 먼저 소진하고, 부족한 금액만 사용 포인트 반환으로 넘길 수 있습니다.
+         */
+        long completedGrossPointRefundAmount =
+                refundRepository.sumCompletedGrossPointRefundAmount(payment.getId());
+
+        long completedGrossPgRefundAmount =
+                refundRepository.sumCompletedGrossPgRefundAmount(payment.getId());
+
+        long completedEarnedPointRecoveryAmount =
+                refundRepository.sumCompletedEarnedPointRecoveryAmount(payment.getId());
+
+        /*
+         * 아직 반환 가능한 사용 포인트, 아직 PG로 환불 가능한 금액,
+         * 아직 회수해야 하는 적립 포인트 잔여량을 계산합니다.
+         */
+        long remainingGrossPointRefundAmount =
+                payment.getUsedPointAmount() - completedGrossPointRefundAmount;
+
+        long remainingGrossPgRefundAmount =
+                payment.getPgAmount() - completedGrossPgRefundAmount;
+
+        long remainingEarnedPointRecoveryAmount =
+                payment.getRewardPointAmount() - completedEarnedPointRecoveryAmount;
+
+        validateRemainingAmount(remainingGrossPointRefundAmount);
+        validateRemainingAmount(remainingGrossPgRefundAmount);
+        validateRemainingAmount(remainingEarnedPointRecoveryAmount);
+
         if (finalRefund) {
-            /*
-             * 마지막 환불에서는 비율 계산으로 생긴 버림 오차를 제거하기 위해
-             * 결제 당시 전체 금액에서 이미 완료된 gross 환불 금액을 뺀 값을 사용합니다.
-             *
-             * 여기서 최종 환불액(pointRefundAmount, pgRefundAmount) 합계를 사용하면 안 됩니다.
-             * 이전 부분 환불에서 적립 포인트 회수 때문에 최종 환불액이 줄어들 수 있기 때문입니다.
-             */
-            long completedGrossPointRefundAmount =
-                    refundRepository.sumCompletedGrossPointRefundAmount(payment.getId());
-
-            long completedGrossPgRefundAmount =
-                    refundRepository.sumCompletedGrossPgRefundAmount(payment.getId());
-
-            long completedEarnedPointRecoveryAmount =
-                    refundRepository.sumCompletedEarnedPointRecoveryAmount(payment.getId());
-
-            grossPointRefundAmount = payment.getUsedPointAmount() - completedGrossPointRefundAmount;
-            grossPgRefundAmount = payment.getPgAmount() - completedGrossPgRefundAmount;
+            // 마지막 환불에서는 남아 있는 PG 환불 가능 금액과 남아 있는 사용 포인트 반환 가능 금액을 모두 정리합니다.
+            grossPgRefundAmount = remainingGrossPgRefundAmount;
+            grossPointRefundAmount = remainingGrossPointRefundAmount;
 
             /*
-             * 마지막 환불에서는 남은 적립 포인트 회수 대상 전체를 잡습니다.
-             * 이전 부분 환불에서 이미 회수한 적립 포인트는 제외합니다.
+             * 마지막 환불에서는 정수 나눗셈으로 생긴 버림 오차를 제거하기 위해
+             * 남은 적립 포인트 회수 대상 전체를 잡습니다.
              */
-            earnedPointRecoveryAmount =
-                    payment.getRewardPointAmount() - completedEarnedPointRecoveryAmount;
+            earnedPointRecoveryAmount = remainingEarnedPointRecoveryAmount;
         } else {
             /*
-             * 마지막 환불이 아닌 경우에는 요청 금액 비율에 따라
-             * 사용 포인트 환불 예정액과 PG 환불 예정액을 계산합니다.
+             * 부분환불에서는 PG 환불 가능 금액을 먼저 사용합니다.
+             * 사용 포인트는 PG 환불 가능 금액이 부족한 경우에만 반환 대상으로 잡습니다.
              */
-            grossPointRefundAmount = calculatePointRefundAmount(payment, requestedRefundAmount);
-            grossPgRefundAmount = requestedRefundAmount - grossPointRefundAmount;
+            grossPgRefundAmount = calculatePgRefundAmount(
+                    requestedRefundAmount,
+                    remainingGrossPgRefundAmount
+            );
 
             /*
-             * 부분 환불에서는 실제 PG 환불 예정 금액에 비례해서
-             * 이번 환불에서 회수할 적립 포인트 금액을 계산합니다.
+             * PG로 환불하지 못한 나머지 금액만 사용 포인트 반환 대상으로 계산합니다.
              */
-            earnedPointRecoveryAmount = calculateEarnedPointRecoveryAmount(payment, grossPgRefundAmount);
+            long remainingRefundAmountAfterPg =
+                    requestedRefundAmount - grossPgRefundAmount;
+
+            grossPointRefundAmount = calculatePointRefundAmount(
+                    remainingRefundAmountAfterPg,
+                    remainingGrossPointRefundAmount
+            );
+
+            /*
+             * 적립 포인트 회수액은 PG 환불액 기준이 아니라
+             * 환불 대상 상품 금액(requestedRefundAmount)이 전체 주문 금액에서 차지하는 비율로 계산합니다.
+             */
+            earnedPointRecoveryAmount = calculateEarnedPointRecoveryAmount(
+                    payment,
+                    requestedRefundAmount,
+                    remainingEarnedPointRecoveryAmount
+            );
         }
 
         /*
@@ -138,48 +169,65 @@ public class RefundAmountCalculator {
     }
 
     /**
-     * 요청 환불 금액 중 사용 포인트로 돌려줘야 할 원래 금액을 계산합니다.
-     *
-     * 예를 들어 전체 결제 금액 중 20%를 사용 포인트로 결제했다면,
-     * 부분 환불 금액에서도 같은 비율만큼 사용 포인트 환불 예정액을 계산합니다.
+     * PG 환불 이후 남은 환불 대상 금액 중 사용 포인트로 반환할 금액을 계산합니다.
+     * 단, 남아 있는 사용 포인트 반환 가능 금액을 초과할 수 없습니다.
      */
-    private long calculatePointRefundAmount(Payment payment, long refundAmount) {
-        if (payment.getTotalAmount() == 0L || payment.getUsedPointAmount() == 0L) {
-            return 0L;
-        }
+    private long calculatePointRefundAmount(
+            long remainingRefundAmountAfterPg,
+            long remainingGrossPointRefundAmount
+    ) {
+        return Math.min(remainingRefundAmountAfterPg, remainingGrossPointRefundAmount);
+    }
 
-        return refundAmount * payment.getUsedPointAmount() / payment.getTotalAmount();
+    /**
+     * 요청 환불 금액 중 PG로 먼저 환불할 금액을 계산합니다.
+     * 단, 남아 있는 PG 환불 가능 금액을 초과할 수 없습니다.
+     */
+    private long calculatePgRefundAmount(
+            long requestedRefundAmount,
+            long remainingGrossPgRefundAmount
+    ) {
+        return Math.min(requestedRefundAmount, remainingGrossPgRefundAmount);
     }
 
     /**
      * 이번 부분 환불에서 회수해야 할 적립 포인트 금액을 계산합니다.
-     *
-     * 적립 포인트는 PG 결제 금액을 기준으로 지급되었다고 보고,
-     * 이번 환불의 grossPgRefundAmount가 원래 PG 결제 금액에서 차지하는 비율만큼 회수합니다.
-     *
+     * 적립 포인트는 PG 환불 금액 기준이 아니라,
+     * 전체 주문 금액 대비 이번 환불 대상 상품 금액 비율로 회수합니다.
      * 마지막 환불에서는 이 메서드를 사용하지 않고,
      * 남은 적립 포인트 회수 대상 전체를 별도로 계산합니다.
      */
-    private long calculateEarnedPointRecoveryAmount(Payment payment, long grossPgRefundAmount) {
-        if (payment.getPgAmount() == 0L || payment.getRewardPointAmount() == 0L) {
+    private long calculateEarnedPointRecoveryAmount(
+            Payment payment,
+            long requestedRefundAmount,
+            long remainingEarnedPointRecoveryAmount
+    ) {
+        if (payment.getTotalAmount() == 0L || payment.getRewardPointAmount() == 0L) {
             return 0L;
         }
 
-        return grossPgRefundAmount * payment.getRewardPointAmount() / payment.getPgAmount();
+        long calculatedRecoveryAmount =
+                requestedRefundAmount * payment.getRewardPointAmount() / payment.getTotalAmount();
+
+        return Math.min(calculatedRecoveryAmount, remainingEarnedPointRecoveryAmount);
+    }
+
+    /**
+     * 완료 환불 누적값을 뺀 잔여 한도가 음수인지 검증합니다.
+     */
+    private void validateRemainingAmount(long amount) {
+        if (amount < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
     }
 
     /**
      * 환불 정산 계산 결과가 정책적으로 일관적인지 검증합니다.
-     *
      * 검증 관계:
      * 1. 요청 환불 금액 = 원래 포인트 환불 예정액 + 원래 PG 환불 예정액
      * 2. 원래 포인트 환불 예정액 = 최종 포인트 환불액 + 사용 포인트에서 회수한 금액
      * 3. 원래 PG 환불 예정액 = 최종 PG 환불액 + PG 환불액에서 차감한 금액
      * 4. 회수해야 할 적립 포인트 = 사용 포인트 회수 + 보유 포인트 회수 + PG 환불 차감
-     *
-     * 주의:
-     * recoveredFromBalance는 고객의 기존 보유 포인트에서 차감하는 금액입니다.
-     * 따라서 requestedRefundAmount 계산에 직접 더하면 안 됩니다.
      */
     private void validateCalculatedAmount(
             long requestedRefundAmount,

@@ -15,7 +15,8 @@ public enum PointTransactionType {
 
     /**
      * 환불 요청 시점에 적립 포인트 회수 예정 금액을 미리 차감합니다.
-     * PG 환불이 아직 완료되지 않았기 때문에 "최종 회수"가 아니라 "예약 회수" 의미입니다.
+     * PG 환불이 성공하면 이 차감은 그대로 최종 회수로 간주하고,
+     * PG 환불이 최종 실패하면 EARN_RECOVERY_RELEASE로 되돌립니다.
      */
     EARN_RECOVERY_RESERVE,
 

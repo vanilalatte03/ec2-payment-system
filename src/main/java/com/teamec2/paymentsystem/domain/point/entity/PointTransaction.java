@@ -142,7 +142,6 @@ public class PointTransaction {
 
     /**
      * 환불 과정에서 발생하는 포인트 원장을 생성합니다.
-     * USE_RESTORE, EARN_CANCEL처럼 refundId를 기준으로 중복 여부를 판단하는 거래에 사용합니다.
      */
     public static PointTransaction createForRefund(
             User user,
