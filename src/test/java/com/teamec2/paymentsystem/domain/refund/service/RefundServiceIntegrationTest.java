@@ -90,7 +90,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void request_partial_refund_creates_refund_items_outbox_and_reserves_quantity() {
+    void 부분환불요청_성공하면_환불상품과outbox를생성하고_수량을예약한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         String idempotencyKey = uniqueKey("refund-partial");
@@ -114,8 +114,8 @@ class RefundServiceIntegrationTest {
 
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.PROCESSING);
         assertThat(refund.getRefundAmount()).isEqualTo(2_973L);
-        assertThat(refund.getPointRefundAmount()).isEqualTo(273L);
-        assertThat(refund.getPgRefundAmount()).isEqualTo(2_700L);
+        assertThat(refund.getPointRefundAmount()).isZero();
+        assertThat(refund.getPgRefundAmount()).isEqualTo(2_973L);
         assertThat(refundItems).hasSize(1);
         assertThat(refundItems.get(0).getRefundQuantity()).isEqualTo(1);
         assertThat(refundedOrderItem.getRefundReservedQuantity()).isEqualTo(1);
@@ -124,7 +124,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void same_idempotency_key_returns_existing_refund_without_duplicate_rows() {
+    void 같은멱등키로_같은환불을요청하면_기존환불을반환하고_중복저장하지않는다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         String idempotencyKey = uniqueKey("refund-idempotent");
@@ -159,7 +159,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void active_refund_blocks_new_refund_with_different_idempotency_key() {
+    void 진행중인환불이있으면_다른멱등키의_새환불요청을차단한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         refundService.requestPartialRefund(
@@ -192,7 +192,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void complete_partial_refund_updates_refund_outbox_quantity_payment_and_points() {
+    void 부분환불완료_성공하면_환불outbox수량결제포인트를갱신한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestPartialRefund(
@@ -222,14 +222,14 @@ class RefundServiceIntegrationTest {
         assertThat(refundedOrderItem.getRefundReservedQuantity()).isZero();
         assertThat(refundedOrderItem.getRefundedQuantity()).isEqualTo(1);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PARTIAL_REFUNDED);
-        assertThat(user.getPointBalance()).isEqualTo(273L);
+        assertThat(user.getPointBalance()).isZero();
         assertThat(pointTransactionRepository.findAll())
                 .extracting("type")
-                .contains(PointTransactionType.USE_RESTORE);
+                .doesNotContain(PointTransactionType.USE_RESTORE);
     }
 
     @Test
-    void complete_by_portone_cancellation_id_updates_partial_refund_from_webhook() {
+    void 환불웹훅완료_cancellationId로_부분환불을완료한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestPartialRefund(
@@ -327,7 +327,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void complete_by_portone_cancellation_id_recovers_failed_outbox_when_pg_result_unknown_webhook_arrives_late() {
+    void 환불웹훅완료_재시도초과로실패한outbox도_PG미확정환불이면복구해완료한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestPartialRefund(
@@ -488,7 +488,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void complete_full_refund_updates_payment_to_full_refunded_and_order_to_canceled() {
+    void 전체환불완료_성공하면_결제를전체환불로_주문을취소로변경한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestFullRefund(
@@ -519,7 +519,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void complete_by_portone_cancellation_id_updates_full_refund_from_webhook() {
+    void 환불웹훅완료_cancellationId로_전체환불을완료한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestFullRefund(
@@ -559,7 +559,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void fail_refund_releases_reserved_quantity_and_keeps_payment_status() {
+    void 환불실패_확정되면_예약수량을해제하고_결제상태는유지한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestPartialRefund(
@@ -591,7 +591,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void fail_refund_releases_reserved_earned_point_recovery_to_user_balance() {
+    void 환불실패_확정되면_예약한적립포인트회수금액을_회원잔액으로되돌린다() {
         // given
         RefundFixture fixture = completedPaymentFixture(0L, 9_000L);
         fixture.user().increasePointBalance(100L);
@@ -630,7 +630,7 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void unknown_pg_result_keeps_reserved_quantity_and_schedules_retry() {
+    void PG결과미확정이면_예약수량을유지하고_재시도를예약한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         RefundResponse response = refundService.requestPartialRefund(
@@ -663,7 +663,60 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
-    void final_refund_allocates_all_remaining_point_and_pg_amount_after_completed_partial_refund() {
+    void PG결과미확정_재시도초과해도_환불상태와예약수량을유지하고_새환불을차단한다() {
+        // given
+        RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
+        RefundResponse response = refundService.requestPartialRefund(
+                fixture.user().getId(),
+                fixture.order().getId(),
+                uniqueKey("refund-unknown-retry-exceeded"),
+                new PartialRefundRequest(
+                        "부분 환불",
+                        List.of(new RefundItemRequest(fixture.firstItem().getId(), 1))
+                )
+        );
+        Long outboxId = onlyOutbox().getId();
+
+        // when
+        for (int attempt = 0; attempt < 6; attempt++) {
+            refundProcessingTxService.start(outboxId);
+            refundProcessingTxService.retryAsPgResultUnknown(outboxId, "PortOne 취소 API 호출 타임아웃");
+        }
+
+        // then
+        Refund refund = refundRepository.findById(response.refundId()).orElseThrow();
+        RefundOutbox outbox = refundOutboxRepository.findById(outboxId).orElseThrow();
+        OrderItem refundedOrderItem = orderItemRepository.findById(fixture.firstItem().getId()).orElseThrow();
+        Payment payment = paymentRepository.findById(fixture.payment().getId()).orElseThrow();
+
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.PG_RESULT_UNKNOWN);
+        assertThat(refund.getFailedReason()).isNull();
+        assertThat(outbox.getStatus()).isEqualTo(RefundOutboxStatus.FAILED);
+        assertThat(outbox.getRetryCount()).isEqualTo(6);
+        assertThat(refundedOrderItem.getRefundReservedQuantity()).isEqualTo(1);
+        assertThat(refundedOrderItem.getRefundedQuantity()).isZero();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+
+        assertThatThrownBy(() -> refundService.requestPartialRefund(
+                fixture.user().getId(),
+                fixture.order().getId(),
+                uniqueKey("refund-after-retry-exceeded"),
+                new PartialRefundRequest(
+                        "두 번째 환불",
+                        List.of(new RefundItemRequest(fixture.secondItem().getId(), 1))
+                )
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.REFUND_IN_PROGRESS);
+
+        assertThat(refundRepository.count()).isEqualTo(1);
+        assertThat(refundItemRepository.count()).isEqualTo(1);
+        assertThat(refundOutboxRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 마지막전체환불은_이전부분환불후_남은포인트와PG금액을모두배분한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
         refundService.requestPartialRefund(
@@ -692,8 +745,8 @@ class RefundServiceIntegrationTest {
         List<RefundItem> refundItems = refundItemRepository.findAllByRefund_Id(refund.getId());
 
         assertThat(refund.getRefundAmount()).isEqualTo(6_937L);
-        assertThat(refund.getPointRefundAmount()).isEqualTo(637L);
-        assertThat(refund.getPgRefundAmount()).isEqualTo(6_300L);
+        assertThat(refund.getPointRefundAmount()).isEqualTo(937L);
+        assertThat(refund.getPgRefundAmount()).isEqualTo(6_000L);
         assertThat(refund.getRefundAmount())
                 .isEqualTo(refund.getPointRefundAmount() + refund.getPgRefundAmount());
         assertThat(refundItems).hasSize(2);

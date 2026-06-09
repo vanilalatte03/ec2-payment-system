@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -430,39 +429,6 @@ public class PointService {
     }
 
     /**
-     * 환불 시 고객에게 실제 반환할 사용 포인트를 복구합니다.
-     * 멱등 키: REFUND:{refundId}:USE_RESTORE
-     * 같은 환불 건에 대해 이미 USE_RESTORE 원장이 있으면 중복 증가하지 않습니다.
-     */
-    private void restoreRefundUsedPoint(
-            User user,
-            Payment payment,
-            Refund refund,
-            Long pointRefundAmount
-    ) {
-        String idempotencyKey = PointTransaction.refundIdempotencyKey(
-                refund,
-                PointTransactionType.USE_RESTORE
-        );
-
-        if (pointTransactionRepository.existsByIdempotencyKey(idempotencyKey)) {
-            return;
-        }
-
-        user.increasePointBalance(pointRefundAmount);
-
-        PointTransaction pointTransaction = PointTransaction.createForRefund(
-                user,
-                payment,
-                refund,
-                PointTransactionType.USE_RESTORE,
-                pointRefundAmount
-        );
-
-        pointTransactionRepository.save(pointTransaction);
-    }
-
-    /**
      * 결제 완료 후 포인트 적립 요청이 유효한지 검증합니다.
      */
     private void validateEarnPointRequest(Payment payment) {
@@ -515,39 +481,6 @@ public class PointService {
         return userRepository.findByIdForUpdate(userId).orElseThrow(
                 () -> new BusinessException(ErrorCode.USER_NOT_FOUND)
         );
-    }
-
-    /**
-     * 환불 포인트 정산 처리에 필요한 Payment/Refund 스냅샷 값이 유효한지 검증합니다.
-     * 금액을 다시 계산하지 않습니다.
-     * RefundService에서 확정한 스냅샷 값이 존재하고 음수가 아닌지만 확인합니다.
-     */
-    private void validateRefundPointSettlementRequest(
-            Payment payment,
-            Refund refund
-    ) {
-        if (payment == null
-                || payment.getId() == null
-                || refund == null
-                || refund.getId() == null
-                || refund.getPointRefundAmount() == null
-                || refund.getRecoveredFromBalance() == null) {
-            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
-        }
-
-        /**
-         * 잘못된 Payment와 Refund 조합으로 포인트 잔액이 변경되는 것을 막습니다.
-         */
-        if (refund.getPayment() == null
-                || refund.getPayment().getId() == null
-                || !refund.getPayment().getId().equals(payment.getId())) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
-        }
-
-        if (refund.getPointRefundAmount() < 0
-                || refund.getRecoveredFromBalance() < 0) {
-            throw new BusinessException(ErrorCode.INVALID_POINT_TRANSACTION_AMOUNT);
-        }
     }
 
     private void validateRefundPointRequest(Payment payment, Refund refund, Long amount) {
