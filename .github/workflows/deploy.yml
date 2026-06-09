@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - develop
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -38,14 +39,14 @@ jobs:
         run: ./gradlew --no-daemon clean build
 
       - name: Prepare deployment artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           mkdir -p deployment
           jar_file=$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' -print -quit)
           cp "$jar_file" deployment/app.jar
 
       - name: Upload deployment artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
@@ -53,7 +54,7 @@ jobs:
           if-no-files-found: error
 
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: ci
     runs-on: ubuntu-latest
 
