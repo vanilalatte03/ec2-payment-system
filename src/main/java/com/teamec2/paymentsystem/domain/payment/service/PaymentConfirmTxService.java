@@ -10,6 +10,9 @@ import com.teamec2.paymentsystem.domain.order.service.OrderCancelService;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.payment.entity.PaymentCompensationOutbox;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCompensationOutboxStatus;
+import com.teamec2.paymentsystem.domain.payment.repository.PaymentCompensationOutboxRepository;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
@@ -23,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 결제 확정 과정에서 DB 상태 변경만 담당하는 트랜잭션 서비스.
@@ -38,8 +42,12 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class PaymentConfirmTxService {
 
+    private static final String COMPENSATION_REASON = "PAYMENT_CONFIRM_INTERNAL_FAILURE";
+    private static final String COMPENSATION_IDEMPOTENCY_KEY_PREFIX = "payment-confirm-compensation-";
+
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentCompensationOutboxRepository paymentCompensationOutboxRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderCancelService orderCancelService;
     private final PointService pointService;
@@ -183,6 +191,172 @@ public class PaymentConfirmTxService {
     }
 
     /**
+     * 외부 결제 성공 후 내부 완료 트랜잭션이 실패한 결제를 완료 재시도 대상으로 남긴다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markConfirmRetryRequired(Long paymentId, LocalDateTime approvedAt, String reason) {
+        Payment payment = findPaymentByIdForUpdate(paymentId);
+
+        if (payment.isCompleted() || !payment.canConfirm()) {
+            return;
+        }
+
+        payment.markConfirmRetryRequired(
+                approvedAt,
+                reason,
+                LocalDateTime.now()
+        );
+    }
+
+    /**
+     * 외부 결제가 성공했지만 내부 주문으로 완료하면 안 되는 결제를 보상 취소 대상으로 남긴다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Long markCompensationRequired(Long paymentId, Long cancelAmount, String reason) {
+        Payment payment = findPaymentByIdForUpdate(paymentId);
+
+        if (payment.isCompleted()) {
+            return null;
+        }
+
+        if (!payment.isPending()
+                && !payment.isConfirmRetryRequired()
+                && !payment.isCompensationRequired()) {
+            return null;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        payment.markCompensationRequired();
+
+        PaymentCompensationOutbox outbox = paymentCompensationOutboxRepository.findByPaymentIdForUpdate(paymentId)
+                .map(existingOutbox -> {
+                    existingOutbox.markPending(reason, now);
+                    return existingOutbox;
+                })
+                .orElseGet(() -> paymentCompensationOutboxRepository.save(
+                        PaymentCompensationOutbox.create(payment, cancelAmount, reason, now)
+                ));
+
+        return outbox.getId();
+    }
+
+    /**
+     * 내부 완료 재시도를 시작할 결제를 선점한다.
+     */
+    @Transactional
+    public Optional<PaymentConfirmRetryCommand> startConfirmRetry(Long paymentId) {
+        Payment payment = findPaymentByIdForUpdate(paymentId);
+
+        if (!payment.isConfirmRetryRequired()) {
+            return Optional.empty();
+        }
+
+        payment.markConfirmProcessing(LocalDateTime.now());
+
+        return Optional.of(new PaymentConfirmRetryCommand(
+                payment.getId(),
+                payment.getConfirmRetryApprovedAt(),
+                payment.getPgAmount()
+        ));
+    }
+
+    /**
+     * 내부 완료 재시도 실패를 기록하고 다음 시도를 예약한다.
+     */
+    @Transactional
+    public void retryConfirm(Long paymentId, String reason) {
+        Payment payment = findPaymentByIdForUpdate(paymentId);
+
+        if (!payment.isConfirmRetryRequired()) {
+            return;
+        }
+
+        payment.markConfirmRetry(reason, LocalDateTime.now());
+    }
+
+    /**
+     * 보상 취소 PG 호출 전 결제를 선점하고 호출에 필요한 값을 반환한다.
+     */
+    @Transactional
+    public Optional<PaymentCompensationCommand> startCompensation(Long outboxId) {
+        PaymentCompensationOutbox outbox = findCompensationOutboxForUpdate(outboxId);
+        Payment payment = outbox.getPayment();
+
+        if (outbox.getStatus() != PaymentCompensationOutboxStatus.PENDING) {
+            return Optional.empty();
+        }
+
+        if (!payment.isCompensationRequired()) {
+            outbox.markFailed("보상 취소가 필요한 결제 상태가 아닙니다.");
+            return Optional.empty();
+        }
+
+        outbox.markProcessing(LocalDateTime.now());
+
+        return Optional.of(new PaymentCompensationCommand(
+                outbox.getId(),
+                payment.getId(),
+                payment.getPortonePaymentId(),
+                outbox.getCancelAmount(),
+                outbox.getCancelAmount(),
+                COMPENSATION_REASON,
+                COMPENSATION_IDEMPOTENCY_KEY_PREFIX + payment.getId()
+        ));
+    }
+
+    /**
+     * 보상 취소가 성공한 뒤 내부 주문/결제를 실패 상태로 정리한다.
+     */
+    @Transactional
+    public void completeCompensation(Long outboxId, String cancellationId) {
+        PaymentCompensationOutbox outbox = findCompensationOutboxForUpdate(outboxId);
+        Payment payment = outbox.getPayment();
+
+        if (!payment.isCompensationRequired()) {
+            return;
+        }
+
+        outbox.recordPortoneCancellationId(cancellationId);
+        failAfterCompensation(payment);
+        outbox.markSucceeded();
+    }
+
+    /**
+     * 보상 취소 결과가 불명확하거나 외부 호출 중 예외가 발생한 경우 다음 시도를 예약한다.
+     */
+    @Transactional
+    public void retryCompensation(Long outboxId, String reason) {
+        PaymentCompensationOutbox outbox = findCompensationOutboxForUpdate(outboxId);
+        Payment payment = outbox.getPayment();
+
+        if (!payment.isCompensationRequired()) {
+            return;
+        }
+
+        boolean retryScheduled = outbox.markRetry(reason, LocalDateTime.now());
+
+        if (!retryScheduled) {
+            payment.markCompensationFailed();
+        }
+    }
+
+    /**
+     * 보상 취소가 명확히 실패하거나 재시도 한도를 초과한 경우 운영자 확인 상태로 남긴다.
+     */
+    @Transactional
+    public void failCompensation(Long outboxId, String reason) {
+        PaymentCompensationOutbox outbox = findCompensationOutboxForUpdate(outboxId);
+        Payment payment = outbox.getPayment();
+
+        if (!payment.isCompensationRequired()) {
+            return;
+        }
+
+        outbox.markFailed(reason);
+        payment.markCompensationFailed();
+    }
+
+    /**
      * PortOne 보상 취소가 성공한 뒤 내부 주문/결제를 실패 상태로 정리한다.
      *
      * <p>{@code Propagation.REQUIRES_NEW}는 항상 새 트랜잭션을 시작하겠다는 의미다.
@@ -202,7 +376,11 @@ public class PaymentConfirmTxService {
     public void failAfterCompensation(Long paymentId) {
         Payment payment = findPaymentByIdForUpdate(paymentId);
 
-        if (!payment.isPending()) {
+        failAfterCompensation(payment);
+    }
+
+    private void failAfterCompensation(Payment payment) {
+        if (!payment.isPending() && !payment.isCompensationRequired()) {
             return;
         }
 
@@ -221,6 +399,11 @@ public class PaymentConfirmTxService {
     private Payment findPaymentByIdForUpdate(Long paymentId) {
         return paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    private PaymentCompensationOutbox findCompensationOutboxForUpdate(Long outboxId) {
+        return paymentCompensationOutboxRepository.findByIdForUpdate(outboxId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
     /**
@@ -263,7 +446,7 @@ public class PaymentConfirmTxService {
             throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
         }
 
-        if (!payment.isPending()) {
+        if (!payment.canConfirm()) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
     }

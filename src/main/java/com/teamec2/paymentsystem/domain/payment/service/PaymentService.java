@@ -1,6 +1,5 @@
 package com.teamec2.paymentsystem.domain.payment.service;
 
-import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -9,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 결제 도메인의 PG 검증과 보상 취소를 담당하는 서비스.
+ * 결제 도메인의 PG 조회와 검증을 담당하는 서비스.
  *
  * <p>유스케이스 순서는 Facade가 조율하고, 이 클래스는 PortOne 같은 외부 결제 시스템과의
  * 도메인 규칙만 처리한다. DB 상태 변경은 {@link PaymentConfirmTxService}에 위임한다.
@@ -17,9 +16,6 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
-
-    private static final String COMPENSATION_REASON = "PAYMENT_CONFIRM_INTERNAL_FAILURE";
-    private static final String COMPENSATION_IDEMPOTENCY_KEY_PREFIX = "payment-confirm-compensation-";
 
     private final PaymentGateway paymentGateway;
 
@@ -69,35 +65,6 @@ public class PaymentService {
 
         if (gatewayResponse.approvedAt() == null) {
             throw new BusinessException(ErrorCode.EXTERNAL_API_FAILED);
-        }
-    }
-
-    /**
-     * 외부 결제 성공 후 내부 확정이 불가능할 때 PortOne 결제를 취소한다.
-     *
-     * <p>이 메서드는 일반적인 사용자 환불 기능이 아니다. 결제 확정 과정에서
-     * "PortOne은 성공했지만 우리 DB 완료 처리가 실패한 상황"을 되돌리기 위한 보상 작업이다.
-     *
-     * <p>이 메서드는 외부 결제 취소 요청만 수행한다. 취소 성공 후 내부 주문/결제를
-     * 실패 상태로 정리하는 일은 유스케이스 순서를 조율하는 Facade가 담당한다.
-     *
-     * @param target 보상 취소할 내부 결제 정보
-     * @param cancelAmount PortOne에서 실제 성공 처리된 금액
-     */
-    public void cancelForConfirmCompensation(
-            ConfirmPaymentTarget target,
-            Long cancelAmount
-    ) {
-        PaymentCancelResponse cancelResponse = paymentGateway.cancelPayment(
-                target.portonePaymentId(),
-                cancelAmount,
-                cancelAmount,
-                COMPENSATION_REASON,
-                COMPENSATION_IDEMPOTENCY_KEY_PREFIX + target.paymentId()
-        );
-
-        if (!cancelResponse.isSucceeded()) {
-            throw new BusinessException(ErrorCode.PAYMENT_COMPENSATION_FAILED);
         }
     }
 }

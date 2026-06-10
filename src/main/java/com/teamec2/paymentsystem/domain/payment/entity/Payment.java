@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 주문에 대한 결제 정보를 관리하는 엔티티.
@@ -23,6 +24,12 @@ import java.util.UUID;
 @Table(name = "payments")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment extends BaseEntity {
+
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+    private static final int MAX_CONFIRM_RETRY_COUNT = 5;
+    private static final long BASE_RETRY_DELAY_MINUTES = 5L;
+    private static final long MAX_RETRY_DELAY_MINUTES = 60L;
+    private static final long MAX_JITTER_SECONDS = 60L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -63,6 +70,21 @@ public class Payment extends BaseEntity {
 
     @Column(name = "failed_at")
     private LocalDateTime failedAt;
+
+    @Column(name = "confirm_retry_count", nullable = false)
+    private int confirmRetryCount = 0;
+
+    @Column(name = "next_confirm_attempt_at")
+    private LocalDateTime nextConfirmAttemptAt;
+
+    @Column(name = "confirm_processing_started_at")
+    private LocalDateTime confirmProcessingStartedAt;
+
+    @Column(name = "confirm_retry_approved_at")
+    private LocalDateTime confirmRetryApprovedAt;
+
+    @Column(name = "confirm_last_error_message", length = MAX_ERROR_MESSAGE_LENGTH)
+    private String confirmLastErrorMessage;
 
     private Payment(
             Order order,
@@ -123,6 +145,19 @@ public class Payment extends BaseEntity {
         return status == PaymentStatus.PENDING;
     }
 
+    public boolean canConfirm() {
+        return status == PaymentStatus.PENDING
+                || status == PaymentStatus.CONFIRM_RETRY_REQUIRED;
+    }
+
+    public boolean isConfirmRetryRequired() {
+        return status == PaymentStatus.CONFIRM_RETRY_REQUIRED;
+    }
+
+    public boolean isCompensationRequired() {
+        return status == PaymentStatus.COMPENSATION_REQUIRED;
+    }
+
     public boolean isPointOnly() {
         return pgAmount == 0;
     }
@@ -139,6 +174,7 @@ public class Payment extends BaseEntity {
 
         changeStatus(PaymentStatus.COMPLETED);
         this.approvedAt = approvedAt;
+        clearConfirmRetryState();
     }
 
     /**
@@ -162,6 +198,82 @@ public class Payment extends BaseEntity {
 
         changeStatus(PaymentStatus.FAILED);
         this.failedAt = failedAt;
+        clearConfirmRetryState();
+    }
+
+    /**
+     * 외부 결제 성공은 확인했지만 내부 완료 트랜잭션이 실패한 경우 재시도 대상으로 남긴다.
+     */
+    public void markConfirmRetryRequired(LocalDateTime approvedAt, String reason, LocalDateTime now) {
+        if (approvedAt == null || now == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (isCompleted()) {
+            return;
+        }
+
+        if (status != PaymentStatus.CONFIRM_RETRY_REQUIRED) {
+            changeStatus(PaymentStatus.CONFIRM_RETRY_REQUIRED);
+            this.confirmRetryCount = 0;
+        }
+
+        this.confirmRetryApprovedAt = approvedAt;
+        this.nextConfirmAttemptAt = now;
+        this.confirmProcessingStartedAt = null;
+        this.confirmLastErrorMessage = normalizeErrorMessage(reason);
+    }
+
+    public void markConfirmProcessing(LocalDateTime now) {
+        if (now == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (status != PaymentStatus.CONFIRM_RETRY_REQUIRED) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+
+        this.confirmProcessingStartedAt = now;
+    }
+
+    public void markConfirmRetry(String reason, LocalDateTime now) {
+        if (now == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
+
+        if (status != PaymentStatus.CONFIRM_RETRY_REQUIRED) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+
+        this.confirmRetryCount++;
+        this.confirmLastErrorMessage = normalizeErrorMessage(reason);
+        this.confirmProcessingStartedAt = null;
+
+        if (this.confirmRetryCount > MAX_CONFIRM_RETRY_COUNT) {
+            this.nextConfirmAttemptAt = null;
+            return;
+        }
+
+        this.nextConfirmAttemptAt = calculateNextAttemptAt(now, confirmRetryCount);
+    }
+
+    /**
+     * 외부 결제가 성공했지만 내부 주문으로 완료하면 안 되는 경우 PG 보상 취소 대상으로 남긴다.
+     */
+    public void markCompensationRequired() {
+        if (status != PaymentStatus.COMPENSATION_REQUIRED) {
+            changeStatus(PaymentStatus.COMPENSATION_REQUIRED);
+        }
+
+        clearConfirmRetryState();
+    }
+
+    public void markCompensationFailed() {
+        if (status == PaymentStatus.COMPENSATION_FAILED) {
+            return;
+        }
+
+        changeStatus(PaymentStatus.COMPENSATION_FAILED);
     }
 
     /**
@@ -219,6 +331,37 @@ public class Payment extends BaseEntity {
 
     private static String generatePortonePaymentId() {
         return "pay_" + UUID.randomUUID();
+    }
+
+    private void clearConfirmRetryState() {
+        this.confirmRetryCount = 0;
+        this.nextConfirmAttemptAt = null;
+        this.confirmProcessingStartedAt = null;
+        this.confirmRetryApprovedAt = null;
+        this.confirmLastErrorMessage = null;
+    }
+
+    private static LocalDateTime calculateNextAttemptAt(LocalDateTime now, int retryCount) {
+        long delayMinutes = Math.min(
+                (long) (BASE_RETRY_DELAY_MINUTES * Math.pow(2, retryCount - 1)),
+                MAX_RETRY_DELAY_MINUTES
+        );
+
+        long jitterSeconds = ThreadLocalRandom.current().nextLong(0, MAX_JITTER_SECONDS + 1);
+
+        return now.plusMinutes(delayMinutes).plusSeconds(jitterSeconds);
+    }
+
+    private String normalizeErrorMessage(String reason) {
+        if (reason == null) {
+            return null;
+        }
+
+        if (reason.length() <= MAX_ERROR_MESSAGE_LENGTH) {
+            return reason;
+        }
+
+        return reason.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
     private static void validateAmounts(
