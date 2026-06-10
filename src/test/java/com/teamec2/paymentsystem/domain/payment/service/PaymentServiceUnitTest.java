@@ -1,9 +1,7 @@
 package com.teamec2.paymentsystem.domain.payment.service;
 
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
-import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
-import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -18,6 +16,7 @@ import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,6 +28,9 @@ class PaymentServiceUnitTest {
     @Mock
     PaymentGateway paymentGateway;
 
+    @Mock
+    PaymentCompensationProcessor paymentCompensationProcessor;
+
     PaymentService paymentService;
 
     PaymentFacade paymentFacade;
@@ -36,11 +38,42 @@ class PaymentServiceUnitTest {
     @BeforeEach
     void setUp() {
         paymentService = new PaymentService(paymentGateway);
-        paymentFacade = new PaymentFacade(paymentConfirmTxService, paymentService);
+        paymentFacade = new PaymentFacade(
+                paymentConfirmTxService,
+                paymentService,
+                paymentCompensationProcessor
+        );
     }
 
     @Test
-    void 결제확정_외부결제성공후_내부완료실패면_보상취소하고_원예외를전파한다() {
+    void 결제확정_외부결제성공후_내부완료일시장애면_완료재시도대상으로남기고_원예외를전파한다() {
+        // given
+        Long userId = 1L;
+        ConfirmPaymentRequest request = new ConfirmPaymentRequest(10L, "pay_123");
+        ConfirmPaymentTarget target = new ConfirmPaymentTarget(20L, "pay_123", 800L, false, null);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        PaymentGatewayResponse gatewayResponse = new PaymentGatewayResponse("pay_123", "PAID", 800L, approvedAt);
+        RuntimeException completeFailure = new IllegalStateException("temporary db failure");
+
+        when(paymentConfirmTxService.prepare(userId, request)).thenReturn(target);
+        when(paymentGateway.getPayment("pay_123")).thenReturn(gatewayResponse);
+        when(paymentConfirmTxService.complete(20L, approvedAt)).thenThrow(completeFailure);
+
+        // when
+        // then
+        assertThatThrownBy(() -> paymentFacade.confirmPayment(userId, request))
+                .isSameAs(completeFailure);
+
+        verify(paymentConfirmTxService).markConfirmRetryRequired(
+                20L,
+                approvedAt,
+                "temporary db failure"
+        );
+        verifyNoInteractions(paymentCompensationProcessor);
+    }
+
+    @Test
+    void 결제확정_외부결제성공후_내부상태충돌이면_보상취소대상으로남기고_원예외를전파한다() {
         // given
         Long userId = 1L;
         ConfirmPaymentRequest request = new ConfirmPaymentRequest(10L, "pay_123");
@@ -52,26 +85,22 @@ class PaymentServiceUnitTest {
         when(paymentConfirmTxService.prepare(userId, request)).thenReturn(target);
         when(paymentGateway.getPayment("pay_123")).thenReturn(gatewayResponse);
         when(paymentConfirmTxService.complete(20L, approvedAt)).thenThrow(completeFailure);
-        when(paymentGateway.cancelPayment(
-                "pay_123",
+        when(paymentConfirmTxService.markCompensationRequired(
+                20L,
                 800L,
-                800L,
-                "PAYMENT_CONFIRM_INTERNAL_FAILURE",
-                "payment-confirm-compensation-20"
-        )).thenReturn(new PaymentCancelResponse("cancel_123", "SUCCEEDED", PaymentCancelStatus.SUCCEEDED));
+                ErrorCode.CONFLICT.getMessage()
+        )).thenReturn(30L);
 
         // when
         // then
         assertThatThrownBy(() -> paymentFacade.confirmPayment(userId, request))
                 .isSameAs(completeFailure);
 
-        verify(paymentGateway).cancelPayment(
-                "pay_123",
+        verify(paymentConfirmTxService).markCompensationRequired(
+                20L,
                 800L,
-                800L,
-                "PAYMENT_CONFIRM_INTERNAL_FAILURE",
-                "payment-confirm-compensation-20"
+                ErrorCode.CONFLICT.getMessage()
         );
-        verify(paymentConfirmTxService).failAfterCompensation(20L);
+        verify(paymentCompensationProcessor).process(30L);
     }
 }

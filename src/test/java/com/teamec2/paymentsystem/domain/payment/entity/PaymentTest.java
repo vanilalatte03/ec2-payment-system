@@ -136,6 +136,79 @@ class PaymentTest {
     }
 
     @Test
+    void 결제완료재시도대상으로_표시하면_승인시각과다음시도시각을저장한다() {
+        // given
+        Payment payment = 결제_생성();
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        LocalDateTime now = LocalDateTime.of(2026, 6, 1, 12, 31);
+
+        // when
+        payment.markConfirmRetryRequired(approvedAt, "DB 완료 실패", now);
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRM_RETRY_REQUIRED);
+        assertThat(payment.getConfirmRetryApprovedAt()).isEqualTo(approvedAt);
+        assertThat(payment.getNextConfirmAttemptAt()).isEqualTo(now);
+        assertThat(payment.getConfirmLastErrorMessage()).isEqualTo("DB 완료 실패");
+    }
+
+    @Test
+    void 완료재시도상태_완료처리하면_COMPLETED가되고_재시도정보를초기화한다() {
+        // given
+        Payment payment = 결제_생성();
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        payment.markConfirmRetryRequired(approvedAt, "DB 완료 실패", approvedAt.plusMinutes(1));
+
+        // when
+        payment.complete(approvedAt);
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(payment.getNextConfirmAttemptAt()).isNull();
+        assertThat(payment.getConfirmRetryApprovedAt()).isNull();
+        assertThat(payment.getConfirmLastErrorMessage()).isNull();
+    }
+
+    @Test
+    void 보상취소대상으로_표시하면_COMPENSATION_REQUIRED가된다() {
+        // given
+        Payment payment = 결제_생성();
+
+        // when
+        payment.markCompensationRequired();
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_REQUIRED);
+    }
+
+    @Test
+    void 보상취소필요상태_보상취소실패처리하면_COMPENSATION_FAILED가된다() {
+        // given
+        Payment payment = 결제_생성();
+        payment.markCompensationRequired();
+
+        // when
+        payment.markCompensationFailed();
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_FAILED);
+    }
+
+    @Test
+    void 보상취소필요상태_실패처리하면_FAILED가된다() {
+        // given
+        Payment payment = 결제_생성();
+        LocalDateTime now = LocalDateTime.of(2026, 6, 1, 12, 30);
+        payment.markCompensationRequired();
+
+        // when
+        payment.fail(now);
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
     void 결제완료상태_부분환불처리하면_PARTIAL_REFUNDED가된다() {
         // given
         Payment payment = 결제_생성();
