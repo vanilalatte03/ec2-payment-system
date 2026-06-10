@@ -31,6 +31,7 @@ erDiagram
     payments ||--o{ point_transactions : creates
     payments ||--o{ refunds : refunded_by
     payments ||--o{ webhook_events : receives
+    payments ||--o| payment_compensation_outbox : compensated_by
     refunds o|--o{ point_transactions : creates
     refunds o|--o{ webhook_events : receives
     refunds ||--o{ refund_items : contains
@@ -120,6 +121,25 @@ erDiagram
         BOOLEAN cart_cleared "장바구니 정리 여부"
         DATETIME approved_at "결제 완료일시"
         DATETIME failed_at "결제 실패일시"
+        INT confirm_retry_count "내부 완료 재시도 횟수"
+        DATETIME next_confirm_attempt_at "다음 내부 완료 재시도 시각"
+        DATETIME confirm_processing_started_at "내부 완료 재시도 시작 시각"
+        DATETIME confirm_retry_approved_at "재시도에 사용할 승인 시각"
+        VARCHAR confirm_last_error_message "내부 완료 재시도 마지막 오류"
+        DATETIME created_at "생성일시"
+        DATETIME updated_at "수정일시"
+    }
+
+    payment_compensation_outbox {
+        BIGINT id PK "보상 취소 Outbox ID"
+        BIGINT payment_id FK "결제ID"
+        BIGINT cancel_amount "보상 취소 금액"
+        VARCHAR portone_cancellation_id "PortOne 보상 취소 ID"
+        VARCHAR status "Outbox 상태"
+        INT retry_count "재시도 횟수"
+        DATETIME next_attempt_at "다음 시도 시각"
+        DATETIME processing_started_at "처리 시작 시각"
+        VARCHAR last_error_message "마지막 오류"
         DATETIME created_at "생성일시"
         DATETIME updated_at "수정일시"
     }
@@ -296,7 +316,7 @@ erDiagram
 | 결제ID | id | BIGINT | NOT NULL | PK |
 | 주문 ID | order_id | BIGINT | NOT NULL | FK: orders.id, UNIQUE |
 | 포트원 ID | portone_payment_id | VARCHAR(100) | NOT NULL | UNIQUE |
-| 결제 상태 | status | VARCHAR(30) | NOT NULL | PENDING, COMPLETED, FAILED, PARTIAL_REFUNDED, FULL_REFUNDED |
+| 결제 상태 | status | VARCHAR(30) | NOT NULL | PENDING, CONFIRM_RETRY_REQUIRED, COMPENSATION_REQUIRED, COMPENSATION_FAILED, COMPLETED, FAILED, PARTIAL_REFUNDED, FULL_REFUNDED |
 | 결제 타입 | payment_type | VARCHAR(30) | NOT NULL | CARD, POINT_ONLY, POINT_CARD |
 | 총 금액 | total_amount | BIGINT | NOT NULL | used_point_amount + pg_amount |
 | 사용 포인트 | used_point_amount | BIGINT | NOT NULL | used_point_amount >= 0 |
@@ -305,6 +325,29 @@ erDiagram
 | 장바구니 정리 여부 | cart_cleared | BOOLEAN | NOT NULL | 결제 완료 시 주문 상품에 해당하는 장바구니 상품이 1건 이상 삭제됐는지 여부 |
 | 결제 완료일시 | approved_at | DATETIME | NULL |  |
 | 결제 실패일시 | failed_at | DATETIME | NULL |  |
+| 내부 완료 재시도 횟수 | confirm_retry_count | INT | NOT NULL | 기본값 0 |
+| 다음 내부 완료 재시도 시각 | next_confirm_attempt_at | DATETIME | NULL | `CONFIRM_RETRY_REQUIRED` 처리 대상 조회 기준 |
+| 내부 완료 재시도 시작 시각 | confirm_processing_started_at | DATETIME | NULL | 오래된 처리 중 작업 복구 기준 |
+| 재시도 승인 시각 | confirm_retry_approved_at | DATETIME | NULL | 내부 완료 재시도에 사용할 PortOne 승인 시각 |
+| 내부 완료 재시도 마지막 오류 | confirm_last_error_message | VARCHAR(500) | NULL | 운영 확인용 오류 요약 |
+| 생성일시 | created_at | DATETIME | NOT NULL |  |
+| 수정일시 | updated_at | DATETIME | NOT NULL |  |
+
+### payment_compensation_outbox
+제약 조건:
+- `UNIQUE (payment_id)`
+
+| 논리명 | 컬럼명 | 타입 | NULL | 제약/비고 |
+| --- | --- | --- | --- | --- |
+| 보상 취소 Outbox ID | id | BIGINT | NOT NULL | PK |
+| 결제ID | payment_id | BIGINT | NOT NULL | FK: payments.id |
+| 보상 취소 금액 | cancel_amount | BIGINT | NOT NULL | 결제 확정 보상 취소 시 PG 취소 금액 |
+| 보상 취소 ID | portone_cancellation_id | VARCHAR(100) | NULL | PortOne 취소 성공 시 받은 cancellationId |
+| Outbox 상태 | status | VARCHAR(30) | NOT NULL | PENDING, PROCESSING, SUCCEEDED, FAILED |
+| 재시도 횟수 | retry_count | INT | NOT NULL | 기본값 0 |
+| 다음 시도 시각 | next_attempt_at | DATETIME | NOT NULL | 처리 대상 조회 기준 |
+| 처리 시작 시각 | processing_started_at | DATETIME | NULL | 오래된 PROCESSING 작업 복구 기준 |
+| 마지막 오류 | last_error_message | VARCHAR(500) | NULL | 운영 확인용 오류 요약 |
 | 생성일시 | created_at | DATETIME | NOT NULL |  |
 | 수정일시 | updated_at | DATETIME | NOT NULL |  |
 

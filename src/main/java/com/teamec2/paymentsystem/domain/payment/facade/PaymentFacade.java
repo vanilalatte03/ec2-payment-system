@@ -4,6 +4,7 @@ import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
 import com.teamec2.paymentsystem.domain.payment.service.ConfirmPaymentTarget;
+import com.teamec2.paymentsystem.domain.payment.service.PaymentCompensationProcessor;
 import com.teamec2.paymentsystem.domain.payment.service.PaymentConfirmTxService;
 import com.teamec2.paymentsystem.domain.payment.service.PaymentService;
 import com.teamec2.paymentsystem.global.exception.BusinessException;
@@ -27,6 +28,7 @@ public class PaymentFacade {
 
     private final PaymentConfirmTxService paymentConfirmTxService;
     private final PaymentService paymentService;
+    private final PaymentCompensationProcessor paymentCompensationProcessor;
 
     /**
      * 인증 사용자의 결제 확정 요청을 처리한다.
@@ -64,27 +66,70 @@ public class PaymentFacade {
 
         try {
             paymentService.validatePaidPayment(target, gatewayResponse);
+        } catch (RuntimeException e) {
+            compensateValidationFailureIfNeeded(target, gatewayResponse, e);
+            throw e;
+        }
+
+        try {
             return paymentConfirmTxService.complete(target.paymentId(), gatewayResponse.approvedAt());
         } catch (RuntimeException e) {
-            compensateExternalSuccessIfNeeded(target, gatewayResponse);
+            recoverCompleteFailure(target, gatewayResponse, e);
             throw e;
         }
     }
 
-    private void compensateExternalSuccessIfNeeded(
+    private void compensateValidationFailureIfNeeded(
             ConfirmPaymentTarget target,
-            PaymentGatewayResponse gatewayResponse
+            PaymentGatewayResponse gatewayResponse,
+            RuntimeException validationFailure
+    ) {
+        if (!shouldCompensateValidationFailure(validationFailure)) {
+            return;
+        }
+
+        registerAndProcessCompensation(target, gatewayResponse, validationFailure);
+    }
+
+    private void recoverCompleteFailure(
+            ConfirmPaymentTarget target,
+            PaymentGatewayResponse gatewayResponse,
+            RuntimeException completeFailure
+    ) {
+        if (shouldCompensateCompleteFailure(completeFailure)) {
+            registerAndProcessCompensation(target, gatewayResponse, completeFailure);
+            return;
+        }
+
+        paymentConfirmTxService.markConfirmRetryRequired(
+                target.paymentId(),
+                gatewayResponse.approvedAt(),
+                completeFailure.getMessage()
+        );
+    }
+
+    private void registerAndProcessCompensation(
+            ConfirmPaymentTarget target,
+            PaymentGatewayResponse gatewayResponse,
+            RuntimeException cause
     ) {
         if (!isCompensatableExternalSuccess(target, gatewayResponse)) {
             return;
         }
 
         try {
-            paymentService.cancelForConfirmCompensation(target, gatewayResponse.paidAmount());
-            paymentConfirmTxService.failAfterCompensation(target.paymentId());
+            Long outboxId = paymentConfirmTxService.markCompensationRequired(
+                    target.paymentId(),
+                    gatewayResponse.paidAmount(),
+                    cause.getMessage()
+            );
+
+            if (outboxId != null) {
+                paymentCompensationProcessor.process(outboxId);
+            }
         } catch (RuntimeException compensationFailure) {
             log.error(
-                    "결제 확정 보상 처리 실패: paymentId={}, portonePaymentId={}",
+                    "결제 확정 보상 처리 등록 실패: paymentId={}, portonePaymentId={}",
                     target.paymentId(),
                     target.portonePaymentId(),
                     compensationFailure
@@ -101,5 +146,28 @@ public class PaymentFacade {
                 && gatewayResponse.hasSamePaymentId(target.portonePaymentId())
                 && gatewayResponse.isPaid()
                 && gatewayResponse.paidAmount() != null;
+    }
+
+    private boolean shouldCompensateValidationFailure(RuntimeException e) {
+        if (!(e instanceof BusinessException businessException)) {
+            return false;
+        }
+
+        ErrorCode errorCode = businessException.getErrorCode();
+
+        return errorCode == ErrorCode.PAYMENT_AMOUNT_MISMATCH
+                || errorCode == ErrorCode.EXTERNAL_API_FAILED;
+    }
+
+    private boolean shouldCompensateCompleteFailure(RuntimeException e) {
+        if (!(e instanceof BusinessException businessException)) {
+            return false;
+        }
+
+        ErrorCode errorCode = businessException.getErrorCode();
+
+        return errorCode == ErrorCode.INVALID_ORDER_STATUS
+                || errorCode == ErrorCode.ORDER_CANCEL_NOT_ALLOWED
+                || errorCode == ErrorCode.CONFLICT;
     }
 }

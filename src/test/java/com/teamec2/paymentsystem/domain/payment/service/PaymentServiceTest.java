@@ -13,12 +13,15 @@ import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentRequest;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.dto.PaymentCancelResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.payment.entity.PaymentCompensationOutbox;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentType;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCompensationOutboxStatus;
 import com.teamec2.paymentsystem.domain.payment.facade.PaymentFacade;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentCancelStatus;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGateway;
 import com.teamec2.paymentsystem.domain.payment.port.PaymentGatewayResponse;
+import com.teamec2.paymentsystem.domain.payment.repository.PaymentCompensationOutboxRepository;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.repository.PointTransactionRepository;
 import com.teamec2.paymentsystem.domain.point.service.PointService;
@@ -65,6 +68,9 @@ class PaymentServiceTest {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PaymentCompensationOutboxRepository paymentCompensationOutboxRepository;
+
+    @Autowired
     PointService pointService;
 
     @Autowired
@@ -98,6 +104,7 @@ class PaymentServiceTest {
         pointTransactionRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
+        paymentCompensationOutboxRepository.deleteAll();
         paymentRepository.deleteAll();
         orderItemRepository.deleteAll();
         orderRepository.deleteAll();
@@ -296,10 +303,14 @@ class PaymentServiceTest {
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        PaymentCompensationOutbox outbox =
+                paymentCompensationOutboxRepository.findByPaymentId(payment.getId()).orElseThrow();
 
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(foundPayment.getFailedAt()).isNotNull();
+        assertThat(outbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.SUCCEEDED);
+        assertThat(outbox.getPortoneCancellationId()).isEqualTo("cancel_test");
     }
 
     @Test
@@ -453,10 +464,14 @@ class PaymentServiceTest {
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        PaymentCompensationOutbox outbox =
+                paymentCompensationOutboxRepository.findByPaymentId(payment.getId()).orElseThrow();
 
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(foundPayment.getFailedAt()).isNotNull();
+        assertThat(outbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.SUCCEEDED);
+        assertThat(outbox.getPortoneCancellationId()).isEqualTo("cancel_test");
     }
 
     @Test
@@ -485,7 +500,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void 결제확정_보상취소가실패하면_PAYMENT_COMPENSATION_FAILED가발생하고_내부상태는대기상태로남는다() {
+    void 결제확정_보상취소가실패하면_보상취소재시도대상으로남기고_원검증예외를전파한다() {
         // given
         User user = 회원_저장();
         Order order = 주문_저장(user, 1000L, 200L);
@@ -501,18 +516,24 @@ class PaymentServiceTest {
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        PaymentCompensationOutbox outbox =
+                paymentCompensationOutboxRepository.findByPaymentId(payment.getId()).orElseThrow();
 
         assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
-        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_REQUIRED);
+        assertThat(outbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.PENDING);
+        assertThat(outbox.getRetryCount()).isEqualTo(1);
+        assertThat(outbox.getNextAttemptAt()).isNotNull();
+        assertThat(outbox.getProcessingStartedAt()).isNull();
     }
 
     @Test
-    void 결제확정_보상취소응답이_SUCCEEDED가아니면_PAYMENT_COMPENSATION_FAILED가발생하고_내부상태는대기상태로남는다() {
+    void 결제확정_보상취소응답이_미확정이면_보상취소재시도대상으로남기고_원검증예외를전파한다() {
         // given
         User user = 회원_저장();
         Order order = 주문_저장(user, 1000L, 200L);
@@ -528,14 +549,20 @@ class PaymentServiceTest {
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.PAYMENT_COMPENSATION_FAILED);
+                .isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
 
         Order foundOrder = orderRepository.findById(order.getId()).orElseThrow();
         Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        PaymentCompensationOutbox outbox =
+                paymentCompensationOutboxRepository.findByPaymentId(payment.getId()).orElseThrow();
 
         assertThat(testPaymentGateway.getCancelCallCount()).isEqualTo(1);
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
-        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_REQUIRED);
+        assertThat(outbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.PENDING);
+        assertThat(outbox.getRetryCount()).isEqualTo(1);
+        assertThat(outbox.getNextAttemptAt()).isNotNull();
+        assertThat(outbox.getProcessingStartedAt()).isNull();
     }
 
     private User 회원_저장() {

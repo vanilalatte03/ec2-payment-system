@@ -11,7 +11,10 @@ import com.teamec2.paymentsystem.domain.order.repository.OrderItemRepository;
 import com.teamec2.paymentsystem.domain.order.repository.OrderRepository;
 import com.teamec2.paymentsystem.domain.payment.dto.ConfirmPaymentResponse;
 import com.teamec2.paymentsystem.domain.payment.entity.Payment;
+import com.teamec2.paymentsystem.domain.payment.entity.PaymentCompensationOutbox;
 import com.teamec2.paymentsystem.domain.payment.entity.PaymentStatus;
+import com.teamec2.paymentsystem.domain.payment.enums.PaymentCompensationOutboxStatus;
+import com.teamec2.paymentsystem.domain.payment.repository.PaymentCompensationOutboxRepository;
 import com.teamec2.paymentsystem.domain.payment.repository.PaymentRepository;
 import com.teamec2.paymentsystem.domain.point.entity.PointTransaction;
 import com.teamec2.paymentsystem.domain.point.enums.PointTransactionType;
@@ -59,6 +62,9 @@ class PaymentConfirmTxServiceTest {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PaymentCompensationOutboxRepository paymentCompensationOutboxRepository;
+
+    @Autowired
     PointTransactionRepository pointTransactionRepository;
 
     @Autowired
@@ -88,6 +94,7 @@ class PaymentConfirmTxServiceTest {
         pointTransactionRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
+        paymentCompensationOutboxRepository.deleteAll();
         paymentRepository.deleteAll();
         orderItemRepository.deleteAll();
         orderRepository.deleteAll();
@@ -214,6 +221,73 @@ class PaymentConfirmTxServiceTest {
         assertThat(foundProduct.getStock()).isEqualTo(5);
         assertThat(cancelTransaction.getType()).isEqualTo(PointTransactionType.USE_CANCEL);
         assertThat(cancelTransaction.getAmount()).isEqualTo(200L);
+    }
+
+    @Test
+    void 보상취소아웃박스가_처리중이면_중복보상요청으로_PENDING으로돌리지않는다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        Long outboxId = paymentConfirmTxService.markCompensationRequired(
+                payment.getId(),
+                800L,
+                "첫 보상 요청"
+        );
+
+        paymentConfirmTxService.startCompensation(outboxId);
+        PaymentCompensationOutbox processingOutbox =
+                paymentCompensationOutboxRepository.findById(outboxId).orElseThrow();
+        LocalDateTime processingStartedAt = processingOutbox.getProcessingStartedAt();
+
+        // when
+        Long duplicatedOutboxId = paymentConfirmTxService.markCompensationRequired(
+                payment.getId(),
+                800L,
+                "중복 보상 요청"
+        );
+
+        // then
+        PaymentCompensationOutbox foundOutbox =
+                paymentCompensationOutboxRepository.findById(outboxId).orElseThrow();
+
+        assertThat(duplicatedOutboxId).isEqualTo(outboxId);
+        assertThat(foundOutbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.PROCESSING);
+        assertThat(foundOutbox.getProcessingStartedAt()).isEqualTo(processingStartedAt);
+        assertThat(foundOutbox.getLastErrorMessage()).isEqualTo("첫 보상 요청");
+    }
+
+    @Test
+    void 완료재시도_최대횟수를초과하면_보상취소대상으로전환한다() {
+        // given
+        User user = 회원_저장();
+        Order order = 주문_저장(user, 1000L, 200L);
+        Payment payment = 결제_저장(order, 1000L, 200L, 800L);
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+
+        payment.markConfirmRetryRequired(approvedAt, "DB 완료 실패", approvedAt.plusMinutes(1));
+        for (int i = 0; i < 5; i++) {
+            payment.markConfirmRetry("일시 장애", approvedAt.plusMinutes(2 + i));
+        }
+        paymentRepository.saveAndFlush(payment);
+
+        // when
+        paymentConfirmTxService.retryConfirm(payment.getId(), "계속 실패");
+
+        // then
+        Payment foundPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        PaymentCompensationOutbox outbox =
+                paymentCompensationOutboxRepository.findByPaymentId(payment.getId()).orElseThrow();
+
+        assertThat(foundPayment.getStatus()).isEqualTo(PaymentStatus.COMPENSATION_REQUIRED);
+        assertThat(foundPayment.getNextConfirmAttemptAt()).isNull();
+        assertThat(foundPayment.getConfirmProcessingStartedAt()).isNull();
+        assertThat(foundPayment.getConfirmRetryApprovedAt()).isNull();
+        assertThat(outbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.PENDING);
+        assertThat(outbox.getCancelAmount()).isEqualTo(800L);
+        assertThat(outbox.getLastErrorMessage())
+                .contains("내부 결제 완료 재시도 횟수를 초과했습니다.")
+                .contains("계속 실패");
     }
 
     private User 회원_저장() {
