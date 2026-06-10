@@ -120,4 +120,4 @@ PortOne `2024-04-25` 웹훅 버전 예시입니다.
 | `INVALID_ORDER_STATUS` | 400 | 내부 주문이 결제 확정 가능한 상태가 아님 |
 | `CONFLICT` | 409 | 내부 결제가 확정 가능한 상태가 아님 |
 | `EXTERNAL_API_FAILED` | 502 | PortOne 결제 조회 실패 |
-| `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 결제 성공 후 내부 확정 실패에 대한 보상 취소 실패 |
+| `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 결제 성공 후 내부 확정 실패에 대한 보상 취소 재처리 등록 실패 |

@@ -113,10 +113,22 @@ Authorization: Bearer {accessToken}
 | 값 | 설명 |
 | --- | --- |
 | `PENDING` | 결제대기 |
+| `CONFIRM_RETRY_REQUIRED` | 외부 결제 성공 후 내부 완료 재시도 필요 |
+| `COMPENSATION_REQUIRED` | 외부 결제를 완료하면 안 되어 PG 보상 취소 재시도 필요 |
+| `COMPENSATION_FAILED` | PG 보상 취소 자동 재시도 실패, 운영자 확인 필요 |
 | `COMPLETED` | 결제완료 |
 | `FAILED` | 결제실패 |
 | `PARTIAL_REFUNDED` | 부분환불 |
 | `FULL_REFUNDED` | 전액환불 |
+
+### PaymentCompensationOutboxStatus
+
+| 값 | 설명 |
+| --- | --- |
+| `PENDING` | 처리 대기 |
+| `PROCESSING` | 처리 중 |
+| `SUCCEEDED` | 처리 성공 |
+| `FAILED` | 처리 실패 |
 
 ### PaymentType
 
@@ -213,7 +225,7 @@ Authorization: Bearer {accessToken}
 | `PAYMENT_PORTONE_ID_MISMATCH` | 400 | 주문의 결제 식별자와 요청 식별자 불일치 |
 | `PAYMENT_STATUS_NOT_PAID` | 400 | PortOne 결제 상태가 성공 상태가 아님 |
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치 |
-| `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 성공/내부 실패 보상 취소 실패 |
+| `PAYMENT_COMPENSATION_FAILED` | 502 | 외부 성공/내부 실패 보상 취소 재처리 등록 실패 |
 | `INSUFFICIENT_POINT` | 400 | 포인트 잔액 부족 |
 | `POINT_INCREASE_AMOUNT_INVALID` | 400 | 증가 포인트 금액 오류 |
 | `POINT_DECREASE_AMOUNT_INVALID` | 400 | 차감 포인트 금액 오류 |

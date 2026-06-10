@@ -88,7 +88,8 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 - 검증 통과 시 단일 트랜잭션으로 주문 완료, 결제 완료, 예약 포인트 사용 확정, 포인트 사용/적립 원장 기록, 포인트 잔액 갱신, 주문 상품에 해당하는 장바구니 상품 삭제를 처리합니다.
 - 장바구니에 5개의 상품이 있고 그중 2개만 주문했다면, 결제 완료 후 주문한 2개만 삭제되고 나머지 3개는 유지됩니다.
 - 적립 포인트는 기본 정책상 PG 실결제 금액의 1%이며, `EARN` 원장으로 기록합니다.
-- 검증 실패 또는 금액 불일치가 외부 결제 성공 후 발견되면 PortOne 결제 취소 API로 보상 취소하고, 주문 취소, 결제 실패, 재고 복구를 처리합니다.
+- 검증 실패 또는 금액 불일치가 외부 결제 성공 후 발견되면 결제를 `COMPENSATION_REQUIRED`로 남기고 `payment_compensation_outbox`를 생성해 PortOne 결제 취소 API로 보상 취소를 시도합니다. PG 취소 성공이 확인된 뒤에만 주문 취소, 결제 실패, 재고 복구를 처리합니다.
+- 외부 결제는 정상이고 내부 완료 처리만 일시 실패하면 결제를 `CONFIRM_RETRY_REQUIRED`로 남기고 스케줄러가 내부 완료 처리를 재시도합니다.
 - 포인트 도메인은 예약 포인트 복구가 필요할 때 `USE_CANCEL` 원장 처리를 제공합니다.
 
 ### Errors
@@ -106,5 +107,5 @@ PortOne SDK 결제 완료 후 클라이언트가 서버에 결제 확정을 요�
 | `PAYMENT_STATUS_NOT_PAID` | 400 | PortOne 결제 상태가 성공 상태가 아님           |
 | `PAYMENT_AMOUNT_MISMATCH` | 400 | PortOne 승인 금액과 서버 산정 PG 금액 불일치     |
 | `EXTERNAL_API_FAILED` | 502 | PortOne 결제 조회 실패                   |
-| `PAYMENT_COMPENSATION_FAILED` | 502 | 보상 취소 실패                           |
+| `PAYMENT_COMPENSATION_FAILED` | 502 | 보상 취소 재처리 등록 실패 |
 | `POINT_ERROR_EXCEPTION` | 500 | 예약 포인트 원장 정합성 오류 |
