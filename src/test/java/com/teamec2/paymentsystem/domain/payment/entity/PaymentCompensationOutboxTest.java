@@ -50,6 +50,25 @@ class PaymentCompensationOutboxTest {
     }
 
     @Test
+    void 처리중아웃박스를_대기상태로표시해도_PROCESSING을유지한다() {
+        // given
+        LocalDateTime now = LocalDateTime.of(2026, 6, 1, 12, 30);
+        LocalDateTime processingStartedAt = now.plusSeconds(1);
+        PaymentCompensationOutbox outbox =
+                PaymentCompensationOutbox.create(결제_생성(), 800L, "금액 불일치", now);
+        outbox.markProcessing(processingStartedAt);
+
+        // when
+        outbox.markPending("중복 보상 요청", now.plusMinutes(1));
+
+        // then
+        assertThat(outbox.getStatus()).isEqualTo(PaymentCompensationOutboxStatus.PROCESSING);
+        assertThat(outbox.getNextAttemptAt()).isEqualTo(now);
+        assertThat(outbox.getProcessingStartedAt()).isEqualTo(processingStartedAt);
+        assertThat(outbox.getLastErrorMessage()).isEqualTo("금액 불일치");
+    }
+
+    @Test
     void 처리중아웃박스를_성공처리하면_SUCCEEDED가된다() {
         // given
         LocalDateTime now = LocalDateTime.of(2026, 6, 1, 12, 30);

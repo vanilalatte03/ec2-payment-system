@@ -44,6 +44,7 @@ public class PaymentConfirmTxService {
 
     private static final String COMPENSATION_REASON = "PAYMENT_CONFIRM_INTERNAL_FAILURE";
     private static final String COMPENSATION_IDEMPOTENCY_KEY_PREFIX = "payment-confirm-compensation-";
+    private static final String CONFIRM_RETRY_EXCEEDED_REASON_PREFIX = "내부 결제 완료 재시도 횟수를 초과했습니다. 마지막 오류: ";
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
@@ -226,18 +227,7 @@ public class PaymentConfirmTxService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        payment.markCompensationRequired();
-
-        PaymentCompensationOutbox outbox = paymentCompensationOutboxRepository.findByPaymentIdForUpdate(paymentId)
-                .map(existingOutbox -> {
-                    existingOutbox.markPending(reason, now);
-                    return existingOutbox;
-                })
-                .orElseGet(() -> paymentCompensationOutboxRepository.save(
-                        PaymentCompensationOutbox.create(payment, cancelAmount, reason, now)
-                ));
-
-        return outbox.getId();
+        return markCompensationRequired(payment, cancelAmount, reason, now);
     }
 
     /**
@@ -271,7 +261,17 @@ public class PaymentConfirmTxService {
             return;
         }
 
-        payment.markConfirmRetry(reason, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        boolean retryScheduled = payment.markConfirmRetry(reason, now);
+
+        if (!retryScheduled) {
+            markCompensationRequired(
+                    payment,
+                    payment.getPgAmount(),
+                    CONFIRM_RETRY_EXCEEDED_REASON_PREFIX + reason,
+                    now
+            );
+        }
     }
 
     /**
@@ -389,6 +389,21 @@ public class PaymentConfirmTxService {
         pointService.cancelReservedPoints(payment);
         orderCancelService.cancelBeforePayment(order);
         payment.fail(LocalDateTime.now());
+    }
+
+    private Long markCompensationRequired(Payment payment, Long cancelAmount, String reason, LocalDateTime now) {
+        payment.markCompensationRequired();
+
+        PaymentCompensationOutbox outbox = paymentCompensationOutboxRepository.findByPaymentIdForUpdate(payment.getId())
+                .map(existingOutbox -> {
+                    existingOutbox.markPending(reason, now);
+                    return existingOutbox;
+                })
+                .orElseGet(() -> paymentCompensationOutboxRepository.save(
+                        PaymentCompensationOutbox.create(payment, cancelAmount, reason, now)
+                ));
+
+        return outbox.getId();
     }
 
     private Payment findPaymentByOrderIdForUpdate(Long orderId) {

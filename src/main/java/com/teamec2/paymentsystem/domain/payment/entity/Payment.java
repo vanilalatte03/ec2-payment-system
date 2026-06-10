@@ -236,7 +236,7 @@ public class Payment extends BaseEntity {
         this.confirmProcessingStartedAt = now;
     }
 
-    public void markConfirmRetry(String reason, LocalDateTime now) {
+    public boolean markConfirmRetry(String reason, LocalDateTime now) {
         if (now == null) {
             throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
         }
@@ -251,10 +251,11 @@ public class Payment extends BaseEntity {
 
         if (this.confirmRetryCount > MAX_CONFIRM_RETRY_COUNT) {
             this.nextConfirmAttemptAt = null;
-            return;
+            return false;
         }
 
         this.nextConfirmAttemptAt = calculateNextAttemptAt(now, confirmRetryCount);
+        return true;
     }
 
     /**

@@ -89,6 +89,10 @@ public class PaymentCompensationOutbox extends BaseEntity {
             return;
         }
 
+        if (status == PaymentCompensationOutboxStatus.PROCESSING) {
+            return;
+        }
+
         if (status == PaymentCompensationOutboxStatus.FAILED) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }

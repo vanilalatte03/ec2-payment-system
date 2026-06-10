@@ -170,6 +170,29 @@ class PaymentTest {
     }
 
     @Test
+    void 완료재시도상태_최대횟수를초과하면_다음시도시각을비우고_실패를반환한다() {
+        // given
+        Payment payment = 결제_생성();
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 6, 1, 12, 30);
+        payment.markConfirmRetryRequired(approvedAt, "DB 완료 실패", approvedAt.plusMinutes(1));
+
+        for (int i = 0; i < 5; i++) {
+            payment.markConfirmRetry("일시 장애", approvedAt.plusMinutes(2 + i));
+        }
+
+        // when
+        boolean retryScheduled = payment.markConfirmRetry("계속 실패", approvedAt.plusMinutes(10));
+
+        // then
+        assertThat(retryScheduled).isFalse();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRM_RETRY_REQUIRED);
+        assertThat(payment.getConfirmRetryCount()).isEqualTo(6);
+        assertThat(payment.getNextConfirmAttemptAt()).isNull();
+        assertThat(payment.getConfirmProcessingStartedAt()).isNull();
+        assertThat(payment.getConfirmLastErrorMessage()).isEqualTo("계속 실패");
+    }
+
+    @Test
     void 보상취소대상으로_표시하면_COMPENSATION_REQUIRED가된다() {
         // given
         Payment payment = 결제_생성();
