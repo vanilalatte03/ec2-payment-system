@@ -519,6 +519,47 @@ class RefundServiceIntegrationTest {
     }
 
     @Test
+    void 전체환불완료후_같은멱등키로_다시요청하면_기존환불응답을반환한다() {
+        // given
+        RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
+        String idempotencyKey = uniqueKey("refund-full-idempotent-after-complete");
+        FullRefundRequest request = new FullRefundRequest("full refund");
+
+        RefundResponse firstResponse = refundService.requestFullRefund(
+                fixture.user().getId(),
+                fixture.payment().getId(),
+                idempotencyKey,
+                request
+        );
+        Long outboxId = onlyOutbox().getId();
+        refundProcessingTxService.start(outboxId);
+        refundProcessingTxService.complete(outboxId);
+
+        Payment completedPayment = paymentRepository.findById(fixture.payment().getId()).orElseThrow();
+        assertThat(completedPayment.getStatus()).isEqualTo(PaymentStatus.FULL_REFUNDED);
+
+        // when
+        // 이미 전체 환불이 완료된 결제라도 같은 멱등키와 같은 요청 본문이면 기존 환불 응답을 반환해야 합니다.
+        RefundResponse secondResponse = refundService.requestFullRefund(
+                fixture.user().getId(),
+                fixture.payment().getId(),
+                idempotencyKey,
+                request
+        );
+
+        // then
+        assertThat(secondResponse.refundId()).isEqualTo(firstResponse.refundId());
+        assertThat(secondResponse.refundStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(secondResponse.refundedAt()).isNotNull();
+        assertThat(secondResponse.actualRefundAmount()).isEqualTo(firstResponse.actualRefundAmount());
+        assertThat(secondResponse.pointRefundAmount()).isEqualTo(firstResponse.pointRefundAmount());
+        assertThat(secondResponse.pgRefundAmount()).isEqualTo(firstResponse.pgRefundAmount());
+        assertThat(refundRepository.count()).isEqualTo(1);
+        assertThat(refundItemRepository.count()).isEqualTo(2);
+        assertThat(refundOutboxRepository.count()).isEqualTo(1);
+    }
+
+    @Test
     void 환불웹훅완료_cancellationId로_전체환불을완료한다() {
         // given
         RefundFixture fixture = completedPaymentFixture(1_000L, 9_000L);
