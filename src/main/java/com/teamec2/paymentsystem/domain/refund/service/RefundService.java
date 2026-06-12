@@ -48,12 +48,12 @@ public class RefundService {
      * 1. 멱등키와 요청값을 검증합니다.
      * 2. 요청 본문 해시를 생성합니다.
      * 3. 주문 ID 기준으로 Payment를 비관적 락으로 조회합니다.
-     * 4. 주문 소유권과 결제 상태를 검증합니다.
-     * 5. 같은 멱등키로 생성된 환불이 있으면 요청 해시를 검증한 뒤 기존 결과를 반환합니다.
-     * 6. 진행 중인 환불이 있는지 검증합니다.
+     * 4. 주문 소유권을 검증합니다.
+     * 5. 같은 멱등키로 생성된 환불이 있으면 요청 해시를 검증한 뒤 기존 환불을 반환합니다.
+     * 6. 신규 요청이면 결제 상태와 진행 중인 환불을 검증합니다.
      * 7. 환불 대상 상품과 수량을 결정합니다.
      * 8. 포인트 잔액을 락과 함께 조회하고 환불 금액을 계산합니다.
-     * 9. Refund/RefundItem/RefundOutbox 스냅샷을 저장합니다.
+     * 9. Refund, RefundItem, RefundOutbox 스냅샷을 저장합니다.
      */
     @Transactional
     public RefundResponse requestPartialRefund(
@@ -73,7 +73,6 @@ public class RefundService {
         Order order = payment.getOrder();
 
         validateOrderOwner(order, userId);
-        validateRefundablePayment(payment);
 
         Optional<RefundResponse> existingResponse =
                 resolveExistingIdempotentRefundResponse(payment, idempotencyKey, requestHash);
@@ -81,6 +80,8 @@ public class RefundService {
         if (existingResponse.isPresent()) {
             return existingResponse.get();
         }
+
+        validateRefundablePayment(payment);
 
         /*
          * 같은 결제에 다른 환불 요청이 동시에 들어온 경우,
@@ -142,7 +143,6 @@ public class RefundService {
         Order order = payment.getOrder();
 
         validateOrderOwner(order, userId);
-        validateRefundablePayment(payment);
 
         Optional<RefundResponse> existingResponse =
                 resolveExistingIdempotentRefundResponse(payment, idempotencyKey, requestHash);
@@ -150,6 +150,8 @@ public class RefundService {
         if (existingResponse.isPresent()) {
             return existingResponse.get();
         }
+
+        validateRefundablePayment(payment);
 
         validateNoActiveRefund(payment);
 
